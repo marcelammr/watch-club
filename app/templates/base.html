@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Watch Club{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="logo" href="/">Watch Club</a>
+    <nav>
+      {% if user %}
+        <span class="who">{{ user.name }}</span>
+        <form action="/logout" method="post"><button type="submit">Sair</button></form>
+      {% else %}
+        <a href="/login">Entrar</a>
+        <a class="btn" href="/register">Criar conta</a>
+      {% endif %}
+    </nav>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

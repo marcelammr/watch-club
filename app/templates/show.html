@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ show.name }} · Watch Club{% endblock %}
+{% block content %}
+<p class="crumb"><a href="/">Clubes</a> / <a href="/clubs/{{ club_id }}">Voltar ao clube</a></p>
+<section class="show-hero">
+  {% if show.image_url %}
+    <img src="{{ show.image_url }}" alt="{{ show.name }}">
+  {% endif %}
+  <div>
+    <h1>{{ show.name }}</h1>
+    <p class="muted">{{ show.status or "" }}{% if show.premiered %} · estreia {{ show.premiered }}{% endif %}</p>
+    {% if show.summary %}<p>{{ show.summary }}</p>{% endif %}
+    {% if show.official_site %}<p><a href="{{ show.official_site }}" rel="noopener" target="_blank">Site oficial</a></p>{% endif %}
+    <form action="/clubs/{{ club_id }}/shows/{{ show.id }}/refresh" method="post">
+      <button type="submit">Atualizar fotos, temporadas e notícias</button>
+    </form>
+  </div>
+</section>
+
+<section>
+  <h2>Temporadas</h2>
+  <ul class="seasons">
+    {% for season in seasons %}
+      <li>
+        {% if season.image_url %}<img src="{{ season.image_url }}" alt="">{% endif %}
+        <div>
+          <strong>Temporada {{ season.number }}{% if season.name %} — {{ season.name }}{% endif %}</strong>
+          <span class="muted">
+            {{ season.episode_count or "?" }} episódios
+            {% if season.premiere_date %} · {{ season.premiere_date }}{% endif %}
+            {% if season.end_date %} → {{ season.end_date }}{% endif %}
+          </span>
+        </div>
+      </li>
+    {% else %}
+      <li class="muted">Nenhuma temporada encontrada.</li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section>
+  <h2>Notícias</h2>
+  <ul class="news">
+    {% for item in show.news %}
+      <li>
+        <a href="{{ item.url }}" rel="noopener" target="_blank">{{ item.title }}</a>
+        <span class="muted">{{ item.source or "" }} {{ item.published_at or "" }}</span>
+      </li>
+    {% else %}
+      <li class="muted">Nenhuma notícia no momento. Tente atualizar.</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}

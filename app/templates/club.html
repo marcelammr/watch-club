@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{{ club.name }} · Watch Club{% endblock %}
+{% block content %}
+<p class="crumb"><a href="/">Clubes</a> / {{ club.name }}</p>
+<section class="club-head">
+  <div>
+    <h1>{{ club.name }}</h1>
+    <p class="muted">Código para amigos: <strong>{{ club.join_code }}</strong></p>
+  </div>
+  <p class="members">
+    {% for member in club.members %}{{ member.user.name }}{% if not loop.last %}, {% endif %}{% endfor %}
+  </p>
+</section>
+
+<section class="card">
+  <h2>Adicionar série</h2>
+  <form method="get">
+    <label>Nome da série
+      <input name="q" value="{{ query }}" placeholder="Breaking Bad, The Office…">
+    </label>
+    <button type="submit">Buscar na TVMaze</button>
+  </form>
+  {% if results %}
+    <ul class="results">
+      {% for item in results %}
+        <li>
+          {% if item.image_url %}<img src="{{ item.image_url }}" alt=""> {% endif %}
+          <div>
+            <strong>{{ item.name }}</strong>
+            <span class="muted">{{ item.premiered or "—" }} · {{ item.status or "" }}</span>
+            <p>{{ item.summary[:220] if item.summary else "" }}{% if item.summary and item.summary|length > 220 %}…{% endif %}</p>
+            <form action="/clubs/{{ club.id }}/shows" method="post">
+              <input type="hidden" name="tvmaze_id" value="{{ item.tvmaze_id }}">
+              <button type="submit">Adicionar ao clube</button>
+            </form>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</section>
+
+<h2>Séries do clube</h2>
+<div class="posters">
+  {% for link in club.shows %}
+    <a class="poster" href="/clubs/{{ club.id }}/shows/{{ link.show.id }}">
+      {% if link.show.image_url %}
+        <img src="{{ link.show.image_url }}" alt="{{ link.show.name }}">
+      {% endif %}
+      <span>{{ link.show.name }}</span>
+    </a>
+  {% else %}
+    <p class="muted">Nenhuma série ainda. Busque pelo nome acima.</p>
+  {% endfor %}
+</div>
+{% endblock %}

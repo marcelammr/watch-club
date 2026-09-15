@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+{% if not user %}
+  <section class="hero">
+    <h1>As séries que vocês assistem juntos.</h1>
+    <p>Crie um clube, chame os amigos e busque pôsteres, temporadas e notícias automaticamente.</p>
+    <a class="btn" href="/register">Começar</a>
+  </section>
+{% else %}
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <section class="grid-2">
+    <div class="card">
+      <h2>Novo clube</h2>
+      <form action="/clubs" method="post">
+        <label>Nome do clube <input name="name" required placeholder="Noite de série"></label>
+        <button type="submit">Criar</button>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Entrar com código</h2>
+      <form action="/clubs/join" method="post">
+        <label>Código <input name="join_code" required maxlength="8" placeholder="A1B2C3D4"></label>
+        <button type="submit">Entrar no clube</button>
+      </form>
+    </div>
+  </section>
+  <h2>Seus clubes</h2>
+  {% if clubs %}
+    <ul class="club-list">
+      {% for club in clubs %}
+        <li>
+          <a href="/clubs/{{ club.id }}">{{ club.name }}</a>
+          <span class="muted">{{ club.shows|length }} séries · código {{ club.join_code }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted">Nenhum clube ainda. Crie o primeiro e convide os amigos com o código.</p>
+  {% endif %}
+{% endif %}
+{% endblock %}
