@@ -2,7 +2,7 @@
 
 App web em FastAPI para gerenciar as séries que você assiste com amigos.
 
-Você cria um **clube**, compartilha o código, busca a série pelo nome e o backend busca na [TVMaze](https://www.tvmaze.com/api) o pôster, o resumo e as temporadas. Notícias vêm de um RSS do Google News (sem API key).
+As contas ficam no SQLite (`watch_club.db`). O cadastro só libera o login depois da **confirmação de e-mail**. Nomes de usuário são únicos; se o desejado estiver ocupado, o site sugere variações. No perfil dá para escolher uma foto cartoon (animais, plantas, paisagens e cinema).
 
 ## Rodar
 
@@ -16,14 +16,18 @@ uvicorn app.main:app --reload
 
 Abra http://127.0.0.1:8000
 
-- Criar conta e um clube
+Sem SMTP configurado, o link de ativação aparece na página de verificação (modo local). Com `SMTP_HOST` no `.env`, o link vai por e-mail.
+
+- Criar conta, confirmar o e-mail e montar um clube
+- Abrir **Minha conta** para nome de usuário, e-mail, senha e avatar
+- Entrar em um clube com o código e sair quando quiser
 - Buscar uma série pelo nome e adicionar
 - Ver fotos, temporadas e notícias
-- Atualizar os dados remotos quando quiser
 
 ## API extra
 
-`GET /api/shows/search?q=breaking+bad` — busca na TVMaze sem persistir.
+`GET /api/shows/search?q=breaking+bad` — busca na TVMaze sem persistir.  
+`GET /api/username?q=marcela` — diz se o nome está livre e sugere alternativas.
 
 ## Stack
 

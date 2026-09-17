@@ -8,6 +8,7 @@
   </section>
 {% else %}
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
   <section class="grid-2">
     <div class="card">
       <h2>Novo clube</h2>
@@ -19,6 +20,7 @@
     <div class="card">
       <h2>Entrar com código</h2>
       <form action="/clubs/join" method="post">
+        <input type="hidden" name="next" value="/">
         <label>Código <input name="join_code" required maxlength="8" placeholder="A1B2C3D4"></label>
         <button type="submit">Entrar no clube</button>
       </form>
@@ -28,9 +30,15 @@
   {% if clubs %}
     <ul class="club-list">
       {% for club in clubs %}
-        <li>
-          <a href="/clubs/{{ club.id }}">{{ club.name }}</a>
-          <span class="muted">{{ club.shows|length }} séries · código {{ club.join_code }}</span>
+        <li class="club-row">
+          <div>
+            <a href="/clubs/{{ club.id }}">{{ club.name }}</a>
+            <span class="muted">{{ club.shows|length }} séries · código {{ club.join_code }}</span>
+          </div>
+          <form action="/clubs/{{ club.id }}/leave" method="post">
+            <input type="hidden" name="next" value="/">
+            <button class="danger" type="submit">Sair</button>
+          </form>
         </li>
       {% endfor %}
     </ul>

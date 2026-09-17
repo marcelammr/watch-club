@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Verificar e-mail · Watch Club{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Verifique seu e-mail</h1>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+  <p>Enviamos um link para ativar a conta. Sem a confirmação, o login não é liberado.</p>
+  {% if verify_link %}
+    <p class="ok">Modo local: <a href="{{ verify_link }}">ativar conta agora</a></p>
+  {% endif %}
+  <form action="/verificar-email/reenviar" method="post">
+    <label>E-mail <input type="email" name="email" required></label>
+    <button type="submit">Reenviar link</button>
+  </form>
+  <p class="muted"><a href="/login">Voltar ao login</a></p>
+</section>
+{% endblock %}

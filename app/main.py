@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -8,6 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 from starlette.middleware.sessions import SessionMiddleware
 
+from app.accounts import create_user, send_activation, utcnow
+from app.avatars import AVATARS, avatars_by_category, valid_avatar
 from app.catalog import (
     add_show_to_club,
     leave_club as remove_club_membership,
@@ -16,13 +19,20 @@ from app.catalog import (
     require_club_member,
     upsert_show_from_tvmaze,
 )
-from app.config import BASE_DIR, SECRET_KEY
-from app.db import Base, SessionLocal, engine, get_db
-from app.models import Club, ClubMember, ClubShow, User
+from app.config import BASE_DIR, EMAIL_DEV_SHOW_LINK, SECRET_KEY
+from app.db import Base, engine, get_db
+from app.models import Club, ClubMember, ClubShow, EmailToken, User
+from app.schema import migrate_schema
 from app.security import hash_password, make_join_code, verify_password
 from app.services import tvmaze
+from app.usernames import USERNAME_RE, normalize_username, suggest_usernames, taken_keys, username_taken
 
 Base.metadata.create_all(bind=engine)
+migrate_schema()
+(BASE_DIR / "app" / "static" / "avatars").mkdir(parents=True, exist_ok=True)
+for _avatar in AVATARS:
+    (BASE_DIR / "app" / "static" / "avatars" / f"{_avatar['id']}.svg").write_text(_avatar["svg"], encoding="utf-8")
+
 
 app = FastAPI(title="Watch Club", description="Séries assistidas com amigos")
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
@@ -34,7 +44,11 @@ def current_user(request: Request, db: Session) -> User | None:
     user_id = request.session.get("user_id")
     if not user_id:
         return None
-    return db.get(User, user_id)
+    user = db.get(User, user_id)
+    if user and not user.is_active:
+        request.session.clear()
+        return None
+    return user
 
 
 def login_required(request: Request, db: Session) -> User:
@@ -48,6 +62,23 @@ def db_session() -> Session:
     return next(get_db())
 
 
+def _safe_next(path: str | None, fallback: str = "/") -> str:
+    if path and path.startswith("/") and not path.startswith("//"):
+        return path
+    return fallback
+
+
+def _user_clubs(db: Session, user_id: int) -> list[Club]:
+    return list(
+        db.scalars(
+            select(Club)
+            .join(ClubMember)
+            .where(ClubMember.user_id == user_id)
+            .options(selectinload(Club.members), selectinload(Club.shows))
+        ).unique()
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
     db = db_session()
@@ -57,7 +88,7 @@ def home(request: Request):
         return templates.TemplateResponse(
             request,
             "home.html",
-            {"user": user, "clubs": clubs, "error": request.query_params.get("error")},
+            {"user": user, "clubs": clubs, "error": request.query_params.get("error"), "ok": request.query_params.get("ok")},
         )
     finally:
         db.close()
@@ -65,38 +96,126 @@ def home(request: Request):
 
 @app.get("/register", response_class=HTMLResponse)
 def register_form(request: Request):
-    return templates.TemplateResponse(request, "auth.html", {"mode": "register", "error": None})
+    return templates.TemplateResponse(
+        request,
+        "auth.html",
+        {"mode": "register", "error": None, "suggestions": [], "form": {}},
+    )
+
+
+def _auth_page(request: Request, mode: str, error: str, status_code: int = 400, suggestions=None, form=None):
+    return templates.TemplateResponse(
+        request,
+        "auth.html",
+        {"mode": mode, "error": error, "suggestions": suggestions or [], "form": form or {}},
+        status_code=status_code,
+    )
 
 
 @app.post("/register")
 def register(
     request: Request,
-    name: str = Form(...),
+    username: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
 ):
     db = db_session()
     try:
         email = email.strip().lower()
-        if db.scalar(select(User).where(User.email == email)):
-            return templates.TemplateResponse(
+        form = {"username": username, "email": email}
+        key = normalize_username(username)
+        if not USERNAME_RE.match(key):
+            return _auth_page(
                 request,
-                "auth.html",
-                {"mode": "register", "error": "Este e-mail já está cadastrado"},
-                status_code=400,
+                "register",
+                "O nome de usuário precisa ter 3 a 30 caracteres (letras, números ou _).",
+                form=form,
             )
-        user = User(name=name.strip(), email=email, password_hash=hash_password(password))
-        db.add(user)
+        if username_taken(db, key):
+            return _auth_page(
+                request,
+                "register",
+                "Esse nome de usuário já está em uso. Que tal um destes?",
+                suggestions=suggest_usernames(key, taken_keys(db)),
+                form=form,
+            )
+        if db.scalar(select(User).where(User.email == email)):
+            return _auth_page(request, "register", "Este e-mail já está cadastrado", form=form)
+        user = create_user(db, username, email, password)
+        verify_url = send_activation(db, user)
         db.commit()
-        request.session["user_id"] = user.id
-        return RedirectResponse("/", status_code=303)
+        if EMAIL_DEV_SHOW_LINK:
+            request.session["verify_link"] = verify_url
+        return RedirectResponse("/verificar-email", status_code=303)
+    finally:
+        db.close()
+
+
+@app.get("/verificar-email", response_class=HTMLResponse)
+def verify_email_page(request: Request, token: str | None = None):
+    db = db_session()
+    try:
+        if token:
+            record = db.scalar(select(EmailToken).where(EmailToken.token == token))
+            if not record or record.expires_at < utcnow():
+                return templates.TemplateResponse(
+                    request,
+                    "verify.html",
+                    {"user": None, "error": "Link inválido ou expirado. Peça um novo e-mail.", "ok": None, "verify_link": None},
+                    status_code=400,
+                )
+            user = db.get(User, record.user_id)
+            if record.purpose == "email_change" and record.new_email:
+                taken = db.scalar(select(User).where(User.email == record.new_email, User.id != user.id))
+                if taken:
+                    db.delete(record)
+                    db.commit()
+                    return templates.TemplateResponse(
+                        request,
+                        "verify.html",
+                        {"user": None, "error": "Este e-mail já pertence a outra conta.", "ok": None, "verify_link": None},
+                        status_code=400,
+                    )
+                user.email = record.new_email
+                user.pending_email = None
+            user.is_active = True
+            db.delete(record)
+            db.commit()
+            request.session["user_id"] = user.id
+            request.session.pop("verify_link", None)
+            return RedirectResponse("/?ok=Conta+ativada", status_code=303)
+        return templates.TemplateResponse(
+            request,
+            "verify.html",
+            {
+                "user": current_user(request, db),
+                "error": request.query_params.get("error"),
+                "ok": request.query_params.get("ok"),
+                "verify_link": request.session.get("verify_link") if EMAIL_DEV_SHOW_LINK else None,
+            },
+        )
+    finally:
+        db.close()
+
+
+@app.post("/verificar-email/reenviar")
+def resend_verification(request: Request, email: str = Form(...)):
+    db = db_session()
+    try:
+        user = db.scalar(select(User).where(User.email == email.strip().lower()))
+        if user and not user.is_active:
+            verify_url = send_activation(db, user)
+            db.commit()
+            if EMAIL_DEV_SHOW_LINK:
+                request.session["verify_link"] = verify_url
+        return RedirectResponse("/verificar-email?ok=Se+o+e-mail+existir,+enviamos+um+novo+link", status_code=303)
     finally:
         db.close()
 
 
 @app.get("/login", response_class=HTMLResponse)
 def login_form(request: Request):
-    return templates.TemplateResponse(request, "auth.html", {"mode": "login", "error": None})
+    return _auth_page(request, "login", "", status_code=200)
 
 
 @app.post("/login")
@@ -105,12 +224,13 @@ def login(request: Request, email: str = Form(...), password: str = Form(...)):
     try:
         user = db.scalar(select(User).where(User.email == email.strip().lower()))
         if not user or not verify_password(password, user.password_hash):
-            return templates.TemplateResponse(
-                request,
-                "auth.html",
-                {"mode": "login", "error": "E-mail ou senha inválidos"},
-                status_code=400,
-            )
+            return _auth_page(request, "login", "E-mail ou senha inválidos", form={"email": email})
+        if not user.is_active:
+            verify_url = send_activation(db, user)
+            db.commit()
+            if EMAIL_DEV_SHOW_LINK:
+                request.session["verify_link"] = verify_url
+            return RedirectResponse("/verificar-email?error=Ative+sua+conta+pelo+e-mail", status_code=303)
         request.session["user_id"] = user.id
         return RedirectResponse("/", status_code=303)
     finally:
@@ -140,23 +260,6 @@ def create_club(request: Request, name: str = Form(...)):
         db.close()
 
 
-def _safe_next(path: str | None, fallback: str = "/") -> str:
-    if path and path.startswith("/") and not path.startswith("//"):
-        return path
-    return fallback
-
-
-def _user_clubs(db: Session, user_id: int) -> list[Club]:
-    return list(
-        db.scalars(
-            select(Club)
-            .join(ClubMember)
-            .where(ClubMember.user_id == user_id)
-            .options(selectinload(Club.members), selectinload(Club.shows))
-        ).unique()
-    )
-
-
 @app.get("/conta", response_class=HTMLResponse)
 def account(request: Request):
     db = db_session()
@@ -170,6 +273,8 @@ def account(request: Request):
                 "clubs": _user_clubs(db, user.id),
                 "error": request.query_params.get("error"),
                 "ok": request.query_params.get("ok"),
+                "suggestions": [],
+                "avatar_groups": avatars_by_category(),
             },
         )
     except HTTPException:
@@ -179,21 +284,69 @@ def account(request: Request):
 
 
 @app.post("/conta/perfil")
-def update_profile(request: Request, name: str = Form(...), email: str = Form(...)):
+def update_profile(request: Request, username: str = Form(...), email: str = Form(...)):
     db = db_session()
     try:
         user = login_required(request, db)
-        name = name.strip()
+        key = normalize_username(username)
         email = email.strip().lower()
-        if not name:
-            return RedirectResponse("/conta?error=Informe+um+nome+de+usuário", status_code=303)
+        clubs = _user_clubs(db, user.id)
+        groups = avatars_by_category()
+
+        def account_error(message: str, suggestions=None):
+            return templates.TemplateResponse(
+                request,
+                "account.html",
+                {
+                    "user": user,
+                    "clubs": clubs,
+                    "error": message,
+                    "ok": None,
+                    "suggestions": suggestions or [],
+                    "avatar_groups": groups,
+                },
+                status_code=400,
+            )
+
+        if not USERNAME_RE.match(key):
+            return account_error("O nome de usuário precisa ter 3 a 30 caracteres (letras, números ou _).")
+        if username_taken(db, key, exclude_user_id=user.id):
+            return account_error(
+                "Esse nome de usuário já está em uso. Sugestões:",
+                suggest_usernames(key, taken_keys(db) - {user.username_key}),
+            )
         taken = db.scalar(select(User).where(User.email == email, User.id != user.id))
         if taken:
-            return RedirectResponse("/conta?error=Este+e-mail+já+está+em+uso", status_code=303)
-        user.name = name
-        user.email = email
+            return account_error("Este e-mail já está em uso")
+        user.username = key
+        user.username_key = key
+        user.name = username.strip()
+        if email != user.email:
+            user.pending_email = email
+            verify_url = send_activation(db, user, new_email=email)
+            db.commit()
+            if EMAIL_DEV_SHOW_LINK:
+                request.session["verify_link"] = verify_url
+            return RedirectResponse(
+                "/verificar-email?ok=Confirme+o+novo+e-mail+para+concluir+a+troca",
+                status_code=303,
+            )
         db.commit()
         return RedirectResponse("/conta?ok=Perfil+atualizado", status_code=303)
+    except HTTPException:
+        return RedirectResponse("/login", status_code=303)
+    finally:
+        db.close()
+
+
+@app.post("/conta/avatar")
+def update_avatar(request: Request, avatar: str = Form(...)):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        user.avatar = valid_avatar(avatar)
+        db.commit()
+        return RedirectResponse("/conta?ok=Foto+de+perfil+atualizada", status_code=303)
     except HTTPException:
         return RedirectResponse("/login", status_code=303)
     finally:
@@ -242,8 +395,6 @@ def join_club(request: Request, join_code: str = Form(...), next: str = Form("/"
             db.add(ClubMember(club_id=club.id, user_id=user.id))
             db.commit()
         if next_url.startswith("/conta"):
-            from urllib.parse import quote
-
             return RedirectResponse(
                 f"/conta?ok={quote('Você entrou no clube ' + club.name)}",
                 status_code=303,
@@ -260,14 +411,14 @@ def leave_club_route(request: Request, club_id: int, next: str = Form("/conta"))
     db = db_session()
     try:
         user = login_required(request, db)
-        from urllib.parse import quote
-
         message = remove_club_membership(db, club_id, user.id)
-        return RedirectResponse(f"{_safe_next(next, '/conta')}?ok={quote(message)}", status_code=303)
+        dest = _safe_next(next, "/conta")
+        sep = "&" if "?" in dest else "?"
+        return RedirectResponse(f"{dest}{sep}ok={quote(message)}", status_code=303)
     except HTTPException as exc:
         if exc.status_code == 401:
             return RedirectResponse("/login", status_code=303)
-        return RedirectResponse(f"/conta?error={exc.detail}", status_code=303)
+        return RedirectResponse(f"/conta?error={quote(str(exc.detail))}", status_code=303)
     finally:
         db.close()
 
@@ -359,6 +510,26 @@ async def refresh_show(request: Request, club_id: int, show_id: int):
 @app.get("/api/shows/search")
 async def api_search(q: str = Query(..., min_length=1)):
     return await tvmaze.search_shows(q)
+
+
+@app.get("/api/username")
+def api_username(request: Request, q: str = Query(..., min_length=1)):
+    db = db_session()
+    try:
+        user = current_user(request, db)
+        key = normalize_username(q)
+        exclude = user.id if user else None
+        available = bool(USERNAME_RE.match(key)) and not username_taken(db, key, exclude_user_id=exclude)
+        occupied = taken_keys(db)
+        if user:
+            occupied.discard(user.username_key)
+        return {
+            "username": key,
+            "available": available,
+            "suggestions": [] if available else suggest_usernames(key or q, occupied),
+        }
+    finally:
+        db.close()
 
 
 @app.get("/health")

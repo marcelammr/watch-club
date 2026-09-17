@@ -6,10 +6,19 @@
   <div>
     <h1>{{ club.name }}</h1>
     <p class="muted">Código para amigos: <strong>{{ club.join_code }}</strong></p>
+    <p class="members">
+      {% for member in club.members %}
+        <span class="member-chip">
+          <img src="/static/avatars/{{ member.user.avatar }}.svg" alt="">
+          {{ member.user.username }}
+        </span>
+      {% endfor %}
+    </p>
   </div>
-  <p class="members">
-    {% for member in club.members %}{{ member.user.name }}{% if not loop.last %}, {% endif %}{% endfor %}
-  </p>
+  <form action="/clubs/{{ club.id }}/leave" method="post">
+    <input type="hidden" name="next" value="/conta">
+    <button class="danger" type="submit">Sair do clube</button>
+  </form>
 </section>
 
 <section class="card">

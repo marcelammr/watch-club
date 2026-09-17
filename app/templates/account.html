@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Minha conta · Watch Club{% endblock %}
+{% block content %}
+<p class="crumb"><a href="/">Início</a> / Minha conta</p>
+<h1>Minha conta</h1>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+
+<section class="card">
+  <h2>Foto de perfil</h2>
+  <div class="current-avatar">
+    <img src="/static/avatars/{{ user.avatar }}.svg" alt="Avatar atual" width="72" height="72">
+    <span>@{{ user.username }}</span>
+  </div>
+  <form action="/conta/avatar" method="post" class="avatar-form">
+    {% for category, icons in avatar_groups.items() %}
+      <h3>{{ category }}</h3>
+      <div class="avatar-grid">
+        {% for icon in icons %}
+          <label class="avatar-option">
+            <input type="radio" name="avatar" value="{{ icon.id }}" {% if user.avatar == icon.id %}checked{% endif %}>
+            <img src="/static/avatars/{{ icon.id }}.svg" alt="{{ icon.label }}">
+            <span>{{ icon.label }}</span>
+          </label>
+        {% endfor %}
+      </div>
+    {% endfor %}
+    <button type="submit">Salvar foto</button>
+  </form>
+</section>
+
+<section class="grid-2">
+  <div class="card">
+    <h2>Perfil</h2>
+    {% if suggestions %}
+      <p class="muted">Variações disponíveis:</p>
+      <div class="suggestions">
+        {% for item in suggestions %}
+          <button type="button" class="chip" data-username="{{ item }}">{{ item }}</button>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <form action="/conta/perfil" method="post">
+      <label>Nome de usuário
+        <input id="username" name="username" value="{{ user.username }}" required minlength="3" maxlength="30">
+      </label>
+      <ul id="live-suggestions" class="suggestions"></ul>
+      <label>E-mail <input type="email" name="email" value="{{ user.email }}" required></label>
+      {% if user.pending_email %}
+        <p class="muted">Novo e-mail aguardando confirmação: {{ user.pending_email }}</p>
+      {% endif %}
+      <button type="submit">Salvar perfil</button>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Senha</h2>
+    <form action="/conta/senha" method="post">
+      <label>Senha atual <input type="password" name="current_password" required></label>
+      <label>Nova senha <input type="password" name="new_password" required minlength="4"></label>
+      <label>Confirmar nova senha <input type="password" name="confirm_password" required minlength="4"></label>
+      <button type="submit">Alterar senha</button>
+    </form>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Entrar em um clube</h2>
+  <form action="/clubs/join" method="post">
+    <input type="hidden" name="next" value="/conta">
+    <label>Código do clube <input name="join_code" required maxlength="8" placeholder="A1B2C3D4"></label>
+    <button type="submit">Entrar</button>
+  </form>
+</section>
+
+<section>
+  <h2>Seus clubes</h2>
+  {% if clubs %}
+    <ul class="club-list">
+      {% for club in clubs %}
+        <li class="club-row">
+          <div>
+            <a href="/clubs/{{ club.id }}">{{ club.name }}</a>
+            <span class="muted">código {{ club.join_code }}{% if club.owner_id == user.id %} · você é o dono{% endif %}</span>
+          </div>
+          <form action="/clubs/{{ club.id }}/leave" method="post">
+            <input type="hidden" name="next" value="/conta">
+            <button class="danger" type="submit">Sair do clube</button>
+          </form>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted">Você ainda não está em nenhum clube.</p>
+  {% endif %}
+</section>
+<script>
+  const input = document.getElementById("username");
+  const live = document.getElementById("live-suggestions");
+  function fillUsername(value) { input.value = value; }
+  document.querySelectorAll("[data-username]").forEach((btn) => {
+    btn.addEventListener("click", () => fillUsername(btn.dataset.username));
+  });
+  let timer;
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const q = input.value.trim();
+      if (q.length < 3) { live.innerHTML = ""; return; }
+      const data = await fetch("/api/username?q=" + encodeURIComponent(q)).then(r => r.json());
+      if (data.available) {
+        live.innerHTML = "<li class='ok'>Nome disponível</li>";
+      } else {
+        live.innerHTML = data.suggestions.map(s => `<button type="button" class="chip" data-username="${s}">${s}</button>`).join(" ");
+        live.querySelectorAll("[data-username]").forEach((btn) => {
+          btn.addEventListener("click", () => fillUsername(btn.dataset.username));
+        });
+      }
+    }, 250);
+  });
+</script>
+{% endblock %}

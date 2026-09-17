@@ -4,11 +4,23 @@
 <section class="card narrow">
   <h1>{% if mode == 'login' %}Entrar{% else %}Criar conta{% endif %}</h1>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% if suggestions %}
+    <p class="muted">Variações disponíveis:</p>
+    <div class="suggestions">
+      {% for item in suggestions %}
+        <button type="button" class="chip" data-username="{{ item }}">{{ item }}</button>
+      {% endfor %}
+    </div>
+  {% endif %}
   <form method="post">
     {% if mode == 'register' %}
-      <label>Nome <input name="name" required></label>
+      <label>Nome de usuário
+        <input id="username" name="username" required minlength="3" maxlength="30" value="{{ form.username or '' }}" placeholder="ex: marcela_tv">
+      </label>
+      <p class="muted">Único no site. Letras, números e _.</p>
+      <ul id="live-suggestions" class="suggestions"></ul>
     {% endif %}
-    <label>E-mail <input type="email" name="email" required></label>
+    <label>E-mail <input type="email" name="email" required value="{{ form.email or '' }}"></label>
     <label>Senha <input type="password" name="password" required minlength="4"></label>
     <button type="submit">{% if mode == 'login' %}Entrar{% else %}Cadastrar{% endif %}</button>
   </form>
@@ -20,4 +32,33 @@
     {% endif %}
   </p>
 </section>
+{% if mode == 'register' %}
+<script>
+  const input = document.getElementById("username");
+  const live = document.getElementById("live-suggestions");
+  function fillUsername(value) {
+    input.value = value;
+  }
+  document.querySelectorAll("[data-username]").forEach((btn) => {
+    btn.addEventListener("click", () => fillUsername(btn.dataset.username));
+  });
+  let timer;
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const q = input.value.trim();
+      if (q.length < 3) { live.innerHTML = ""; return; }
+      const data = await fetch("/api/username?q=" + encodeURIComponent(q)).then(r => r.json());
+      if (data.available) {
+        live.innerHTML = "<li class='ok'>Nome disponível</li>";
+      } else {
+        live.innerHTML = data.suggestions.map(s => `<button type="button" class="chip" data-username="${s}">${s}</button>`).join(" ");
+        live.querySelectorAll("[data-username]").forEach((btn) => {
+          btn.addEventListener("click", () => fillUsername(btn.dataset.username));
+        });
+      }
+    }, 250);
+  });
+</script>
+{% endif %}
 {% endblock %}

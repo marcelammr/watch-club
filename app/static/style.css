@@ -59,6 +59,23 @@ button, .btn {
 }
 .muted { color: var(--muted); }
 .error { color: #ff8d8d; }
+.ok { color: #9be7b3; }
+.club-row {
+  align-items: center;
+  justify-content: space-between;
+}
+.club-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+button.danger, .danger {
+  background: transparent;
+  color: #ffb4b4;
+  border: 1px solid #6a3a3a;
+}
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .club-list, .results, .seasons, .news { list-style: none; padding: 0; }
 .club-list li, .results li, .seasons li, .news li {
@@ -98,6 +115,46 @@ button, .btn {
   border-radius: 12px;
 }
 .crumb { color: var(--muted); }
+.suggestions { display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0; list-style: none; }
+.chip {
+  background: #2a2436;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  margin-top: 0;
+  font-weight: 600;
+}
+.account-link { display: flex; align-items: center; gap: 0.5rem; color: var(--text); }
+.nav-avatar, .current-avatar img, .avatar-option img, .member-chip img {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+.current-avatar { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1rem; }
+.current-avatar img { width: 72px; height: 72px; border-radius: 20px; }
+.avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 0.6rem;
+  margin: 0.6rem 0 1.2rem;
+}
+.avatar-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.avatar-option input { position: absolute; opacity: 0; width: 0; }
+.avatar-option img { width: 64px; height: 64px; border-radius: 16px; }
+.avatar-option:has(input:checked) { border-color: var(--accent); }
+.member-chip { display: inline-flex; align-items: center; gap: 0.35rem; margin-right: 0.6rem; }
 @media (max-width: 720px) {
   .grid-2, .show-hero { grid-template-columns: 1fr; }
 }

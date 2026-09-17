@@ -11,11 +11,31 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(80), nullable=False)
+    username: Mapped[str] = mapped_column(String(80), nullable=False, default="user")
+    username_key: Mapped[str] = mapped_column(String(80), unique=True, nullable=False, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    pending_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(default=False, nullable=False)
+    avatar: Mapped[str] = mapped_column(String(40), default="popcorn", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     memberships: Mapped[list["ClubMember"]] = relationship(back_populates="user")
+    email_tokens: Mapped[list["EmailToken"]] = relationship(back_populates="user")
+
+
+class EmailToken(Base):
+    __tablename__ = "email_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    token: Mapped[str] = mapped_column(String(80), unique=True, nullable=False, index=True)
+    purpose: Mapped[str] = mapped_column(String(20), default="activate", nullable=False)
+    new_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    user: Mapped[User] = relationship(back_populates="email_tokens")
 
 
 class Club(Base):
