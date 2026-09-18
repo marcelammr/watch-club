@@ -1,19 +1,21 @@
 {% extends "base.html" %}
 {% block title %}{{ show.name }} · Watch Club{% endblock %}
 {% block content %}
-<p class="crumb"><a href="/">Clubes</a> / <a href="/clubs/{{ club_id }}">Voltar ao clube</a></p>
+<p class="crumb"><a href="/clubs/{{ club_id }}?aba=assistindo">Voltar ao clube</a></p>
 <section class="show-hero">
   {% if show.image_url %}
     <img src="{{ show.image_url }}" alt="{{ show.name }}">
   {% endif %}
   <div>
     <h1>{{ show.name }}</h1>
-    <p class="muted">{{ show.status or "" }}{% if show.premiered %} · estreia {{ show.premiered }}{% endif %}</p>
+    <p class="muted">{{ CONTENT_KINDS.get(show.kind, 'Série') }}{% if show.status %} · {{ show.status }}{% endif %}{% if show.premiered %} · estreia {{ show.premiered }}{% endif %}</p>
     {% if show.summary %}<p>{{ show.summary }}</p>{% endif %}
     {% if show.official_site %}<p><a href="{{ show.official_site }}" rel="noopener" target="_blank">Site oficial</a></p>{% endif %}
+    {% if show.tvmaze_id > 0 %}
     <form action="/clubs/{{ club_id }}/shows/{{ show.id }}/refresh" method="post">
       <button type="submit">Atualizar fotos, temporadas e notícias</button>
     </form>
+    {% endif %}
   </div>
 </section>
 

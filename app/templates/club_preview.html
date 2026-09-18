@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ club.name }} · Watch Club{% endblock %}
+{% block content %}
+<section class="club-cover-banner" style="background: {{ club.cover_color or '#3a2348' }}">
+  {% if club.cover_image %}
+    <img src="{{ cover_image_url(club.cover_image) }}" alt="">
+  {% endif %}
+</section>
+<section class="card narrow">
+  <h1>{{ club.name }}</h1>
+  <p class="muted">{{ club.members|length }} participante{% if club.members|length != 1 %}s{% endif %}</p>
+  <p>Este clube é aberto. Entre para ver as séries e conversar com o grupo.</p>
+  <form action="/clubs/{{ club.id }}/entrar" method="post">
+    <button type="submit">Participar</button>
+  </form>
+</section>
+{% endblock %}

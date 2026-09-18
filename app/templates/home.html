@@ -1,49 +1,74 @@
 {% extends "base.html" %}
+{% block body_class %}home{% endblock %}
 {% block content %}
 {% if not user %}
-  <section class="hero">
+  <section class="home-hero">
+    <p class="home-kicker">Watch Club</p>
     <h1>As séries que vocês assistem juntos.</h1>
-    <p>Crie um clube, chame os amigos e busque pôsteres, temporadas e notícias automaticamente.</p>
+    <p>Crie um clube, chame os amigos e acompanhe pôsteres, temporadas e notícias num só lugar.</p>
     <a class="btn" href="/register">Começar</a>
   </section>
 {% else %}
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
   {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
-  <section class="grid-2">
-    <div class="card">
-      <h2>Novo clube</h2>
-      <form action="/clubs" method="post">
-        <label>Nome do clube <input name="name" required placeholder="Noite de série"></label>
-        <button type="submit">Criar</button>
-      </form>
+
+  <section class="home-hello">
+    <h1>Olá, {{ user.name }}!</h1>
+  </section>
+
+  <section class="home-launch">
+    <button type="button" class="home-tile" id="open-clubs">Meus Clubes</button>
+    <a class="home-tile" href="/clubs/novo">Criar um clube</a>
+    <button type="button" class="home-tile" id="open-join">Entrar com código</button>
+  </section>
+
+  <dialog id="clubs-modal" class="home-modal">
+    <div class="home-modal-card">
+      <div class="avatar-modal-head">
+        <h2>Meus Clubes</h2>
+        <button type="button" class="ghost" id="close-clubs">Fechar</button>
+      </div>
+      {% if clubs %}
+        <div class="club-cover-grid">
+          {% for club in clubs %}
+            <a class="club-cover-card" href="/clubs/{{ club.id }}">
+              <span class="club-cover" style="background: {{ club.cover_color or '#3a2348' }}">
+                {% if club.cover_image %}
+                  <img src="{{ cover_image_url(club.cover_image) }}" alt="">
+                {% endif %}
+              </span>
+              <strong>{{ club.name }}</strong>
+            </a>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted">Você ainda não participa de nenhum clube.</p>
+      {% endif %}
     </div>
-    <div class="card">
-      <h2>Entrar com código</h2>
+  </dialog>
+
+  <dialog id="join-modal" class="home-modal">
+    <div class="home-modal-card narrow-modal">
+      <div class="avatar-modal-head">
+        <h2>Entrar com código</h2>
+        <button type="button" class="ghost" id="close-join">Fechar</button>
+      </div>
       <form action="/clubs/join" method="post">
         <input type="hidden" name="next" value="/">
         <label>Código <input name="join_code" required maxlength="8" placeholder="A1B2C3D4"></label>
         <button type="submit">Entrar no clube</button>
       </form>
     </div>
-  </section>
-  <h2>Seus clubes</h2>
-  {% if clubs %}
-    <ul class="club-list">
-      {% for club in clubs %}
-        <li class="club-row">
-          <div>
-            <a href="/clubs/{{ club.id }}">{{ club.name }}</a>
-            <span class="muted">{{ club.shows|length }} séries · código {{ club.join_code }}</span>
-          </div>
-          <form action="/clubs/{{ club.id }}/leave" method="post">
-            <input type="hidden" name="next" value="/">
-            <button class="danger" type="submit">Sair</button>
-          </form>
-        </li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="muted">Nenhum clube ainda. Crie o primeiro e convide os amigos com o código.</p>
-  {% endif %}
+  </dialog>
+  <script>
+    function bindModal(openId, modalId, closeId) {
+      const modal = document.getElementById(modalId);
+      document.getElementById(openId).addEventListener("click", () => modal.showModal());
+      document.getElementById(closeId).addEventListener("click", () => modal.close());
+      modal.addEventListener("click", (event) => { if (event.target === modal) modal.close(); });
+    }
+    bindModal("open-clubs", "clubs-modal", "close-clubs");
+    bindModal("open-join", "join-modal", "close-join");
+  </script>
 {% endif %}
 {% endblock %}

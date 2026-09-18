@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ person.name }} · Watch Club{% endblock %}
+{% block content %}
+<p class="crumb"><a href="/">Início</a> / Perfil</p>
+<section class="card profile-head">
+  <img class="profile-avatar" src="/static/avatars/{{ person.avatar }}.svg" alt="">
+  <div>
+    <h1 class="profile-name">{{ person.name }}</h1>
+    <p class="profile-nick">@{{ person.username }}</p>
+    <p class="status {{ status }}"><span class="dot"></span>{{ status_label }}</p>
+    <p class="bio-label">Bio</p>
+    {% if person.bio %}
+      <p class="bio-box">{{ person.bio }}</p>
+    {% else %}
+      <p class="bio-box muted">Sem bio ainda.</p>
+    {% endif %}
+    {% if person.id == user.id %}
+      <p><a href="/conta">Editar meu perfil</a></p>
+    {% endif %}
+  </div>
+</section>
+<h2>Clubes</h2>
+<ul class="club-list">
+  {% for club in clubs %}
+    <li class="club-row">
+      <div>
+        {% if club.is_closed and club.id not in mine %}
+          <span>{{ club.name }}</span>
+          <span class="lock" title="Clube fechado">🔒</span>
+          <span class="muted">Clube fechado</span>
+        {% else %}
+          <a href="/clubs/{{ club.id }}">{{ club.name }}</a>
+          {% if club.is_closed %}<span class="lock" title="Clube fechado">🔒</span>{% endif %}
+          <span class="muted">{{ club.members|length }} participantes</span>
+        {% endif %}
+      </div>
+      {% if club.id not in mine and not club.is_closed %}
+        <form action="/clubs/{{ club.id }}/entrar" method="post">
+          <button type="submit">Participar</button>
+        </form>
+      {% elif club.id in mine %}
+        <span class="muted">Você já participa</span>
+      {% endif %}
+    </li>
+  {% else %}
+    <li class="muted">Nenhum clube público para mostrar.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

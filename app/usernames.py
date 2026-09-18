@@ -3,12 +3,26 @@ from __future__ import annotations
 import re
 import unicodedata
 
+from datetime import datetime, timedelta
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import User
 
 USERNAME_RE = re.compile(r"^[a-z0-9_]{3,30}$")
+NICKNAME_DAYS = 14
+
+
+def nickname_unlock_at(changed_at: datetime | None) -> datetime | None:
+    if changed_at is None:
+        return None
+    return changed_at + timedelta(days=NICKNAME_DAYS)
+
+
+def nickname_can_change(changed_at: datetime | None, now: datetime) -> bool:
+    unlock = nickname_unlock_at(changed_at)
+    return unlock is None or now >= unlock
 
 
 def normalize_username(value: str) -> str:
@@ -63,3 +77,20 @@ def suggest_usernames(desired: str, occupied: set[str], limit: int = 6) -> list[
         suggestions.append(candidate)
         seen.add(candidate)
     return suggestions
+
+
+def unique_username(db: Session, seed: str) -> str:
+    base = normalize_username(seed) or "cinefilo"
+    if len(base) < 3:
+        base = f"{base}tv"
+    occupied = taken_keys(db)
+    if base not in occupied and USERNAME_RE.match(base):
+        return base
+    picks = suggest_usernames(base, occupied, limit=1)
+    return picks[0] if picks else f"user{secrets_suffix()}"
+
+
+def secrets_suffix() -> str:
+    import secrets
+
+    return secrets.token_hex(3)

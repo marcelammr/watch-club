@@ -1,65 +1,234 @@
 {% extends "base.html" %}
 {% block title %}{{ club.name }} · Watch Club{% endblock %}
+{% block body_class %}club-room{% endblock %}
 {% block content %}
-<p class="crumb"><a href="/">Clubes</a> / {{ club.name }}</p>
-<section class="club-head">
-  <div>
-    <h1>{{ club.name }}</h1>
-    <p class="muted">Código para amigos: <strong>{{ club.join_code }}</strong></p>
-    <p class="members">
-      {% for member in club.members %}
-        <span class="member-chip">
-          <img src="/static/avatars/{{ member.user.avatar }}.svg" alt="">
-          {{ member.user.username }}
-        </span>
-      {% endfor %}
-    </p>
-  </div>
-  <form action="/clubs/{{ club.id }}/leave" method="post">
-    <input type="hidden" name="next" value="/conta">
-    <button class="danger" type="submit">Sair do clube</button>
-  </form>
-</section>
+{% macro catalog_row(link, flag_label, flag_class, next_status, next_label, next_class) %}
+  {% set info = ratings.get(link.show.id, {"average": None, "count": 0, "mine": None, "filled": 0}) %}
+  {% set tags = link.show.genres|genres %}
+  <article class="watch-row">
+    <a class="watch-poster" href="/clubs/{{ club.id }}/shows/{{ link.show.id }}">
+      {% if link.show.image_url %}
+        <img src="{{ link.show.image_url }}" alt="{{ link.show.name }}">
+      {% else %}
+        <span class="watch-fallback">🎬</span>
+      {% endif %}
+    </a>
+    <div class="watch-copy">
+      <h3>{{ link.show.name }}</h3>
+      {% if tags %}
+        <p class="watch-tags">
+          {% for tag in tags %}
+            <span class="watch-tag">{{ tag }}</span>
+          {% endfor %}
+        </p>
+      {% endif %}
+      <p class="watch-rating">
+        {% if info.count %}
+          <span class="star-read" aria-hidden="true">
+            {% for n in [1, 2, 3, 4, 5] %}
+              <span class="{% if n <= info.filled %}is-on{% endif %}">★</span>
+            {% endfor %}
+          </span>
+          <span>{{ info.average|avg_pt }} — {{ info.count }} {% if info.count == 1 %}avaliação{% else %}avaliações{% endif %}</span>
+        {% else %}
+          <span class="muted">Ainda sem avaliações</span>
+        {% endif %}
+      </p>
+      <form class="star-form" action="/clubs/{{ club.id }}/shows/{{ link.show.id }}/avaliar" method="post">
+        <span class="muted">Sua avaliação:</span>
+        <button class="star-zero {% if info.mine == 0 %}is-on{% endif %}" type="submit" name="stars" value="0" title="0 estrelas">0</button>
+        {% for n in [1, 2, 3, 4, 5] %}
+          <button class="star-btn {% if info.mine is not none and info.mine >= n %}is-on{% endif %}" type="submit" name="stars" value="{{ n }}" aria-label="{{ n }} estrela{% if n != 1 %}s{% endif %}">★</button>
+        {% endfor %}
+      </form>
+      <p class="watch-meta">
+        <span>{{ CONTENT_KINDS.get(link.show.kind, 'Série') }}</span>
+        <span class="watch-flag {{ flag_class }}">{{ flag_label }}</span>
+      </p>
+      {% if link.show.summary %}
+        <p class="watch-synopsis">{{ link.show.summary[:180] }}{% if link.show.summary|length > 180 %}…{% endif %}</p>
+      {% endif %}
+      <div class="watch-actions">
+        <a href="/clubs/{{ club.id }}/shows/{{ link.show.id }}">Ver detalhes</a>
+        <form action="/clubs/{{ club.id }}/shows/{{ link.show.id }}/status" method="post">
+          <input type="hidden" name="watch_status" value="{{ next_status }}">
+          <button class="{{ next_class }}" type="submit">{{ next_label }}</button>
+        </form>
+        {% if is_admin %}
+          <form action="/clubs/{{ club.id }}/shows/{{ link.show.id }}/remover" method="post" onsubmit="return confirm('Remover “{{ link.show.name }}” deste clube?');">
+            <button class="danger" type="submit">Remover do clube</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </article>
+{% endmacro %}
+<input class="club-toggle" type="checkbox" id="club-nav-toggle">
+<input class="club-toggle" type="checkbox" id="club-people-toggle">
+<div class="club-shell">
+  <label class="club-dim" for="club-nav-toggle"></label>
+  <label class="club-dim club-dim-people" for="club-people-toggle"></label>
 
-<section class="card">
-  <h2>Adicionar série</h2>
-  <form method="get">
-    <label>Nome da série
-      <input name="q" value="{{ query }}" placeholder="Breaking Bad, The Office…">
-    </label>
-    <button type="submit">Buscar na TVMaze</button>
-  </form>
-  {% if results %}
-    <ul class="results">
-      {% for item in results %}
+  <aside class="club-nav">
+    <section class="club-cover-banner club-nav-cover" style="background: {{ club.cover_color or '#3a2348' }}">
+      {% if club.cover_image %}
+        <img src="{{ cover_image_url(club.cover_image) }}" alt="">
+      {% endif %}
+    </section>
+    <div class="club-nav-copy">
+      <p class="crumb"><a href="/">Início</a></p>
+      <h1>{{ club.name }} {% if club.is_closed %}<span class="lock" title="Clube fechado">🔒</span>{% endif %}</h1>
+      {% if club.description %}<p class="club-lead">{{ club.description }}</p>{% endif %}
+      <p class="muted">Código: <strong>{{ club.join_code }}</strong></p>
+    </div>
+    <nav class="club-side-nav">
+      <a class="club-side-link {% if tab == 'chat' %}is-on{% endif %}" href="/clubs/{{ club.id }}?aba=chat">Bate-papo</a>
+      <a class="club-side-link {% if tab == 'assistindo' %}is-on{% endif %}" href="/clubs/{{ club.id }}?aba=assistindo">Assistindo</a>
+      {% if is_admin %}
+        <a class="club-side-link is-quiet" href="/clubs/{{ club.id }}/config">Configurações</a>
+      {% endif %}
+    </nav>
+    <div class="club-leave">
+      <form action="/clubs/{{ club.id }}/leave" method="post">
+        <input type="hidden" name="next" value="/">
+        <button class="danger" type="submit">Sair do clube</button>
+      </form>
+    </div>
+  </aside>
+
+  <section class="club-main">
+    <div class="club-mobile-bar">
+      <label class="ghost club-mobile-btn" for="club-nav-toggle">Menu</label>
+      <strong>{{ club.name }}</strong>
+      <label class="ghost club-mobile-btn" for="club-people-toggle">Membros</label>
+    </div>
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+    {% if tab == 'chat' %}
+      <section class="chat-panel">
+        <div class="chat-log">
+          {% for item in messages %}
+            {% set follow = not loop.first and loop.previtem.user_id == item.user_id %}
+            <article class="chat-item{% if follow %} is-follow{% endif %}">
+              {% if follow %}
+                <span class="chat-gutter" aria-hidden="true"></span>
+              {% else %}
+                <img src="/static/avatars/{{ item.user.avatar }}.svg" alt="">
+              {% endif %}
+              <div>
+                {% if not follow %}
+                  <p class="chat-meta">
+                    <strong>{{ item.user.name }}</strong>
+                    <span class="muted">@{{ item.user.username }} · {{ item.created_at|when }}</span>
+                  </p>
+                {% endif %}
+                <p class="chat-body">{{ item.body }}</p>
+              </div>
+            </article>
+          {% else %}
+            <p class="muted">Nenhuma mensagem ainda. Diga oi para o clube.</p>
+          {% endfor %}
+        </div>
+        <form class="chat-form" action="/clubs/{{ club.id }}/mensagens" method="post">
+          <label class="chat-compose">
+            <span class="visually-hidden">Mensagem</span>
+            <textarea name="body" rows="1" maxlength="2000" required placeholder="Escreva para o clube"></textarea>
+          </label>
+          <button type="submit">Enviar</button>
+          <a class="muted chat-refresh" href="/clubs/{{ club.id }}?aba=chat">Atualizar</a>
+        </form>
+      </section>
+    {% else %}
+      <section class="watch-panel">
+        <div class="watch-add grid-2">
+          <form class="card" method="get">
+            <input type="hidden" name="aba" value="assistindo">
+            <h2>Buscar na TVMaze</h2>
+            <label>Título
+              <input name="q" value="{{ query }}" placeholder="Série, filme, animação…">
+            </label>
+            <button type="submit">Buscar</button>
+          </form>
+          <form class="card" action="/clubs/{{ club.id }}/titulos" method="post">
+            <h2>Adicionar manualmente</h2>
+            <label>Nome <input name="name" required maxlength="255" placeholder="Nome do título"></label>
+            <label>Tipo
+              <select name="kind">
+                {% for key, label in CONTENT_KINDS.items() %}
+                  <option value="{{ key }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>URL da capa <input name="image_url" placeholder="https://…"></label>
+            <button type="submit">Adicionar</button>
+          </form>
+        </div>
+
+        {% if results %}
+          <ul class="results">
+            {% for item in results %}
+              <li>
+                {% if item.image_url %}<img src="{{ item.image_url }}" alt=""> {% endif %}
+                <div>
+                  <strong>{{ item.name }}</strong>
+                  <span class="muted">{{ CONTENT_KINDS.get(item.kind, 'Série') }} · {{ item.premiered or "—" }}</span>
+                  <p>{{ item.summary[:220] if item.summary else "" }}{% if item.summary and item.summary|length > 220 %}…{% endif %}</p>
+                  <form action="/clubs/{{ club.id }}/shows" method="post">
+                    <input type="hidden" name="tvmaze_id" value="{{ item.tvmaze_id }}">
+                    <input type="hidden" name="kind" value="{{ item.kind or 'serie' }}">
+                    <button type="submit">Adicionar ao clube</button>
+                  </form>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+
+        <h2 class="watch-heading">Assistindo agora</h2>
+        <div class="watch-list">
+          {% for link in watching %}
+            {{ catalog_row(link, 'Assistindo', '', 'watched', 'Já assistimos', '') }}
+          {% else %}
+            <p class="muted">Nada em andamento. Adicione um título acima.</p>
+          {% endfor %}
+        </div>
+
+        <h2 class="watch-heading">Já assistimos</h2>
+        <div class="watch-list">
+          {% for link in watched %}
+            {{ catalog_row(link, 'Já assistimos', 'is-done', 'watching', 'Voltar para Assistindo', 'ghost') }}
+          {% else %}
+            <p class="muted">Nenhum título encerrado ainda.</p>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+  </section>
+
+  <aside class="club-people">
+    <h2>
+      <a class="member-count" href="/clubs/{{ club.id }}/membros">{{ club.members|length }} participante{% if club.members|length != 1 %}s{% endif %}</a>
+    </h2>
+    <ul class="club-member-list">
+      {% for member in club.members %}
         <li>
-          {% if item.image_url %}<img src="{{ item.image_url }}" alt=""> {% endif %}
-          <div>
-            <strong>{{ item.name }}</strong>
-            <span class="muted">{{ item.premiered or "—" }} · {{ item.status or "" }}</span>
-            <p>{{ item.summary[:220] if item.summary else "" }}{% if item.summary and item.summary|length > 220 %}…{% endif %}</p>
-            <form action="/clubs/{{ club.id }}/shows" method="post">
-              <input type="hidden" name="tvmaze_id" value="{{ item.tvmaze_id }}">
-              <button type="submit">Adicionar ao clube</button>
-            </form>
-          </div>
+          <a class="club-member" href="/u/{{ member.user.username }}">
+            <img src="/static/avatars/{{ member.user.avatar }}.svg" alt="">
+            <span>
+              <strong>{{ member.user.name }}</strong>
+              <span class="muted">@{{ member.user.username }}{% if member.is_admin %} · admin{% endif %}</span>
+            </span>
+            <span class="status {{ presence_of(member.user) }}" title="{{ presence_label(member.user) }}"><span class="dot"></span></span>
+          </a>
         </li>
       {% endfor %}
     </ul>
-  {% endif %}
-</section>
-
-<h2>Séries do clube</h2>
-<div class="posters">
-  {% for link in club.shows %}
-    <a class="poster" href="/clubs/{{ club.id }}/shows/{{ link.show.id }}">
-      {% if link.show.image_url %}
-        <img src="{{ link.show.image_url }}" alt="{{ link.show.name }}">
-      {% endif %}
-      <span>{{ link.show.name }}</span>
-    </a>
-  {% else %}
-    <p class="muted">Nenhuma série ainda. Busque pelo nome acima.</p>
-  {% endfor %}
+  </aside>
 </div>
+{% if tab == 'chat' %}
+<script>
+  const log = document.querySelector(".chat-log");
+  if (log) log.scrollTop = log.scrollHeight;
+</script>
+{% endif %}
 {% endblock %}

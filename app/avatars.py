@@ -11,25 +11,41 @@ def _svg(bg: str, drawing: str) -> str:
 '''
 
 
+def _eyes(cx: int, cy: int, r: int = 6) -> str:
+    return (
+        f'<circle cx="{cx - 12}" cy="{cy}" r="{r}" fill="#2b2235"/>'
+        f'<circle cx="{cx + 12}" cy="{cy}" r="{r}" fill="#2b2235"/>'
+        f'<circle cx="{cx - 10}" cy="{cy - 2}" r="2" fill="#fff"/>'
+        f'<circle cx="{cx + 14}" cy="{cy - 2}" r="2" fill="#fff"/>'
+    )
+
+
+def _smile(cx: int, cy: int) -> str:
+    return (
+        f'<path d="M{cx - 10} {cy} Q{cx} {cy + 10} {cx + 10} {cy}" '
+        'stroke="#2b2235" stroke-width="3" fill="none" stroke-linecap="round"/>'
+    )
+
+
 AVATARS = [
     {"id": "fox", "label": "Raposa", "category": "Animais", "svg": _svg("#f3b36a",
-        '<polygon points="24,78 40,28 56,78" fill="#e07a3d"/><polygon points="72,78 88,28 104,78" fill="#e07a3d"/><circle cx="64" cy="78" r="32" fill="#ffd29a"/><circle cx="54" cy="76" r="5" fill="#3a2418"/><circle cx="74" cy="76" r="5" fill="#3a2418"/><ellipse cx="64" cy="92" rx="10" ry="6" fill="#e07a3d"/>')},
+        '<polygon points="22,76 40,22 58,70" fill="#e07a3d"/><polygon points="70,70 88,22 106,76" fill="#e07a3d"/><circle cx="64" cy="78" r="34" fill="#ffd29a"/><circle cx="48" cy="92" r="7" fill="#ff9aa2"/><circle cx="80" cy="92" r="7" fill="#ff9aa2"/>' + _eyes(64, 74) + _smile(64, 90))},
     {"id": "cat", "label": "Gato", "category": "Animais", "svg": _svg("#d7c4ef",
-        '<polygon points="28,70 40,26 58,62" fill="#6b5a86"/><polygon points="70,62 88,26 100,70" fill="#6b5a86"/><circle cx="64" cy="76" r="34" fill="#f4e9ff"/><circle cx="52" cy="74" r="5" fill="#2b2235"/><circle cx="76" cy="74" r="5" fill="#2b2235"/><path d="M40 82 L28 78 M40 86 L26 86 M40 90 L28 94" stroke="#2b2235" stroke-width="3" fill="none"/><path d="M88 82 L100 78 M88 86 L102 86 M88 90 L100 94" stroke="#2b2235" stroke-width="3" fill="none"/>')},
+        '<polygon points="26,70 40,20 58,62" fill="#6b5a86"/><polygon points="70,62 88,20 102,70" fill="#6b5a86"/><circle cx="64" cy="78" r="34" fill="#f4e9ff"/>' + _eyes(64, 74, 5) + _smile(64, 90) + '<path d="M38 82 L24 76 M38 88 L22 88 M38 94 L24 98" stroke="#2b2235" stroke-width="3" fill="none"/><path d="M90 82 L104 76 M90 88 L106 88 M90 94 L104 98" stroke="#2b2235" stroke-width="3" fill="none"/>')},
     {"id": "owl", "label": "Coruja", "category": "Animais", "svg": _svg("#8fbf7a",
-        '<ellipse cx="64" cy="78" rx="36" ry="34" fill="#f4f0c8"/><circle cx="48" cy="70" r="16" fill="#fff"/><circle cx="80" cy="70" r="16" fill="#fff"/><circle cx="48" cy="70" r="7" fill="#2b2235"/><circle cx="80" cy="70" r="7" fill="#2b2235"/><polygon points="64,78 54,92 74,92" fill="#e8a44a"/>')},
+        '<ellipse cx="64" cy="80" rx="36" ry="34" fill="#f4f0c8"/><circle cx="48" cy="70" r="16" fill="#fff"/><circle cx="80" cy="70" r="16" fill="#fff"/><circle cx="48" cy="70" r="7" fill="#2b2235"/><circle cx="80" cy="70" r="7" fill="#2b2235"/><circle cx="50" cy="68" r="2" fill="#fff"/><circle cx="82" cy="68" r="2" fill="#fff"/><polygon points="64,80 52,96 76,96" fill="#e8a44a"/>')},
     {"id": "panda", "label": "Panda", "category": "Animais", "svg": _svg("#eadfce",
-        '<circle cx="36" cy="40" r="16" fill="#2b2235"/><circle cx="92" cy="40" r="16" fill="#2b2235"/><circle cx="64" cy="74" r="36" fill="#fff"/><ellipse cx="48" cy="72" rx="12" ry="14" fill="#2b2235"/><ellipse cx="80" cy="72" rx="12" ry="14" fill="#2b2235"/><circle cx="50" cy="72" r="5" fill="#fff"/><circle cx="82" cy="72" r="5" fill="#fff"/>')},
+        '<circle cx="36" cy="38" r="16" fill="#2b2235"/><circle cx="92" cy="38" r="16" fill="#2b2235"/><circle cx="64" cy="76" r="36" fill="#fff"/><ellipse cx="48" cy="72" rx="12" ry="14" fill="#2b2235"/><ellipse cx="80" cy="72" rx="12" ry="14" fill="#2b2235"/><circle cx="50" cy="72" r="5" fill="#fff"/><circle cx="82" cy="72" r="5" fill="#fff"/>' + _smile(64, 92))},
     {"id": "whale", "label": "Baleia", "category": "Animais", "svg": _svg("#7ec8e3",
-        '<ellipse cx="60" cy="72" rx="40" ry="24" fill="#3d7ea6"/><circle cx="42" cy="68" r="5" fill="#fff"/><circle cx="42" cy="68" r="2" fill="#1c3147"/><path d="M96 68 Q118 48 112 78 Q104 70 96 74" fill="#3d7ea6"/><circle cx="78" cy="58" r="6" fill="#d6f1ff"/>')},
+        '<ellipse cx="60" cy="74" rx="42" ry="26" fill="#3d7ea6"/><circle cx="42" cy="70" r="6" fill="#fff"/><circle cx="42" cy="70" r="3" fill="#1c3147"/><circle cx="44" cy="68" r="1.5" fill="#fff"/><path d="M96 70 Q120 44 114 82 Q104 72 96 76" fill="#3d7ea6"/><path d="M48 82 Q58 90 70 82" stroke="#1c3147" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="78" cy="60" r="6" fill="#d6f1ff"/>')},
     {"id": "bunny", "label": "Coelho", "category": "Animais", "svg": _svg("#f7cfdc",
-        '<ellipse cx="46" cy="36" rx="10" ry="28" fill="#fff"/><ellipse cx="82" cy="36" rx="10" ry="28" fill="#fff"/><ellipse cx="46" cy="38" rx="5" ry="18" fill="#f7a8bd"/><ellipse cx="82" cy="38" rx="5" ry="18" fill="#f7a8bd"/><circle cx="64" cy="80" r="30" fill="#fff"/><circle cx="54" cy="78" r="4" fill="#3a2418"/><circle cx="74" cy="78" r="4" fill="#3a2418"/><ellipse cx="64" cy="90" rx="6" ry="4" fill="#f7a8bd"/>')},
+        '<ellipse cx="46" cy="34" rx="10" ry="28" fill="#fff"/><ellipse cx="82" cy="34" rx="10" ry="28" fill="#fff"/><ellipse cx="46" cy="36" rx="5" ry="18" fill="#f7a8bd"/><ellipse cx="82" cy="36" rx="5" ry="18" fill="#f7a8bd"/><circle cx="64" cy="80" r="32" fill="#fff"/><circle cx="50" cy="92" r="6" fill="#f7a8bd"/><circle cx="78" cy="92" r="6" fill="#f7a8bd"/>' + _eyes(64, 78, 5) + _smile(64, 94))},
     {"id": "cactus", "label": "Cacto", "category": "Plantas", "svg": _svg("#f3e0b0",
-        '<rect x="54" y="36" width="20" height="64" rx="10" fill="#3fa66a"/><rect x="30" y="58" width="28" height="12" rx="6" fill="#3fa66a"/><rect x="70" y="50" width="28" height="12" rx="6" fill="#3fa66a"/><circle cx="64" cy="44" r="4" fill="#e85d75"/>')},
+        '<rect x="54" y="36" width="20" height="64" rx="10" fill="#3fa66a"/><rect x="30" y="58" width="28" height="12" rx="6" fill="#3fa66a"/><rect x="70" y="50" width="28" height="12" rx="6" fill="#3fa66a"/><circle cx="64" cy="44" r="4" fill="#e85d75"/><circle cx="60" cy="68" r="3" fill="#2b2235"/><circle cx="68" cy="68" r="3" fill="#2b2235"/>' + _smile(64, 78))},
     {"id": "sunflower", "label": "Girassol", "category": "Plantas", "svg": _svg("#8ecf8a",
         '<circle cx="64" cy="64" r="22" fill="#f2c14e"/><circle cx="64" cy="64" r="12" fill="#6b3f1d"/><g fill="#f6d36b"><circle cx="64" cy="32" r="10"/><circle cx="64" cy="96" r="10"/><circle cx="32" cy="64" r="10"/><circle cx="96" cy="64" r="10"/><circle cx="40" cy="40" r="9"/><circle cx="88" cy="40" r="9"/><circle cx="40" cy="88" r="9"/><circle cx="88" cy="88" r="9"/></g>')},
     {"id": "mushroom", "label": "Cogumelo", "category": "Plantas", "svg": _svg("#f4d7c5",
-        '<path d="M24 70 Q64 18 104 70 Z" fill="#e85d75"/><rect x="52" y="68" width="24" height="34" rx="10" fill="#f8efe6"/><circle cx="48" cy="52" r="7" fill="#fff"/><circle cx="72" cy="44" r="6" fill="#fff"/>')},
+        '<path d="M24 70 Q64 18 104 70 Z" fill="#e85d75"/><rect x="52" y="68" width="24" height="34" rx="10" fill="#f8efe6"/><circle cx="48" cy="52" r="7" fill="#fff"/><circle cx="72" cy="44" r="6" fill="#fff"/><circle cx="58" cy="82" r="3" fill="#2b2235"/><circle cx="70" cy="82" r="3" fill="#2b2235"/>')},
     {"id": "leaf", "label": "Folha", "category": "Plantas", "svg": _svg("#c5e8c2",
         '<path d="M28 96 Q36 28 96 24 Q92 92 28 96 Z" fill="#2f8f5b"/><path d="M40 88 Q64 56 88 36" stroke="#d7f5de" stroke-width="4" fill="none"/>')},
     {"id": "tulip", "label": "Tulipa", "category": "Plantas", "svg": _svg("#fde2ef",

@@ -1,4 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img">
   <rect width="128" height="128" rx="36" fill="#f3b36a"/>
-  <polygon points="24,78 40,28 56,78" fill="#e07a3d"/><polygon points="72,78 88,28 104,78" fill="#e07a3d"/><circle cx="64" cy="78" r="32" fill="#ffd29a"/><circle cx="54" cy="76" r="5" fill="#3a2418"/><circle cx="74" cy="76" r="5" fill="#3a2418"/><ellipse cx="64" cy="92" rx="10" ry="6" fill="#e07a3d"/>
+  <polygon points="22,76 40,22 58,70" fill="#e07a3d"/><polygon points="70,70 88,22 106,76" fill="#e07a3d"/><circle cx="64" cy="78" r="34" fill="#ffd29a"/><circle cx="48" cy="92" r="7" fill="#ff9aa2"/><circle cx="80" cy="92" r="7" fill="#ff9aa2"/><circle cx="52" cy="74" r="6" fill="#2b2235"/><circle cx="76" cy="74" r="6" fill="#2b2235"/><circle cx="54" cy="72" r="2" fill="#fff"/><circle cx="78" cy="72" r="2" fill="#fff"/><path d="M54 90 Q64 100 74 90" stroke="#2b2235" stroke-width="3" fill="none" stroke-linecap="round"/>
 </svg>

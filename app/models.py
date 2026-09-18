@@ -15,13 +15,20 @@ class User(Base):
     username_key: Mapped[str] = mapped_column(String(80), unique=True, nullable=False, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     pending_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     is_active: Mapped[bool] = mapped_column(default=False, nullable=False)
     avatar: Mapped[str] = mapped_column(String(40), default="popcorn", nullable=False)
+    bio: Mapped[str] = mapped_column(String(150), default="", nullable=False)
+    google_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    facebook_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    last_seen: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    presence: Mapped[str] = mapped_column(String(12), default="offline", nullable=False)
+    username_changed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     memberships: Mapped[list["ClubMember"]] = relationship(back_populates="user")
     email_tokens: Mapped[list["EmailToken"]] = relationship(back_populates="user")
+    messages: Mapped[list["ClubMessage"]] = relationship(back_populates="user")
 
 
 class EmailToken(Base):
@@ -45,10 +52,16 @@ class Club(Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     join_code: Mapped[str] = mapped_column(String(8), unique=True, nullable=False)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    is_closed: Mapped[bool] = mapped_column(default=False, nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    rules: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    cover_color: Mapped[str] = mapped_column(String(7), default="#3a2348", nullable=False)
+    cover_image: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     members: Mapped[list["ClubMember"]] = relationship(back_populates="club")
     shows: Mapped[list["ClubShow"]] = relationship(back_populates="club")
+    messages: Mapped[list["ClubMessage"]] = relationship(back_populates="club")
 
 
 class ClubMember(Base):
@@ -58,6 +71,7 @@ class ClubMember(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    is_admin: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     club: Mapped[Club] = relationship(back_populates="members")
     user: Mapped[User] = relationship(back_populates="memberships")
@@ -69,11 +83,13 @@ class Show(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tvmaze_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), default="serie", nullable=False)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str | None] = mapped_column(String(40), nullable=True)
     premiered: Mapped[str | None] = mapped_column(String(20), nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     official_site: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    genres: Mapped[str | None] = mapped_column(Text, nullable=True)
     news_fetched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     seasons: Mapped[list["Season"]] = relationship(back_populates="show", cascade="all, delete-orphan")
@@ -105,10 +121,36 @@ class ClubShow(Base):
     club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), nullable=False)
     show_id: Mapped[int] = mapped_column(ForeignKey("shows.id"), nullable=False)
     added_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    watch_status: Mapped[str] = mapped_column(String(20), default="watching", nullable=False)
     added_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     club: Mapped[Club] = relationship(back_populates="shows")
     show: Mapped[Show] = relationship(back_populates="clubs")
+
+
+class ClubShowRating(Base):
+    __tablename__ = "club_show_ratings"
+    __table_args__ = (UniqueConstraint("club_id", "user_id", "show_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    show_id: Mapped[int] = mapped_column(ForeignKey("shows.id"), nullable=False)
+    stars: Mapped[int] = mapped_column(Integer, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class ClubMessage(Base):
+    __tablename__ = "club_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    club: Mapped[Club] = relationship(back_populates="messages")
+    user: Mapped[User] = relationship(back_populates="messages")
 
 
 class NewsItem(Base):

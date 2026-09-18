@@ -1,3 +1,5 @@
+app/static/uploads/clubs/*
+!app/static/uploads/clubs/.gitkeep
 .venv/
 __pycache__/
 *.py[cod]

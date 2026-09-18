@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{% if mode == 'edit' %}Configurações · {{ club.name }}{% else %}Criar um clube{% endif %}{% endblock %}
+{% block content %}
+<p class="crumb"><a href="/">Início</a>{% if mode == 'edit' %} / <a href="/clubs/{{ club.id }}">{{ club.name }}</a> / Configurações{% else %} / Novo clube{% endif %}</p>
+<section class="card">
+  <h1>{% if mode == 'edit' %}Configurações do clube{% else %}Criar um clube{% endif %}</h1>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <div class="club-cover-banner cover-preview" id="cover-preview" style="background: {{ (club.cover_color if club else '#3a2348') }}">
+    {% if club and club.cover_image %}
+      <img id="cover-preview-img" src="{{ cover_image_url(club.cover_image) }}" alt="">
+    {% else %}
+      <img id="cover-preview-img" alt="" hidden>
+    {% endif %}
+  </div>
+  <form action="{% if mode == 'edit' %}/clubs/{{ club.id }}/config{% else %}/clubs{% endif %}" method="post" enctype="multipart/form-data">
+    <label>Nome do clube
+      <input name="name" required maxlength="120" value="{{ club.name if club else '' }}" placeholder="Noite de série">
+    </label>
+    <label>Descrição
+      <textarea name="description" rows="3" maxlength="800" placeholder="Sobre o clube">{{ club.description if club else '' }}</textarea>
+    </label>
+    <label>Informações e regras
+      <textarea name="rules" rows="5" maxlength="2000" placeholder="Combinados do grupo">{{ club.rules if club else '' }}</textarea>
+    </label>
+    <p class="bio-label">Capa</p>
+    <div class="color-row">
+      {% for color in COVER_COLORS %}
+        <label class="color-option">
+          <input type="radio" name="cover_color" value="{{ color }}" {% if (club.cover_color if club else '#3a2348') == color %}checked{% endif %}>
+          <span class="color-swatch" style="background: {{ color }}"></span>
+        </label>
+      {% endfor %}
+    </div>
+    <label>Ou envie uma imagem
+      <input type="file" name="cover_file" id="cover-file" accept="image/jpeg,image/png,image/webp,image/gif">
+    </label>
+    {% if mode == 'edit' and club.cover_image %}
+      <label class="check"><input type="checkbox" name="clear_cover" value="1"> Remover imagem e usar só a cor</label>
+    {% endif %}
+    <label class="check"><input type="checkbox" name="is_closed" value="1" {% if club and club.is_closed %}checked{% endif %}> Clube fechado (só entra com código)</label>
+    {% if mode == 'edit' %}
+      <p><a href="/clubs/{{ club.id }}/membros">Gerenciar participantes</a></p>
+    {% endif %}
+    <button type="submit">{% if mode == 'edit' %}Salvar{% else %}Criar clube{% endif %}</button>
+  </form>
+</section>
+<script>
+  const preview = document.getElementById("cover-preview");
+  const previewImg = document.getElementById("cover-preview-img");
+  document.querySelectorAll("input[name=cover_color]").forEach((input) => {
+    input.addEventListener("change", () => { preview.style.background = input.value; });
+  });
+  document.getElementById("cover-file").addEventListener("change", (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    previewImg.src = URL.createObjectURL(file);
+    previewImg.hidden = false;
+  });
+</script>
+{% endblock %}

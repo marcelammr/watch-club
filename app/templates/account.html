@@ -2,32 +2,53 @@
 {% block title %}Minha conta · Watch Club{% endblock %}
 {% block content %}
 <p class="crumb"><a href="/">Início</a> / Minha conta</p>
-<h1>Minha conta</h1>
+<h1>Configurações</h1>
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
 
 <section class="card">
-  <h2>Foto de perfil</h2>
   <div class="current-avatar">
-    <img src="/static/avatars/{{ user.avatar }}.svg" alt="Avatar atual" width="72" height="72">
-    <span>@{{ user.username }}</span>
+    <button type="button" class="avatar-trigger" id="open-avatar" aria-label="Editar foto de perfil" aria-haspopup="dialog" aria-controls="avatar-modal">
+      <img src="/static/avatars/{{ user.avatar }}.svg" alt="Foto de perfil">
+      <span class="avatar-edit-hint" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0 0-3L16.5 4.5a2.1 2.1 0 0 0-3 0L3 15v5z"/>
+          <path d="M12.5 6.5l5 5"/>
+          <path d="M4.5 15.5c2 1 3.5 2.5 4 4"/>
+        </svg>
+      </span>
+    </button>
+    <div>
+      <strong>{{ user.name }}</strong>
+      <p class="status {{ presence_of(user) }}"><span class="dot"></span>{{ presence_label(user) }}</p>
+      <p><a href="/u/{{ user.username }}">Ver perfil público</a></p>
+    </div>
   </div>
-  <form action="/conta/avatar" method="post" class="avatar-form">
-    {% for category, icons in avatar_groups.items() %}
-      <h3>{{ category }}</h3>
-      <div class="avatar-grid">
-        {% for icon in icons %}
-          <label class="avatar-option">
-            <input type="radio" name="avatar" value="{{ icon.id }}" {% if user.avatar == icon.id %}checked{% endif %}>
-            <img src="/static/avatars/{{ icon.id }}.svg" alt="{{ icon.label }}">
-            <span>{{ icon.label }}</span>
-          </label>
-        {% endfor %}
-      </div>
-    {% endfor %}
-    <button type="submit">Salvar foto</button>
-  </form>
 </section>
+
+<dialog id="avatar-modal" class="avatar-modal">
+  <div class="avatar-modal-card">
+    <div class="avatar-modal-head">
+      <h2>Foto de perfil</h2>
+      <button type="button" class="ghost" id="close-avatar" aria-label="Fechar">Fechar</button>
+    </div>
+    <form action="/conta/avatar" method="post" class="avatar-form">
+      {% for category, icons in avatar_groups.items() %}
+        <h3>{{ category }}</h3>
+        <div class="avatar-grid">
+          {% for icon in icons %}
+            <label class="avatar-option">
+              <input type="radio" name="avatar" value="{{ icon.id }}" {% if user.avatar == icon.id %}checked{% endif %}>
+              <img src="/static/avatars/{{ icon.id }}.svg" alt="{{ icon.label }}">
+              <span>{{ icon.label }}</span>
+            </label>
+          {% endfor %}
+        </div>
+      {% endfor %}
+      <button type="submit">Salvar foto</button>
+    </form>
+  </div>
+</dialog>
 
 <section class="grid-2">
   <div class="card">
@@ -41,21 +62,41 @@
       </div>
     {% endif %}
     <form action="/conta/perfil" method="post">
-      <label>Nome de usuário
-        <input id="username" name="username" value="{{ user.username }}" required minlength="3" maxlength="30">
+      <label>Nome
+        <input name="name" value="{{ user.name }}" required maxlength="80" placeholder="Como você quer aparecer">
       </label>
+      <label>Nickname
+        <input id="username" name="username" value="{{ user.username }}" required minlength="3" maxlength="30" {% if nickname_locked %}readonly{% endif %}>
+      </label>
+      {% if nickname_locked %}
+        <p class="muted">O nickname só pode ser alterado a cada {{ nickname_days }} dias. Próxima troca em {{ nickname_unlock }}.</p>
+      {% else %}
+        <p class="muted">Único no site. Letras, números e _. Pode mudar a cada {{ nickname_days }} dias.</p>
+      {% endif %}
       <ul id="live-suggestions" class="suggestions"></ul>
       <label>E-mail <input type="email" name="email" value="{{ user.email }}" required></label>
       {% if user.pending_email %}
         <p class="muted">Novo e-mail aguardando confirmação: {{ user.pending_email }}</p>
       {% endif %}
+      <div class="bio-field">
+        <p class="bio-label">Bio</p>
+        <div class="emoji-bar" id="emoji-bar" aria-label="Emojis e símbolos">
+          {% for item in ["🍿","🎬","📺","⭐","❤️","✨","🌙","🌸","🐱","🎧","☕","🔥","♪","★","♥","✦","☺","→","•","✿"] %}
+            <button type="button" class="emoji-btn" data-emoji="{{ item }}">{{ item }}</button>
+          {% endfor %}
+        </div>
+        <textarea id="bio" class="bio-box" name="bio" maxlength="{{ BIO_MAX }}" rows="4" placeholder="Conte um pouco sobre você">{{ user.bio or '' }}</textarea>
+        <p class="muted bio-count"><span id="bio-count">0</span>/{{ BIO_MAX }}</p>
+      </div>
       <button type="submit">Salvar perfil</button>
     </form>
   </div>
   <div class="card">
     <h2>Senha</h2>
     <form action="/conta/senha" method="post">
-      <label>Senha atual <input type="password" name="current_password" required></label>
+      {% if user.password_hash %}
+        <label>Senha atual <input type="password" name="current_password" required></label>
+      {% endif %}
       <label>Nova senha <input type="password" name="new_password" required minlength="4"></label>
       <label>Confirmar nova senha <input type="password" name="confirm_password" required minlength="4"></label>
       <button type="submit">Alterar senha</button>
@@ -80,7 +121,8 @@
         <li class="club-row">
           <div>
             <a href="/clubs/{{ club.id }}">{{ club.name }}</a>
-            <span class="muted">código {{ club.join_code }}{% if club.owner_id == user.id %} · você é o dono{% endif %}</span>
+            {% if club.is_closed %}<span class="lock" title="Clube fechado">🔒</span>{% endif %}
+            <span class="muted"><a class="member-count" href="/clubs/{{ club.id }}/membros">{{ club.members|length }} participantes</a> · código {{ club.join_code }}</span>
           </div>
           <form action="/clubs/{{ club.id }}/leave" method="post">
             <input type="hidden" name="next" value="/conta">
@@ -96,12 +138,44 @@
 <script>
   const input = document.getElementById("username");
   const live = document.getElementById("live-suggestions");
-  function fillUsername(value) { input.value = value; }
+  const bio = document.getElementById("bio");
+  const bioCount = document.getElementById("bio-count");
+  function fillUsername(value) {
+    if (input.readOnly) return;
+    input.value = value;
+  }
+  function updateBio() { bioCount.textContent = (bio.value || "").length; }
+  updateBio();
+  bio.addEventListener("input", updateBio);
   document.querySelectorAll("[data-username]").forEach((btn) => {
     btn.addEventListener("click", () => fillUsername(btn.dataset.username));
   });
+  function insertEmoji(symbol) {
+    const max = Number(bio.getAttribute("maxlength") || 150);
+    const start = bio.selectionStart ?? bio.value.length;
+    const end = bio.selectionEnd ?? bio.value.length;
+    const next = bio.value.slice(0, start) + symbol + bio.value.slice(end);
+    if (next.length > max) return;
+    bio.value = next;
+    const cursor = start + symbol.length;
+    bio.focus();
+    bio.setSelectionRange(cursor, cursor);
+    updateBio();
+  }
+  document.getElementById("emoji-bar").querySelectorAll("[data-emoji]").forEach((btn) => {
+    btn.addEventListener("click", () => insertEmoji(btn.dataset.emoji));
+  });
   let timer;
+  const avatarModal = document.getElementById("avatar-modal");
+  const openAvatar = document.getElementById("open-avatar");
+  const closeAvatar = document.getElementById("close-avatar");
+  openAvatar.addEventListener("click", () => avatarModal.showModal());
+  closeAvatar.addEventListener("click", () => avatarModal.close());
+  avatarModal.addEventListener("click", (event) => {
+    if (event.target === avatarModal) avatarModal.close();
+  });
   input.addEventListener("input", () => {
+    if (input.readOnly) return;
     clearTimeout(timer);
     timer = setTimeout(async () => {
       const q = input.value.trim();

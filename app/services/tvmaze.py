@@ -7,6 +7,17 @@ import httpx
 TVMAZE = "https://api.tvmaze.com"
 
 
+def _kind(type_name: str | None) -> str:
+    text = (type_name or "").lower()
+    if "anim" in text:
+        return "animacao"
+    if "movie" in text or "film" in text:
+        return "filme"
+    if any(token in text for token in ("talk", "reality", "variety", "award", "news", "game")):
+        return "programa"
+    return "serie"
+
+
 def _image(payload: dict | None) -> str | None:
     if not payload:
         return None
@@ -42,6 +53,8 @@ async def search_shows(query: str) -> list[dict]:
                     "status": show.get("status"),
                     "image_url": _image(show.get("image")),
                     "summary": _strip_html(show.get("summary")),
+            "kind": _kind(show.get("type")),
+                    "genres": [item for item in (show.get("genres") or []) if item],
                 }
             )
         return results
@@ -64,6 +77,8 @@ async def fetch_show_and_seasons(tvmaze_id: int) -> tuple[dict, list[dict]]:
             "premiered": show.get("premiered"),
             "image_url": _image(show.get("image")),
             "official_site": show.get("officialSite"),
+            "kind": _kind(show.get("type")),
+            "genres": [item for item in (show.get("genres") or []) if item],
         }
         seasons = []
         for season in seasons_resp.json():
@@ -78,3 +93,11 @@ async def fetch_show_and_seasons(tvmaze_id: int) -> tuple[dict, list[dict]]:
                 }
             )
         return show_data, seasons
+
+
+async def fetch_show_genres(tvmaze_id: int) -> list[str]:
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(f"{TVMAZE}/shows/{tvmaze_id}")
+        response.raise_for_status()
+        show = response.json()
+        return [item for item in (show.get("genres") or []) if item]

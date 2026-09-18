@@ -12,12 +12,20 @@
       {% endfor %}
     </div>
   {% endif %}
+  <div class="oauth">
+    <a class="oauth-btn google" href="/auth/google">Continuar com Gmail</a>
+    <a class="oauth-btn facebook" href="/auth/facebook">Continuar com Facebook</a>
+  </div>
+  <p class="muted center">ou com e-mail</p>
   <form method="post">
     {% if mode == 'register' %}
-      <label>Nome de usuário
+      <label>Nome
+        <input name="name" required maxlength="80" value="{{ form.name or '' }}" placeholder="Seu nome">
+      </label>
+      <label>Nickname
         <input id="username" name="username" required minlength="3" maxlength="30" value="{{ form.username or '' }}" placeholder="ex: marcela_tv">
       </label>
-      <p class="muted">Único no site. Letras, números e _.</p>
+      <p class="muted">Único no site. Letras, números e _. Só pode ser alterado a cada 14 dias.</p>
       <ul id="live-suggestions" class="suggestions"></ul>
     {% endif %}
     <label>E-mail <input type="email" name="email" required value="{{ form.email or '' }}"></label>

@@ -4,18 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Watch Club{% endblock %}</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v=watch-rate">
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <header class="top">
     <a class="logo" href="/">Watch Club</a>
     <nav>
       {% if user %}
-        <a class="account-link" href="/conta">
-          <img class="nav-avatar" src="/static/avatars/{{ user.avatar }}.svg" alt="">
-          Minha conta
+        <a class="account-link" href="/conta" title="{{ user.name }}">
+          <img class="nav-avatar" src="/static/avatars/{{ user.avatar }}.svg" alt="{{ user.name }}">
+          <span class="account-label">Minha conta</span>
+          <span class="status {{ presence_of(user) }}"><span class="dot"></span></span>
         </a>
-        <form action="/logout" method="post"><button type="submit">Sair da sessão</button></form>
+        <form class="logout-form" action="/logout" method="post"><button type="submit">Sair da sessão</button></form>
       {% else %}
         <a href="/login">Entrar</a>
         <a class="btn" href="/register">Criar conta</a>
@@ -25,5 +26,23 @@
   <main>
     {% block content %}{% endblock %}
   </main>
+  {% if user %}
+  <script>
+    function ping(status) {
+      fetch("/presenca", {
+        method: "POST",
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: "status=" + encodeURIComponent(status),
+        keepalive: true
+      }).catch(() => {});
+    }
+    ping(document.visibilityState === "hidden" ? "away" : "online");
+    setInterval(() => ping(document.visibilityState === "hidden" ? "away" : "online"), 30000);
+    document.addEventListener("visibilitychange", () => {
+      ping(document.visibilityState === "hidden" ? "away" : "online");
+    });
+    window.addEventListener("pagehide", () => ping("away"));
+  </script>
+  {% endif %}
 </body>
 </html>

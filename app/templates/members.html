@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Participantes · {{ club.name }}{% endblock %}
+{% block content %}
+<p class="crumb"><a href="/">Início</a> / <a href="/clubs/{{ club.id }}">{{ club.name }}</a> / Participantes</p>
+<h1>{{ club.members|length }} participante{% if club.members|length != 1 %}s{% endif %}</h1>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<ul class="people">
+  {% for member in members %}
+    <li class="person-row">
+      <a class="person-row" href="/u/{{ member.user.username }}">
+        <img src="/static/avatars/{{ member.user.avatar }}.svg" alt="">
+        <span>{{ member.user.name }}</span>
+        {% if member.is_admin %}<span class="muted">admin</span>{% endif %}
+        <span class="status {{ presence_of(member.user) }}"><span class="dot"></span>{{ presence_label(member.user) }}</span>
+      </a>
+      {% if is_admin and member.user_id != user.id %}
+        {% if member.is_admin %}
+          <form action="/clubs/{{ club.id }}/membros/{{ member.user_id }}/admin" method="post">
+            <input type="hidden" name="action" value="revoke">
+            <button class="danger" type="submit" {% if admin_total <= 1 %}disabled{% endif %}>Remover admin</button>
+          </form>
+        {% else %}
+          <form action="/clubs/{{ club.id }}/membros/{{ member.user_id }}/admin" method="post">
+            <input type="hidden" name="action" value="grant">
+            <button type="submit">Tornar admin</button>
+          </form>
+        {% endif %}
+      {% endif %}
+    </li>
+  {% endfor %}
+</ul>
+{% endblock %}
