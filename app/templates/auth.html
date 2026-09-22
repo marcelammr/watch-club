@@ -1,72 +1,56 @@
 {% extends "base.html" %}
-{% block title %}{% if mode == 'login' %}Entrar{% else %}Criar conta{% endif %} · Watch Club{% endblock %}
+{% block title %}{% if mode == 'forgot' %}Recuperar senha{% elif mode == 'reset' %}Redefinir senha{% elif mode == 'login' %}Entrar{% else %}Criar conta{% endif %} · Watch Club{% endblock %}
+{% block body_class %}auth-page{% endblock %}
 {% block content %}
-<section class="card narrow">
-  <h1>{% if mode == 'login' %}Entrar{% else %}Criar conta{% endif %}</h1>
-  {% if error %}<p class="error">{{ error }}</p>{% endif %}
-  {% if suggestions %}
-    <p class="muted">Variações disponíveis:</p>
-    <div class="suggestions">
-      {% for item in suggestions %}
-        <button type="button" class="chip" data-username="{{ item }}">{{ item }}</button>
-      {% endfor %}
-    </div>
-  {% endif %}
-  <div class="oauth">
-    <a class="oauth-btn google" href="/auth/google">Continuar com Gmail</a>
-    <a class="oauth-btn facebook" href="/auth/facebook">Continuar com Facebook</a>
-  </div>
-  <p class="muted center">ou com e-mail</p>
-  <form method="post">
-    {% if mode == 'register' %}
-      <label>Nome
-        <input name="name" required maxlength="80" value="{{ form.name or '' }}" placeholder="Seu nome">
-      </label>
-      <label>Nickname
-        <input id="username" name="username" required minlength="3" maxlength="30" value="{{ form.username or '' }}" placeholder="ex: marcela_tv">
-      </label>
-      <p class="muted">Único no site. Letras, números e _. Só pode ser alterado a cada 14 dias.</p>
-      <ul id="live-suggestions" class="suggestions"></ul>
-    {% endif %}
-    <label>E-mail <input type="email" name="email" required value="{{ form.email or '' }}"></label>
-    <label>Senha <input type="password" name="password" required minlength="4"></label>
-    <button type="submit">{% if mode == 'login' %}Entrar{% else %}Cadastrar{% endif %}</button>
-  </form>
-  <p class="muted">
-    {% if mode == 'login' %}
-      Sem conta? <a href="/register">Cadastre-se</a>
+<script type="application/json" id="auth-props">{{ {
+  "mode": mode,
+  "error": error or "",
+  "ok": ok or "",
+  "suggestions": suggestions or [],
+  "form": form or {},
+  "dev_code": dev_code or none
+}|tojson }}</script>
+<div id="auth-root" class="mx-auto w-full max-w-sm">
+  <section class="card narrow">
+    <h1>{% if mode == 'forgot' %}Recuperar senha{% elif mode == 'reset' %}Redefinir senha{% elif mode == 'login' %}Entrar{% else %}Criar conta{% endif %}</h1>
+    {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    {% if mode == 'reset' and dev_code %}<p class="ok">Modo local: seu código é {{ dev_code }}</p>{% endif %}
+    {% if mode == 'forgot' %}
+      <form method="post">
+        <label>E-mail <input type="email" name="email" required value="{{ form.email or '' }}"></label>
+        <button type="submit">Enviar código</button>
+      </form>
+    {% elif mode == 'reset' %}
+      <form method="post">
+        <label>Código <input name="code" required maxlength="6" inputmode="numeric" pattern="[0-9]{6}"></label>
+        <label>Nova senha <input type="password" name="new_password" required minlength="4"></label>
+        <label>Confirmar nova senha <input type="password" name="confirm_password" required minlength="4"></label>
+        <button type="submit">Redefinir senha</button>
+      </form>
     {% else %}
-      Já tem conta? <a href="/login">Entrar</a>
+      <form method="post">
+        {% if mode == 'register' %}
+          <label>Nome <input name="name" required maxlength="80" value="{{ form.name or '' }}"></label>
+          <label>Nickname <input name="username" required minlength="3" maxlength="30" value="{{ form.username or '' }}"></label>
+        {% endif %}
+        <label>E-mail <input type="email" name="email" required value="{{ form.email or '' }}"></label>
+        <label>Senha <input type="password" name="password" required minlength="4"></label>
+        {% if mode == 'login' %}<p class="muted"><a href="/recuperar-senha">Esqueceu a senha?</a></p>{% endif %}
+        <button type="submit">{% if mode == 'login' %}Entrar{% else %}Cadastrar{% endif %}</button>
+      </form>
+      <div class="oauth">
+        <a class="oauth-btn google" href="/auth/google">Continuar com Gmail</a>
+        <a class="oauth-btn facebook" href="/auth/facebook">Continuar com Facebook</a>
+      </div>
     {% endif %}
-  </p>
-</section>
-{% if mode == 'register' %}
-<script>
-  const input = document.getElementById("username");
-  const live = document.getElementById("live-suggestions");
-  function fillUsername(value) {
-    input.value = value;
-  }
-  document.querySelectorAll("[data-username]").forEach((btn) => {
-    btn.addEventListener("click", () => fillUsername(btn.dataset.username));
-  });
-  let timer;
-  input.addEventListener("input", () => {
-    clearTimeout(timer);
-    timer = setTimeout(async () => {
-      const q = input.value.trim();
-      if (q.length < 3) { live.innerHTML = ""; return; }
-      const data = await fetch("/api/username?q=" + encodeURIComponent(q)).then(r => r.json());
-      if (data.available) {
-        live.innerHTML = "<li class='ok'>Nome disponível</li>";
-      } else {
-        live.innerHTML = data.suggestions.map(s => `<button type="button" class="chip" data-username="${s}">${s}</button>`).join(" ");
-        live.querySelectorAll("[data-username]").forEach((btn) => {
-          btn.addEventListener("click", () => fillUsername(btn.dataset.username));
-        });
-      }
-    }, 250);
-  });
-</script>
-{% endif %}
+    <p class="muted">
+      {% if mode == 'login' %}
+        Sem conta? <a href="/register">Cadastre-se</a>
+      {% else %}
+        <a href="/login">Voltar ao login</a>
+      {% endif %}
+    </p>
+  </section>
+</div>
 {% endblock %}

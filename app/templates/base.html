@@ -1,20 +1,20 @@
+{% from "macros/avatar.html" import user_avatar %}
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="dark" dir="ltr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Watch Club{% endblock %}</title>
-  <link rel="stylesheet" href="/static/style.css?v=watch-rate">
+  <link rel="stylesheet" href="/static/style.css">
 </head>
-<body class="{% block body_class %}{% endblock %}">
+<body class="min-h-screen bg-background font-display text-foreground {% block body_class %}{% endblock %}">
   <header class="top">
     <a class="logo" href="/">Watch Club</a>
-    <nav>
+    <nav class="flex items-center gap-4">
       {% if user %}
         <a class="account-link" href="/conta" title="{{ user.name }}">
-          <img class="nav-avatar" src="/static/avatars/{{ user.avatar }}.svg" alt="{{ user.name }}">
+          {{ user_avatar(user, 'md') }}
           <span class="account-label">Minha conta</span>
-          <span class="status {{ presence_of(user) }}"><span class="dot"></span></span>
         </a>
         <form class="logout-form" action="/logout" method="post"><button type="submit">Sair da sessão</button></form>
       {% else %}
@@ -44,5 +44,7 @@
     window.addEventListener("pagehide", () => ping("away"));
   </script>
   {% endif %}
+  <div id="command-root"></div>
+  <script type="module" src="/static/js/command.js"></script>
 </body>
 </html>

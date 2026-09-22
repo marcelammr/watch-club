@@ -45,6 +45,26 @@ def test_health():
     assert response.json()["status"] == "ok"
 
 
+def test_command_api_guest_and_member():
+    guest = client.get("/api/command")
+    assert guest.status_code == 200
+    labels = [item["label"] for group in guest.json()["groups"] for item in group["items"]]
+    assert "Entrar" in labels
+    assert "Criar conta" in labels
+
+    member = TestClient(app)
+    register_active(member, "cmdk_user", "cmdk@example.com")
+    created = member.post("/clubs", data={"name": "Clube Command"}, follow_redirects=False)
+    assert created.status_code == 303
+    menu = member.get("/api/command")
+    body = menu.json()
+    headings = [group["heading"] for group in body["groups"]]
+    assert "Navegação" in headings
+    assert "Clubes" in headings
+    club_names = [item["label"] for group in body["groups"] if group["heading"] == "Clubes" for item in group["items"]]
+    assert "Clube Command" in club_names
+
+
 def test_search_api_uses_tvmaze():
     fake = [
         {
@@ -110,6 +130,59 @@ def test_username_must_be_unique_and_suggests_alternatives():
     assert "cinefila2" in taken.text or "cinefila_tv" in taken.text
 
 
+def test_email_must_be_unique_even_with_different_case():
+    register_active(client, "email_dona", "unica@example.com")
+    other = TestClient(app)
+    taken = other.post(
+        "/register",
+        data={
+            "name": "Outra Pessoa",
+            "username": "email_outra",
+            "email": "Unica@Example.com",
+            "password": "segredo",
+        },
+    )
+    assert taken.status_code == 400
+    assert "e-mail já está cadastrado" in taken.text.lower()
+
+
+def test_oauth_reuses_existing_email_instead_of_creating():
+    from app.accounts import login_or_create_oauth
+    from app.db import SessionLocal
+
+    register_active(client, "oauth_mail", "oauth.unica@example.com")
+    db = SessionLocal()
+    try:
+        first = login_or_create_oauth(
+            db,
+            {
+                "provider": "google",
+                "provider_id": "google-oauth-1",
+                "email": "OAuth.Unica@example.com",
+                "name": "Outra Marcela",
+            },
+        )
+        db.commit()
+        user_id = first.id
+        username = first.username
+        second = login_or_create_oauth(
+            db,
+            {
+                "provider": "google",
+                "provider_id": "google-oauth-1",
+                "email": "oauth.unica@example.com",
+                "name": "Marcela Nova",
+            },
+        )
+        db.commit()
+        assert second.id == user_id
+        assert username == "oauth_mail"
+        count = len(db.scalars(select(User).where(User.email == "oauth.unica@example.com")).all())
+        assert count == 1
+    finally:
+        db.close()
+
+
 def test_update_profile_password_and_avatar():
     other = TestClient(app)
     register_active(other, "ana", "ana@example.com", "antiga")
@@ -130,7 +203,10 @@ def test_update_profile_password_and_avatar():
 
     avatar = other.post("/conta/avatar", data={"avatar": "fox"}, follow_redirects=False)
     assert avatar.status_code == 303
-    assert 'src="/static/avatars/fox.svg"' in other.get("/conta").text
+    account_html = other.get("/conta").text
+    assert 'src="/static/avatars/fox.svg"' in account_html
+    assert 'data-slot="avatar-badge"' in account_html
+    assert 'data-user-avatar' in other.get("/").text
 
     password = other.post(
         "/conta/senha",
@@ -150,6 +226,56 @@ def test_update_profile_password_and_avatar():
     )
     assert login.status_code == 303
     assert login.headers["location"] == "/"
+
+
+def test_password_reset_sends_code_and_updates_password():
+    member = TestClient(app)
+    register_active(member, "reset_user", "reset@example.com", "antiga")
+    member.post("/logout")
+
+    login_page = client.get("/login")
+    assert "Esqueceu a senha?" in login_page.text
+    assert "/recuperar-senha" in login_page.text
+
+    asked = member.post("/recuperar-senha", data={"email": "reset@example.com"}, follow_redirects=False)
+    assert asked.status_code == 303
+    assert asked.headers["location"] == "/recuperar-senha/codigo"
+
+    db = SessionLocal()
+    try:
+        user = db.scalar(select(User).where(User.email == "reset@example.com"))
+        token = db.scalar(select(EmailToken).where(EmailToken.user_id == user.id, EmailToken.purpose == "reset"))
+        assert token is not None
+        code = token.token
+    finally:
+        db.close()
+
+    unknown = TestClient(app)
+    ghost = unknown.post("/recuperar-senha", data={"email": "naoexiste@example.com"}, follow_redirects=False)
+    assert ghost.status_code == 303
+
+    bad = member.post(
+        "/recuperar-senha/codigo",
+        data={"code": "000000", "new_password": "nova123", "confirm_password": "nova123"},
+        follow_redirects=False,
+    )
+    assert bad.status_code == 400
+
+    changed = member.post(
+        "/recuperar-senha/codigo",
+        data={"code": code, "new_password": "nova123", "confirm_password": "nova123"},
+        follow_redirects=False,
+    )
+    assert changed.status_code == 303
+    assert changed.headers["location"].startswith("/")
+
+    member.post("/logout")
+    old = member.post("/login", data={"email": "reset@example.com", "password": "antiga"}, follow_redirects=False)
+    assert old.status_code == 400
+    fresh = TestClient(app)
+    ok_login = fresh.post("/login", data={"email": "reset@example.com", "password": "nova123"}, follow_redirects=False)
+    assert ok_login.status_code == 303
+    assert ok_login.headers["location"] == "/"
 
 
 def test_join_and_leave_club():

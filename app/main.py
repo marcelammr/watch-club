@@ -9,8 +9,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.accounts import create_user, login_or_create_oauth, send_activation, utcnow
-from app.avatars import AVATARS, avatars_by_category, valid_avatar
+from app.accounts import (
+    create_user,
+    email_taken,
+    find_user_by_email,
+    find_valid_reset,
+    login_or_create_oauth,
+    normalize_email,
+    send_activation,
+    send_password_reset,
+    utcnow,
+)
+from app.avatars import AVATARS, avatar_initials, avatars_by_category, valid_avatar
 from app.catalog import (
     CONTENT_KINDS,
     add_manual_title,
@@ -77,6 +87,7 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "app" / "static"), name="s
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
 templates.env.globals["presence_of"] = presence_of
 templates.env.globals["presence_label"] = lambda user: PRESENCE_LABELS[presence_of(user)]
+templates.env.globals["avatar_initials"] = avatar_initials
 templates.env.globals["google_enabled"] = google_enabled
 templates.env.globals["facebook_enabled"] = facebook_enabled
 templates.env.globals["BIO_MAX"] = BIO_MAX
@@ -176,7 +187,7 @@ def register_form(request: Request):
     return templates.TemplateResponse(
         request,
         "auth.html",
-        {"mode": "register", "error": None, "suggestions": [], "form": {}},
+        {"mode": "register", "error": None, "ok": "", "suggestions": [], "form": {}, "dev_code": None},
     )
 
 
@@ -184,7 +195,7 @@ def _auth_page(request: Request, mode: str, error: str, status_code: int = 400, 
     return templates.TemplateResponse(
         request,
         "auth.html",
-        {"mode": mode, "error": error, "suggestions": suggestions or [], "form": form or {}},
+        {"mode": mode, "error": error, "ok": "", "suggestions": suggestions or [], "form": form or {}, "dev_code": None},
         status_code=status_code,
     )
 
@@ -199,7 +210,7 @@ def register(
 ):
     db = db_session()
     try:
-        email = email.strip().lower()
+        email = normalize_email(email)
         display = name.strip()[:80]
         form = {"name": display, "username": username, "email": email}
         key = normalize_username(username)
@@ -220,7 +231,7 @@ def register(
                 suggestions=suggest_usernames(key, taken_keys(db)),
                 form=form,
             )
-        if db.scalar(select(User).where(User.email == email)):
+        if email_taken(db, email):
             return _auth_page(request, "register", "Este e-mail já está cadastrado", form=form)
         user = create_user(db, username, email, password, name=display)
         verify_url = send_activation(db, user)
@@ -238,7 +249,7 @@ def verify_email_page(request: Request, token: str | None = None):
     try:
         if token:
             record = db.scalar(select(EmailToken).where(EmailToken.token == token))
-            if not record or record.expires_at < utcnow():
+            if not record or record.expires_at < utcnow() or record.purpose == "reset":
                 return templates.TemplateResponse(
                     request,
                     "verify.html",
@@ -247,7 +258,7 @@ def verify_email_page(request: Request, token: str | None = None):
                 )
             user = db.get(User, record.user_id)
             if record.purpose == "email_change" and record.new_email:
-                taken = db.scalar(select(User).where(User.email == record.new_email, User.id != user.id))
+                taken = email_taken(db, record.new_email or "", exclude_user_id=user.id)
                 if taken:
                     db.delete(record)
                     db.commit()
@@ -283,13 +294,131 @@ def verify_email_page(request: Request, token: str | None = None):
 def resend_verification(request: Request, email: str = Form(...)):
     db = db_session()
     try:
-        user = db.scalar(select(User).where(User.email == email.strip().lower()))
+        user = find_user_by_email(db, email)
         if user and not user.is_active:
             verify_url = send_activation(db, user)
             db.commit()
             if EMAIL_DEV_SHOW_LINK:
                 request.session["verify_link"] = verify_url
         return RedirectResponse("/verificar-email?ok=Se+o+e-mail+existir,+enviamos+um+novo+link", status_code=303)
+    finally:
+        db.close()
+
+
+def _reset_page(request: Request, mode: str, error: str = "", ok: str = "", form=None, status_code: int = 200):
+    return templates.TemplateResponse(
+        request,
+        "auth.html",
+        {
+            "mode": mode,
+            "error": error,
+            "ok": ok,
+            "suggestions": [],
+            "form": form or {},
+            "dev_code": request.session.get("reset_code") if EMAIL_DEV_SHOW_LINK else None,
+        },
+        status_code=status_code,
+    )
+
+
+@app.get("/recuperar-senha", response_class=HTMLResponse)
+def forgot_password_form(request: Request):
+    return _reset_page(
+        request,
+        "forgot",
+        error=request.query_params.get("error") or "",
+        ok=request.query_params.get("ok") or "",
+        form={"email": request.session.get("reset_email") or ""},
+    )
+
+
+@app.post("/recuperar-senha")
+def forgot_password(request: Request, email: str = Form(...)):
+    db = db_session()
+    try:
+        address = normalize_email(email)
+        user = find_user_by_email(db, address)
+        request.session["reset_email"] = address
+        request.session.pop("reset_code", None)
+        if user:
+            code = send_password_reset(db, user)
+            db.commit()
+            if EMAIL_DEV_SHOW_LINK:
+                request.session["reset_code"] = code
+        return RedirectResponse("/recuperar-senha/codigo", status_code=303)
+    finally:
+        db.close()
+
+
+@app.get("/recuperar-senha/codigo", response_class=HTMLResponse)
+def reset_code_form(request: Request):
+    email = request.session.get("reset_email")
+    if not email:
+        return RedirectResponse("/recuperar-senha", status_code=303)
+    return _reset_page(
+        request,
+        "reset",
+        error=request.query_params.get("error") or "",
+        ok=request.query_params.get("ok") or "",
+        form={"email": email},
+    )
+
+
+@app.post("/recuperar-senha/codigo")
+def reset_password(
+    request: Request,
+    code: str = Form(...),
+    new_password: str = Form(...),
+    confirm_password: str = Form(...),
+):
+    db = db_session()
+    try:
+        email = request.session.get("reset_email") or ""
+        if not email:
+            return RedirectResponse("/recuperar-senha", status_code=303)
+        if len(new_password) < 4:
+            return _reset_page(
+                request,
+                "reset",
+                error="A nova senha precisa ter pelo menos 4 caracteres.",
+                form={"email": email},
+                status_code=400,
+            )
+        if new_password != confirm_password:
+            return _reset_page(
+                request,
+                "reset",
+                error="A confirmação da senha não confere.",
+                form={"email": email},
+                status_code=400,
+            )
+        record = find_valid_reset(db, email, code)
+        if not record:
+            return _reset_page(
+                request,
+                "reset",
+                error="Código inválido ou expirado. Peça um novo código.",
+                form={"email": email},
+                status_code=400,
+            )
+        user = db.get(User, record.user_id)
+        if not user:
+            return _reset_page(
+                request,
+                "reset",
+                error="Código inválido ou expirado. Peça um novo código.",
+                form={"email": email},
+                status_code=400,
+            )
+        user.password_hash = hash_password(new_password)
+        user.is_active = True
+        db.delete(record)
+        request.session.pop("reset_email", None)
+        request.session.pop("reset_code", None)
+        request.session["user_id"] = user.id
+        touch_presence(user, "online")
+        db.commit()
+        return RedirectResponse("/?ok=Senha+redefinida", status_code=303)
     finally:
         db.close()
 
@@ -303,7 +432,7 @@ def login_form(request: Request):
 def login(request: Request, email: str = Form(...), password: str = Form(...)):
     db = db_session()
     try:
-        user = db.scalar(select(User).where(User.email == email.strip().lower()))
+        user = find_user_by_email(db, email)
         if not user or not user.password_hash or not verify_password(password, user.password_hash):
             return _auth_page(request, "login", "E-mail ou senha inválidos", form={"email": email})
         if not user.is_active:
@@ -462,7 +591,7 @@ def update_profile(
         user = login_required(request, db)
         key = normalize_username(username)
         display = name.strip()[:80]
-        email = email.strip().lower()
+        email = normalize_email(email)
         clubs = _user_clubs(db, user.id)
         groups = avatars_by_category()
 
@@ -497,8 +626,7 @@ def update_profile(
                     "Esse nickname já está em uso. Sugestões:",
                     suggest_usernames(key, taken_keys(db) - {user.username_key}),
                 )
-        taken = db.scalar(select(User).where(User.email == email, User.id != user.id))
-        if taken:
+        if email_taken(db, email, exclude_user_id=user.id):
             return account_error("Este e-mail já está em uso")
         user.name = display
         if nick_changed:
@@ -972,6 +1100,48 @@ async def refresh_show(request: Request, club_id: int, show_id: int):
         if exc.status_code == 401:
             return RedirectResponse("/login", status_code=303)
         raise
+    finally:
+        db.close()
+
+
+@app.get("/api/command")
+def api_command(request: Request):
+    db = db_session()
+    try:
+        user = current_user(request, db)
+        if not user:
+            return {
+                "groups": [
+                    {
+                        "heading": "Navegação",
+                        "items": [
+                            {"label": "Início", "href": "/"},
+                            {"label": "Entrar", "href": "/login"},
+                            {"label": "Criar conta", "href": "/register"},
+                        ],
+                    }
+                ]
+            }
+        groups = [
+            {
+                "heading": "Navegação",
+                "items": [
+                    {"label": "Início", "href": "/"},
+                    {"label": "Minha conta", "href": "/conta"},
+                    {"label": "Criar um clube", "href": "/clubs/novo"},
+                    {"label": "Meu perfil", "href": f"/u/{user.username}"},
+                ],
+            }
+        ]
+        clubs = _user_clubs(db, user.id)
+        if clubs:
+            groups.append(
+                {
+                    "heading": "Clubes",
+                    "items": [{"label": club.name, "href": f"/clubs/{club.id}"} for club in clubs],
+                }
+            )
+        return {"groups": groups}
     finally:
         db.close()
 

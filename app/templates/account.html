@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/avatar.html" import user_avatar %}
 {% block title %}Minha conta · Watch Club{% endblock %}
 {% block content %}
 <p class="crumb"><a href="/">Início</a> / Minha conta</p>
@@ -9,7 +10,7 @@
 <section class="card">
   <div class="current-avatar">
     <button type="button" class="avatar-trigger" id="open-avatar" aria-label="Editar foto de perfil" aria-haspopup="dialog" aria-controls="avatar-modal">
-      <img src="/static/avatars/{{ user.avatar }}.svg" alt="Foto de perfil">
+      {{ user_avatar(user, 'lg') }}
       <span class="avatar-edit-hint" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0 0-3L16.5 4.5a2.1 2.1 0 0 0-3 0L3 15v5z"/>

@@ -99,6 +99,10 @@ def migrate_schema() -> None:
     if "ix_users_username_key" not in indexes:
         with engine.begin() as connection:
             connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username_key ON users (username_key)"))
+    with engine.begin() as connection:
+        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email_lower ON users (lower(email))"))
+        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_id ON users (google_id)"))
+        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_facebook_id ON users (facebook_id)"))
     if "shows" in inspector.get_table_names():
         show_cols = {column["name"] for column in inspector.get_columns("shows")}
         if "kind" not in show_cols:

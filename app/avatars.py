@@ -89,6 +89,15 @@ def avatars_by_category() -> dict[str, list[dict]]:
     return grouped
 
 
+def avatar_initials(name: str | None) -> str:
+    parts = [part for part in (name or "").split() if part]
+    if not parts:
+        return "?"
+    if len(parts) == 1:
+        return parts[0][:2].upper()
+    return f"{parts[0][0]}{parts[-1][0]}".upper()
+
+
 def valid_avatar(avatar_id: str | None) -> str:
     if avatar_id in AVATAR_IDS:
         return avatar_id

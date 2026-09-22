@@ -12,9 +12,13 @@ Depois do login, a página inicial mostra só a saudação e três ações: **Me
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+npm install
+npm run build
 cp .env.example .env
 uvicorn app.main:app --reload
 ```
+
+O CSS é gerado com **Tailwind 3.4**. O palete de comandos (shadcn `Command`) abre com **⌘K** ou **Ctrl+K**. Em desenvolvimento, use `npm run watch:css` e `npm run watch:js` em outros terminais.
 
 Abra http://127.0.0.1:8000
 
@@ -33,4 +37,4 @@ Sem SMTP configurado, o link de ativação aparece na página de verificação (
 
 ## Stack
 
-FastAPI, SQLAlchemy, SQLite, httpx, Jinja2.
+FastAPI, SQLAlchemy, SQLite, httpx, Jinja2, Tailwind CSS 3.4.

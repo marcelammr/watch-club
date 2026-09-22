@@ -1,3 +1,4 @@
+node_modules/
 app/static/uploads/clubs/*
 !app/static/uploads/clubs/.gitkeep
 .venv/
