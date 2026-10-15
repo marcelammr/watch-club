@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{% if mode == 'edit' %}Configurações · {{ club.name }}{% else %}Criar um clube{% endif %}{% endblock %}
+{% block page_heading %}{% if mode == 'edit' %}Configurações{% else %}Criar um clube{% endif %}{% endblock %}
 {% block content %}
 <p class="crumb"><a href="/">Início</a>{% if mode == 'edit' %} / <a href="/clubs/{{ club.id }}">{{ club.name }}</a> / Configurações{% else %} / Novo clube{% endif %}</p>
 <section class="card">

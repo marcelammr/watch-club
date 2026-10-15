@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "macros/avatar.html" import user_avatar %}
 {% block title %}{{ person.name }} · Watch Club{% endblock %}
+{% block page_heading %}{{ person.name }}{% endblock %}
 {% block content %}
 <p class="crumb"><a href="/">Início</a> / Perfil</p>
 <section class="card profile-head">
@@ -17,6 +18,41 @@
     {% endif %}
     {% if person.id == user.id %}
       <p><a href="/conta">Editar meu perfil</a></p>
+    {% else %}
+      {% if error %}<p class="error">{{ error }}</p>{% endif %}
+      {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+      <div class="friend-actions">
+        {% if relation == 'none' %}
+          <form action="/amigos/{{ person.username }}/convidar" method="post">
+            <input type="hidden" name="next" value="/u/{{ person.username }}">
+            <button type="submit">Adicionar amigo</button>
+          </form>
+        {% elif relation == 'outgoing' %}
+          <p class="muted">Pedido enviado</p>
+          <form action="/amigos/{{ person.username }}/recusar" method="post">
+            <input type="hidden" name="next" value="/u/{{ person.username }}">
+            <button class="ghost" type="submit">Cancelar pedido</button>
+          </form>
+        {% elif relation == 'incoming' %}
+          <form action="/amigos/{{ person.username }}/aceitar" method="post">
+            <input type="hidden" name="next" value="/u/{{ person.username }}">
+            <button type="submit">Aceitar amizade</button>
+          </form>
+          <form action="/amigos/{{ person.username }}/recusar" method="post">
+            <input type="hidden" name="next" value="/u/{{ person.username }}">
+            <button class="ghost" type="submit">Recusar</button>
+          </form>
+        {% elif relation == 'friends' %}
+          <p><a class="btn" href="/mensagens/{{ person.username }}">Conversar</a></p>
+          <form action="/amigos/{{ person.username }}/desfazer" method="post">
+            <input type="hidden" name="next" value="/u/{{ person.username }}">
+            <button class="danger" type="submit">Desfazer amizade</button>
+          </form>
+        {% endif %}
+        {% if relation != 'friends' and has_history %}
+          <p><a href="/mensagens/{{ person.username }}">Ver conversa</a></p>
+        {% endif %}
+      </div>
     {% endif %}
   </div>
 </section>

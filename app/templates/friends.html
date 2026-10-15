@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "macros/avatar.html" import user_avatar %}
+{% block title %}Amigos · Watch Club{% endblock %}
+{% block page_heading %}Amigos{% endblock %}
+{% block content %}
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+
+<section class="friends-section">
+  <h2 class="friends-heading">Solicitações de amizade</h2>
+  <ul class="people">
+    {% for person in incoming %}
+      <li class="person-row">
+        <a class="person-row" href="/u/{{ person.username }}">
+          {{ user_avatar(person, 'md') }}
+          <span>{{ person.name }}</span>
+          <span class="muted">@{{ person.username }}</span>
+          <span class="status {{ presence_of(person) }}"><span class="dot"></span>{{ presence_label(person) }}</span>
+        </a>
+        <form action="/amigos/{{ person.username }}/aceitar" method="post">
+          <input type="hidden" name="next" value="/amigos">
+          <button type="submit">Aceitar</button>
+        </form>
+        <form action="/amigos/{{ person.username }}/recusar" method="post">
+          <input type="hidden" name="next" value="/amigos">
+          <button class="ghost" type="submit">Recusar</button>
+        </form>
+      </li>
+    {% else %}
+      <li class="muted">Nenhum pedido pendente.</li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="friends-section">
+  <h2 class="friends-heading">Seus amigos</h2>
+  <ul class="people">
+    {% for person in friends %}
+      <li class="person-row">
+        <a class="person-row" href="/u/{{ person.username }}">
+          {{ user_avatar(person, 'md') }}
+          <span>{{ person.name }}</span>
+          <span class="muted">@{{ person.username }}</span>
+          <span class="status {{ presence_of(person) }}"><span class="dot"></span>{{ presence_label(person) }}</span>
+        </a>
+        <a class="btn" href="/mensagens/{{ person.username }}">Conversar</a>
+      </li>
+    {% else %}
+      <li class="muted">Você ainda não tem amigos. Envie um pedido pelo perfil de alguém do clube.</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}

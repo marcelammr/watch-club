@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "macros/avatar.html" import user_avatar %}
 {% block title %}Participantes · {{ club.name }}{% endblock %}
+{% block page_heading %}Participantes{% endblock %}
 {% block content %}
 <p class="crumb"><a href="/">Início</a> / <a href="/clubs/{{ club.id }}">{{ club.name }}</a> / Participantes</p>
 <h1>{{ club.members|length }} participante{% if club.members|length != 1 %}s{% endif %}</h1>
@@ -8,7 +9,7 @@
 <ul class="people">
   {% for member in members %}
     <li class="person-row">
-      <a class="person-row" href="/u/{{ member.user.username }}">
+      <a class="person-row" href="{{ person_href(user.id, member.user, friend_ids) }}">
         {{ user_avatar(member.user, 'md') }}
         <span>{{ member.user.name }}</span>
         {% if member.is_admin %}<span class="muted">admin</span>{% endif %}

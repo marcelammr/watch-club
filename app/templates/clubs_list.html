@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Meus Clubes · Watch Club{% endblock %}
+{% block page_heading %}Meus Clubes{% endblock %}
+{% block content %}
+{% if clubs %}
+  <div class="club-cover-grid">
+    {% for club in clubs %}
+      <a class="club-cover-card" href="/clubs/{{ club.id }}">
+        <span class="club-cover" style="background: {{ club.cover_color or '#3a2348' }}">
+          {% if club.cover_image %}
+            <img src="{{ cover_image_url(club.cover_image) }}" alt="">
+          {% endif %}
+        </span>
+        <strong>{{ club.name }}</strong>
+      </a>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="muted">Você ainda não participa de nenhum clube.</p>
+{% endif %}
+<p class="clubes-extra">
+  <a class="btn" href="/clubs/novo">Criar um clube</a>
+</p>
+{% endblock %}
