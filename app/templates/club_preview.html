@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ club.name }} · Watch Club{% endblock %}
+{% block page_heading %}{{ club.name }}{% endblock %}
 {% block content %}
 <section class="club-cover-banner" style="background: {{ club.cover_color or '#3a2348' }}">
   {% if club.cover_image %}

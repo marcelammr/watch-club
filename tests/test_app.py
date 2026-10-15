@@ -39,6 +39,33 @@ def register_active(
     assert verified.status_code == 303
 
 
+def test_logged_in_shell_and_clubes_page():
+    member = TestClient(app)
+    register_active(member, "nav_user", "nav.user@example.com")
+    created = member.post("/clubs", data={"name": "Clube Nav"}, follow_redirects=False)
+    assert created.status_code == 303
+    home = member.get("/")
+    assert home.status_code == 200
+    assert "app-sidebar" in home.text
+    assert "WatchClub" in home.text
+    assert ">WC<" in home.text
+    assert 'aria-label="Início"' in home.text
+    assert 'aria-label="Meus Clubes"' in home.text
+    assert 'aria-label="Amigos"' in home.text
+    assert 'aria-label="Notificações"' in home.text
+    assert 'href="/amigos"' in home.text
+    assert 'id="open-clubs"' in home.text
+    assert "Sair da sessão" not in home.text
+    clubs = member.get("/clubes")
+    assert clubs.status_code == 200
+    assert "Clube Nav" in clubs.text
+    assert "Meus Clubes" in clubs.text
+    account = member.get("/conta")
+    assert "Sair da sessão" in account.text
+    guest_home = client.get("/")
+    assert "app-sidebar" not in guest_home.text
+
+
 def test_health():
     response = client.get("/health")
     assert response.status_code == 200
@@ -624,4 +651,108 @@ def test_club_ratings_genres_and_admin_remove():
         assert db.scalar(select(ClubShow).where(ClubShow.club_id == club_id, ClubShow.show_id == show_id)) is None
     finally:
         db.close()
+
+
+def test_friends_private_chat_history_and_auth():
+    from app.models import DirectMessage
+
+    host = TestClient(app)
+    register_active(host, "amizade_a", "amizade.a@example.com", name="Amizade A")
+    created = host.post("/clubs", data={"name": "Clube Amigos"}, follow_redirects=False)
+    club_id = int(created.headers["location"].rsplit("/", 1)[-1])
+    db = SessionLocal()
+    try:
+        code = db.get(Club, club_id).join_code
+    finally:
+        db.close()
+
+    guest = TestClient(app)
+    register_active(guest, "amizade_b", "amizade.b@example.com", name="Amizade B")
+    guest.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
+
+    self_invite = host.post("/amigos/amizade_a/convidar", data={"next": "/amigos"}, follow_redirects=False)
+    assert self_invite.status_code == 303
+    assert "error=" in self_invite.headers["location"]
+
+    before = guest.post("/mensagens/amizade_a", data={"body": "cedo demais"}, follow_redirects=False)
+    assert before.status_code == 303
+    assert "/u/amizade_a" in before.headers["location"]
+    blocked_get = guest.get("/mensagens/amizade_a", follow_redirects=False)
+    assert blocked_get.status_code == 303
+    assert blocked_get.headers["location"] == "/u/amizade_a"
+
+    invited = host.post("/amigos/amizade_b/convidar", data={"next": "/u/amizade_b"}, follow_redirects=False)
+    assert invited.status_code == 303
+    again = host.post("/amigos/amizade_b/convidar", data={"next": "/u/amizade_b"}, follow_redirects=False)
+    assert "error=" in again.headers["location"]
+
+    amigos = guest.get("/amigos")
+    assert "Amizade A" in amigos.text
+    assert "Aceitar" in amigos.text
+    assert "Solicitações de amizade" in amigos.text
+    assert "Seus amigos" in amigos.text
+    accepted = guest.post("/amigos/amizade_a/aceitar", data={"next": "/amigos"}, follow_redirects=False)
+    assert accepted.status_code == 303
+
+    sent = host.post("/mensagens/amizade_b", data={"body": "segredo-do-par"}, follow_redirects=False)
+    assert sent.status_code == 303
+    assert sent.headers["location"] == "/mensagens/amizade_b"
+    thread = host.get("/mensagens/amizade_b")
+    assert "segredo-do-par" in thread.text
+    assert 'action="/mensagens/amizade_b"' in thread.text
+    same = guest.get("/mensagens/amizade_a")
+    assert "segredo-do-par" in same.text
+
+    friends_page = host.get("/amigos")
+    assert "Conversar" in friends_page.text
+    assert 'href="/mensagens/amizade_b"' in friends_page.text
+
+    chat = host.get(f"/clubs/{club_id}?aba=chat")
+    assert "/mensagens/amizade_b" in chat.text
+    people = host.get(f"/clubs/{club_id}/membros")
+    assert "/mensagens/amizade_b" in people.text
+
+    undone = host.post("/amigos/amizade_b/desfazer", data={"next": "/amigos"}, follow_redirects=False)
+    assert undone.status_code == 303
+    history = host.get("/mensagens/amizade_b")
+    assert "segredo-do-par" in history.text
+    assert "não são mais amigos" in history.text.lower()
+    assert 'action="/mensagens/amizade_b"' not in history.text
+    blocked_again = host.post("/mensagens/amizade_b", data={"body": "depois do corte"}, follow_redirects=False)
+    assert blocked_again.status_code == 303
+    after_unfriend = host.get("/mensagens/amizade_b")
+    assert "depois do corte" not in after_unfriend.text
+    assert "segredo-do-par" in after_unfriend.text
+
+    chat_after = host.get(f"/clubs/{club_id}?aba=chat")
+    assert "/mensagens/amizade_b" not in chat_after.text
+    assert "/u/amizade_b" in chat_after.text
+    people_after = host.get(f"/clubs/{club_id}/membros")
+    assert "/mensagens/amizade_b" not in people_after.text
+    assert "/u/amizade_b" in people_after.text
+
+    host.post("/amigos/amizade_b/convidar", data={"next": "/amigos"}, follow_redirects=False)
+    guest.post("/amigos/amizade_a/aceitar", data={"next": "/amigos"}, follow_redirects=False)
+    restored = host.get("/mensagens/amizade_b")
+    assert "segredo-do-par" in restored.text
+    assert 'action="/mensagens/amizade_b"' in restored.text
+    db = SessionLocal()
+    try:
+        count = len(list(db.scalars(select(DirectMessage).where(DirectMessage.body == "segredo-do-par"))))
+        assert count == 1
+    finally:
+        db.close()
+
+    stranger = TestClient(app)
+    register_active(stranger, "amizade_c", "amizade.c@example.com", name="Amizade C")
+    peek = stranger.get("/mensagens/amizade_a", follow_redirects=False)
+    assert peek.status_code == 303
+    assert peek.headers["location"] == "/u/amizade_a"
+    profile = stranger.get("/u/amizade_a")
+    assert "segredo-do-par" not in profile.text
+    stranger.post("/amigos/amizade_a/convidar", data={"next": "/amigos"}, follow_redirects=False)
+    host.post("/amigos/amizade_c/aceitar", data={"next": "/amigos"}, follow_redirects=False)
+    other_thread = stranger.get("/mensagens/amizade_a")
+    assert "segredo-do-par" not in other_thread.text
+    assert "Nenhuma mensagem ainda" in other_thread.text
 

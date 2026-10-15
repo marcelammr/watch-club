@@ -48,6 +48,22 @@ from app.catalog import (
 from app.covers import COVER_COLORS, cover_image_url, save_cover_image, valid_cover_color
 from app.config import BASE_DIR, BIO_MAX, EMAIL_DEV_SHOW_LINK, SECRET_KEY
 from app.db import Base, engine, get_db
+from app.friends import (
+    accept_invite,
+    can_view_thread,
+    decline_invite,
+    dm_thread,
+    find_active_user,
+    friend_id_set,
+    has_dm_history,
+    incoming_invites,
+    list_friends,
+    person_href,
+    post_dm,
+    relation_status,
+    send_invite,
+    unfriend,
+)
 from app.models import Club, ClubMember, ClubShow, EmailToken, User
 from app.oauth import (
     facebook_authorize_url,
@@ -94,6 +110,7 @@ templates.env.globals["BIO_MAX"] = BIO_MAX
 templates.env.globals["COVER_COLORS"] = COVER_COLORS
 templates.env.globals["cover_image_url"] = cover_image_url
 templates.env.globals["CONTENT_KINDS"] = CONTENT_KINDS
+templates.env.globals["person_href"] = person_href
 templates.env.filters["when"] = lambda value: value.strftime("%d/%m/%Y %H:%M") if value else ""
 templates.env.filters["genres"] = parse_genres
 templates.env.filters["avg_pt"] = lambda value: f"{value:.1f}".replace(".", ",") if value is not None else ""
@@ -178,6 +195,24 @@ def home(request: Request):
             "home.html",
             {"user": user, "clubs": clubs, "error": request.query_params.get("error"), "ok": request.query_params.get("ok")},
         )
+    finally:
+        db.close()
+
+
+@app.get("/clubes", response_class=HTMLResponse)
+def clubs_index(request: Request):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        return templates.TemplateResponse(
+            request,
+            "clubs_list.html",
+            {"user": user, "clubs": _user_clubs(db, user.id)},
+        )
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        raise
     finally:
         db.close()
 
@@ -804,6 +839,7 @@ async def club_detail(request: Request, club_id: int, q: str | None = Query(None
                 "watching": watching,
                 "watched": watched,
                 "ratings": ratings,
+                "friend_ids": friend_id_set(db, user.id),
                 "error": request.query_params.get("error"),
             },
         )
@@ -832,6 +868,7 @@ def club_members(request: Request, club_id: int):
                 "members": members,
                 "is_admin": is_club_admin(db, club.id, user.id),
                 "admin_total": admin_count(db, club.id),
+                "friend_ids": friend_id_set(db, user.id),
                 "error": request.query_params.get("error"),
             },
         )
@@ -1127,9 +1164,11 @@ def api_command(request: Request):
                 "heading": "Navegação",
                 "items": [
                     {"label": "Início", "href": "/"},
+                    {"label": "Meus Clubes", "href": "/clubes"},
                     {"label": "Minha conta", "href": "/conta"},
                     {"label": "Criar um clube", "href": "/clubs/novo"},
                     {"label": "Meu perfil", "href": f"/u/{user.username}"},
+                    {"label": "Amigos", "href": "/amigos"},
                 ],
             }
         ]
@@ -1171,6 +1210,163 @@ def api_username(request: Request, q: str = Query(..., min_length=1)):
         db.close()
 
 
+def _friend_redirect(exc: HTTPException, fallback: str):
+    if exc.status_code == 401:
+        return RedirectResponse("/login", status_code=303)
+    if exc.status_code in {400, 403}:
+        return RedirectResponse(f"{fallback}?error={quote(exc.detail)}", status_code=303)
+    raise exc
+
+
+@app.get("/amigos", response_class=HTMLResponse)
+def friends_page(request: Request):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        return templates.TemplateResponse(
+            request,
+            "friends.html",
+            {
+                "user": user,
+                "friends": list_friends(db, user.id),
+                "incoming": incoming_invites(db, user.id),
+                "error": request.query_params.get("error"),
+                "ok": request.query_params.get("ok"),
+            },
+        )
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/amigos/{username}/convidar")
+def friend_invite(request: Request, username: str, next: str = Form("/amigos")):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        person = find_active_user(db, username)
+        if not person:
+            raise HTTPException(status_code=404, detail="Perfil não encontrado")
+        send_invite(db, user.id, person.id)
+        return RedirectResponse(_safe_next(next, f"/u/{person.username}") + "?ok=Pedido+enviado", status_code=303)
+    except HTTPException as exc:
+        return _friend_redirect(exc, _safe_next(next, "/amigos"))
+    finally:
+        db.close()
+
+
+@app.post("/amigos/{username}/aceitar")
+def friend_accept(request: Request, username: str, next: str = Form("/amigos")):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        person = find_active_user(db, username)
+        if not person:
+            raise HTTPException(status_code=404, detail="Perfil não encontrado")
+        accept_invite(db, user.id, person.id)
+        return RedirectResponse(_safe_next(next, "/amigos") + "?ok=Vocês+são+amigos", status_code=303)
+    except HTTPException as exc:
+        return _friend_redirect(exc, _safe_next(next, "/amigos"))
+    finally:
+        db.close()
+
+
+@app.post("/amigos/{username}/recusar")
+def friend_decline(request: Request, username: str, next: str = Form("/amigos")):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        person = find_active_user(db, username)
+        if not person:
+            raise HTTPException(status_code=404, detail="Perfil não encontrado")
+        decline_invite(db, user.id, person.id)
+        return RedirectResponse(_safe_next(next, "/amigos") + "?ok=Pedido+recusado", status_code=303)
+    except HTTPException as exc:
+        return _friend_redirect(exc, _safe_next(next, "/amigos"))
+    finally:
+        db.close()
+
+
+@app.post("/amigos/{username}/desfazer")
+def friend_unfriend(request: Request, username: str, next: str = Form("/amigos")):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        person = find_active_user(db, username)
+        if not person:
+            raise HTTPException(status_code=404, detail="Perfil não encontrado")
+        unfriend(db, user.id, person.id)
+        return RedirectResponse(_safe_next(next, "/amigos") + "?ok=Amizade+desfeita", status_code=303)
+    except HTTPException as exc:
+        return _friend_redirect(exc, _safe_next(next, "/amigos"))
+    finally:
+        db.close()
+
+
+@app.get("/mensagens/{username}", response_class=HTMLResponse)
+def direct_chat(request: Request, username: str):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        person = find_active_user(db, username)
+        if not person:
+            raise HTTPException(status_code=404, detail="Perfil não encontrado")
+        if person.id == user.id:
+            return RedirectResponse(f"/u/{user.username}", status_code=303)
+        if not can_view_thread(db, user.id, person.id):
+            return RedirectResponse(f"/u/{person.username}", status_code=303)
+        are_friends = relation_status(db, user.id, person.id) == "friends"
+        return templates.TemplateResponse(
+            request,
+            "direct_chat.html",
+            {
+                "user": user,
+                "person": person,
+                "messages": dm_thread(db, user.id, person.id),
+                "are_friends": are_friends,
+                "error": request.query_params.get("error"),
+            },
+        )
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/mensagens/{username}")
+def send_direct_message(request: Request, username: str, body: str = Form("")):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        person = find_active_user(db, username)
+        if not person:
+            raise HTTPException(status_code=404, detail="Perfil não encontrado")
+        post_dm(db, user.id, person.id, body)
+        return RedirectResponse(f"/mensagens/{person.username}", status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        person = find_active_user(db, username)
+        nick = person.username if person else username
+        if exc.status_code == 403:
+            if person and can_view_thread(db, user.id, person.id):
+                return RedirectResponse(
+                    f"/mensagens/{nick}?error={quote(exc.detail)}",
+                    status_code=303,
+                )
+            return RedirectResponse(f"/u/{nick}", status_code=303)
+        if exc.status_code == 400:
+            return RedirectResponse(f"/mensagens/{nick}?error={quote(exc.detail)}", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
 @app.get("/u/{username}", response_class=HTMLResponse)
 def public_profile(request: Request, username: str):
     db = db_session()
@@ -1182,6 +1378,7 @@ def public_profile(request: Request, username: str):
             raise HTTPException(status_code=404, detail="Perfil não encontrado")
         clubs = _user_clubs(db, person.id)
         mine = {club.id for club in _user_clubs(db, viewer.id)}
+        relation = relation_status(db, viewer.id, person.id)
         return templates.TemplateResponse(
             request,
             "profile.html",
@@ -1192,6 +1389,10 @@ def public_profile(request: Request, username: str):
                 "mine": mine,
                 "status": presence_of(person),
                 "status_label": PRESENCE_LABELS[presence_of(person)],
+                "relation": relation,
+                "has_history": has_dm_history(db, viewer.id, person.id),
+                "error": request.query_params.get("error"),
+                "ok": request.query_params.get("ok"),
             },
         )
     except HTTPException as exc:

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "macros/avatar.html" import user_avatar %}
 {% block title %}Minha conta · Watch Club{% endblock %}
+{% block page_heading %}Minha conta{% endblock %}
 {% block content %}
 <p class="crumb"><a href="/">Início</a> / Minha conta</p>
 <h1>Configurações</h1>
@@ -136,6 +137,9 @@
     <p class="muted">Você ainda não está em nenhum clube.</p>
   {% endif %}
 </section>
+<form class="logout-form account-logout" action="/logout" method="post">
+  <button type="submit">Sair da sessão</button>
+</form>
 <script>
   const input = document.getElementById("username");
   const live = document.getElementById("live-suggestions");

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "macros/avatar.html" import user_avatar %}
+{% block title %}{{ person.name }} · Mensagens{% endblock %}
+{% block page_heading %}{{ person.name }}{% endblock %}
+{% block body_class %}dm-page{% endblock %}
+{% block content %}
+<p class="crumb"><a href="/">Início</a> / <a href="/amigos">Amigos</a> / {{ person.name }}</p>
+<section class="chat-panel dm-panel">
+  <header class="dm-head">
+    {{ user_avatar(person, 'md') }}
+    <div>
+      <h1 class="profile-name">{{ person.name }}</h1>
+      <p class="muted">@{{ person.username }}</p>
+      <p class="status {{ presence_of(person) }}"><span class="dot"></span>{{ presence_label(person) }}</p>
+    </div>
+    <a class="muted" href="/u/{{ person.username }}">Ver perfil</a>
+  </header>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <div class="chat-log">
+    {% for item in messages %}
+      {% set follow = not loop.first and loop.previtem.sender_id == item.sender_id %}
+      <article class="chat-item{% if follow %} is-follow{% endif %}">
+        {% if follow %}
+          <span class="chat-gutter" aria-hidden="true"></span>
+        {% else %}
+          {{ user_avatar(item.sender, 'md') }}
+        {% endif %}
+        <div>
+          {% if not follow %}
+            <p class="chat-meta">
+              <strong>{{ item.sender.name }}</strong>
+              <span class="muted">@{{ item.sender.username }} · {{ item.created_at|when }}</span>
+            </p>
+          {% endif %}
+          <p class="chat-body">{{ item.body }}</p>
+        </div>
+      </article>
+    {% else %}
+      <p class="muted">Nenhuma mensagem ainda. Diga oi.</p>
+    {% endfor %}
+  </div>
+  {% if are_friends %}
+    <form class="chat-form" action="/mensagens/{{ person.username }}" method="post">
+      <label class="chat-compose">
+        <span class="visually-hidden">Mensagem</span>
+        <textarea name="body" rows="1" maxlength="2000" required placeholder="Escreva para {{ person.name }}"></textarea>
+      </label>
+      <button type="submit">Enviar</button>
+      <a class="muted chat-refresh" href="/mensagens/{{ person.username }}">Atualizar</a>
+    </form>
+  {% else %}
+    <p class="muted dm-locked">Vocês não são mais amigos. O histórico continua aqui, mas ninguém pode enviar novas mensagens até aceitarem um novo pedido.</p>
+  {% endif %}
+</section>
+<script>
+  const log = document.querySelector(".chat-log");
+  if (log) log.scrollTop = log.scrollHeight;
+</script>
+{% endblock %}
