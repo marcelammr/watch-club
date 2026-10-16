@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from app.config import BASE_DIR
+
 
 def _svg(bg: str, drawing: str) -> str:
     return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img">
@@ -80,6 +82,42 @@ AVATARS = [
 
 AVATAR_IDS = {item["id"] for item in AVATARS}
 DEFAULT_AVATAR = "popcorn"
+TYPE_ILLUSTRATED = "illustrated"
+TYPE_UPLOAD = "upload"
+PROVIDER_WATCHCLUB = "watchclub"
+PROVIDER_TYGER = "tyger"
+STATIC_AVATARS = BASE_DIR / "app" / "static" / "avatars"
+UPLOAD_AVATARS = BASE_DIR / "app" / "static" / "uploads" / "avatars"
+FALLBACK_URL = f"/static/avatars/{DEFAULT_AVATAR}.svg"
+
+TYGER_AVATARS = [
+    {"id": "TrAlex", "label": "Alex"},
+    {"id": "TrCathy", "label": "Cathy"},
+    {"id": "TrChad", "label": "Chad"},
+    {"id": "TrChelsea", "label": "Chelsea"},
+    {"id": "TrEnrique", "label": "Enrique"},
+    {"id": "TrEric", "label": "Eric"},
+    {"id": "TrFelix", "label": "Felix"},
+    {"id": "TrFranklin", "label": "Franklin"},
+    {"id": "TrHarry", "label": "Harry"},
+    {"id": "TrHelen", "label": "Helen"},
+    {"id": "TrIggy", "label": "Iggy"},
+    {"id": "TrImran", "label": "Imran"},
+    {"id": "TrMaria", "label": "Maria"},
+    {"id": "TrNancy", "label": "Nancy"},
+    {"id": "TrRachel", "label": "Rachel"},
+    {"id": "TrSamantha", "label": "Samantha"},
+    {"id": "TrShamila", "label": "Shamila"},
+    {"id": "TrSophia", "label": "Sophia"},
+    {"id": "TrStu", "label": "Stu"},
+    {"id": "TrTorsten", "label": "Torsten"},
+]
+TYGER_IDS = {item["id"] for item in TYGER_AVATARS}
+
+ILLUSTRATED_IDS = {
+    PROVIDER_WATCHCLUB: AVATAR_IDS,
+    PROVIDER_TYGER: TYGER_IDS,
+}
 
 
 def avatars_by_category() -> dict[str, list[dict]]:
@@ -102,3 +140,110 @@ def valid_avatar(avatar_id: str | None) -> str:
     if avatar_id in AVATAR_IDS:
         return avatar_id
     return DEFAULT_AVATAR
+
+
+def _looks_like_url(value: str) -> bool:
+    lowered = value.strip().lower()
+    return "://" in lowered or lowered.startswith("/") or ".." in lowered or "\\" in value
+
+
+def illustrated_url(provider: str | None, value: str | None) -> str | None:
+    provider_id = (provider or "").strip().lower()
+    avatar_id = (value or "").strip()
+    if not provider_id or not avatar_id or _looks_like_url(avatar_id) or _looks_like_url(provider_id):
+        return None
+    allowed = ILLUSTRATED_IDS.get(provider_id)
+    if not allowed or avatar_id not in allowed:
+        return None
+    if provider_id == PROVIDER_WATCHCLUB:
+        path = STATIC_AVATARS / f"{avatar_id}.svg"
+        url = f"/static/avatars/{avatar_id}.svg"
+    elif provider_id == PROVIDER_TYGER:
+        path = STATIC_AVATARS / "tyger" / f"{avatar_id}.svg"
+        url = f"/static/avatars/tyger/{avatar_id}.svg"
+    else:
+        return None
+    if not path.is_file():
+        return None
+    return url
+
+
+def upload_url(filename: str | None) -> str | None:
+    from app.avatar_uploads import stored_upload_path
+
+    path = stored_upload_path(filename)
+    if not path:
+        return None
+    return f"/static/uploads/avatars/{path.name}"
+
+
+def avatar_url(person) -> str:
+    kind = (getattr(person, "avatar_type", None) or TYPE_ILLUSTRATED).strip().lower()
+    if kind == TYPE_UPLOAD:
+        url = upload_url(getattr(person, "avatar_value", None))
+        if url:
+            return url
+    provider = getattr(person, "avatar_provider", None) or PROVIDER_WATCHCLUB
+    value = getattr(person, "avatar_value", None) or getattr(person, "avatar", None) or DEFAULT_AVATAR
+    url = illustrated_url(provider, value)
+    if url:
+        return url
+    legacy = getattr(person, "avatar", None)
+    return illustrated_url(PROVIDER_WATCHCLUB, legacy) or FALLBACK_URL
+
+
+def illustrated_catalogs() -> list[dict]:
+    catalogs: list[dict] = []
+    for category, icons in avatars_by_category().items():
+        catalogs.append(
+            {
+                "provider": PROVIDER_WATCHCLUB,
+                "heading": category,
+                "icons": [
+                    {"id": item["id"], "label": item["label"], "url": f"/static/avatars/{item['id']}.svg"}
+                    for item in icons
+                ],
+            }
+        )
+    catalogs.append(
+        {
+            "provider": PROVIDER_TYGER,
+            "heading": "Ilustrados",
+            "icons": [
+                {"id": item["id"], "label": item["label"], "url": f"/static/avatars/tyger/{item['id']}.svg"}
+                for item in TYGER_AVATARS
+            ],
+        }
+    )
+    return catalogs
+
+
+def parse_illustrated_choice(choice: str | None, provider: str | None = None, value: str | None = None) -> tuple[str, str] | None:
+    raw = (choice or "").strip()
+    if raw:
+        if _looks_like_url(raw) or raw.count(":") != 1:
+            return None
+        provider_id, avatar_id = raw.split(":", 1)
+    else:
+        provider_id = (provider or "").strip()
+        avatar_id = (value or "").strip()
+    if illustrated_url(provider_id, avatar_id):
+        return provider_id.strip().lower(), avatar_id.strip()
+    return None
+
+
+def set_illustrated_avatar(user, provider: str, value: str) -> bool:
+    if not illustrated_url(provider, value):
+        return False
+    user.avatar_type = TYPE_ILLUSTRATED
+    user.avatar_provider = provider
+    user.avatar_value = value
+    if provider == PROVIDER_WATCHCLUB:
+        user.avatar = value
+    return True
+
+
+def set_upload_avatar(user, filename: str) -> None:
+    user.avatar_type = TYPE_UPLOAD
+    user.avatar_provider = ""
+    user.avatar_value = filename

@@ -328,6 +328,20 @@
   .current-avatar {
     @apply mb-4 flex items-center gap-3;
   }
+  .avatar-actions {
+    @apply mt-4 flex flex-wrap items-center gap-2;
+  }
+  .avatar-actions form,
+  .avatar-actions button {
+    @apply m-0;
+  }
+  .avatar-preview {
+    @apply mb-4 flex justify-center;
+  }
+  .avatar-preview img {
+    @apply h-[88px] w-[88px] rounded-full object-cover;
+  }
+  .avatar-trigger,
   button.avatar-trigger {
     @apply relative m-0 mt-0 grid h-[88px] w-[88px] place-items-center overflow-visible rounded-full border-0 bg-transparent p-0 font-normal text-foreground;
   }
@@ -408,8 +422,26 @@
   .bio-field {
     @apply my-4;
   }
+  .bio-head {
+    @apply mb-2 flex items-center justify-between gap-2;
+  }
   .bio-label {
     @apply mb-2 mt-0 font-bold text-foreground;
+  }
+  .bio-head .bio-label {
+    @apply mb-0;
+  }
+  .emoji-toggle {
+    @apply m-0 inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 text-muted-foreground;
+  }
+  .emoji-toggle:hover {
+    @apply bg-accent text-foreground;
+  }
+  .bio-field .emoji-popover {
+    bottom: auto;
+    top: calc(100% + 0.35rem);
+    left: auto;
+    right: 0;
   }
   .emoji-bar {
     @apply mb-2 flex flex-wrap gap-1;
@@ -792,6 +824,19 @@
   }
   .leave-dialog-actions {
     @apply mt-5 flex flex-wrap items-center justify-end gap-2;
+  }
+  .photo-crop-stage {
+    @apply mx-auto my-4 h-[280px] w-[280px] overflow-hidden rounded-full bg-muted;
+    touch-action: none;
+  }
+  .photo-crop-stage canvas {
+    @apply block h-[280px] w-[280px] cursor-grab rounded-full;
+  }
+  .photo-crop-zoom {
+    @apply m-0 block;
+  }
+  .photo-crop-zoom input {
+    @apply mt-1.5 w-full;
   }
   .leave-dialog-actions form,
   .leave-dialog-actions button {

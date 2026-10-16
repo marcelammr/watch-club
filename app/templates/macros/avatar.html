@@ -14,7 +14,7 @@
 <span
   class="inline-flex shrink-0"
   data-user-avatar
-  data-src="/static/avatars/{{ person.avatar }}.svg"
+  data-src="{{ avatar_url(person) }}"
   data-alt="{{ person.name }}"
   data-fallback="{{ avatar_initials(person.name) }}"
   data-presence="{{ presence }}"
@@ -22,7 +22,7 @@
   data-size="{{ size }}"
 >
   <span class="relative flex {{ size_class }} shrink-0 rounded-full">
-    <img class="aspect-square h-full w-full rounded-full object-cover" src="/static/avatars/{{ person.avatar }}.svg" alt="{{ person.name }}">
+    <img class="aspect-square h-full w-full rounded-full object-cover" src="{{ avatar_url(person) }}" alt="{{ person.name }}">
     <div
       data-slot="avatar-badge"
       class="absolute bottom-0 right-0 z-10 {{ badge_size }} {{ badge_variant }}"

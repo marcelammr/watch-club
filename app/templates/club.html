@@ -2,6 +2,7 @@
 {% from "macros/avatar.html" import user_avatar %}
 {% from "macros/presence.html" import presence_mark %}
 {% from "macros/sidebar.html" import club_menu_toggle, nav_icon %}
+{% from "macros/emoji.html" import emoji_picker %}
 {% block title %}{{ club.name }} · Watch Club{% endblock %}
 {% block body_class %}club-room{% endblock %}
 {% block top_start %}
@@ -155,20 +156,7 @@
             </label>
             <div class="chat-toolbar">
               <div class="chat-toolbar-tools">
-                <div class="emoji-picker-wrap">
-                  <button type="button" class="chat-tool js-emoji-toggle" aria-expanded="false" aria-haspopup="true" aria-label="Emoji">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <circle cx="12" cy="12" r="9"/>
-                      <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
-                      <path d="M9 9.5h.01M15 9.5h.01"/>
-                    </svg>
-                  </button>
-                  <div class="emoji-popover js-emoji-popover" hidden>
-                    {% for item in ["🍿","🎬","📺","⭐","❤️","✨","🌙","🌸","🐱","🎧","☕","🔥","😂","😍","👍","👏","😮","😢","🎉","♪","★","♥","✦","☺"] %}
-                      <button type="button" class="emoji-btn js-insert-emoji" data-emoji="{{ item }}">{{ item }}</button>
-                    {% endfor %}
-                  </div>
-                </div>
+                {{ emoji_picker('Emoji') }}
                 <button type="button" class="chat-tool js-wrap" data-before="||" data-after="||" aria-label="Spoiler">
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M3 3l18 18"/>
@@ -489,8 +477,6 @@
   (function () {
     const input = document.querySelector(".js-chat-input");
     if (!input) return;
-    const popover = document.querySelector(".js-emoji-popover");
-    const toggle = document.querySelector(".js-emoji-toggle");
 
     function insertAtCursor(chunk) {
       const start = input.selectionStart ?? input.value.length;
@@ -521,12 +507,6 @@
       resizeInput();
     }
 
-    function closePicker() {
-      if (!popover || !toggle) return;
-      popover.hidden = true;
-      toggle.setAttribute("aria-expanded", "false");
-    }
-
     function resizeInput() {
       input.style.height = "auto";
       const max = 128;
@@ -536,35 +516,12 @@
     document.querySelectorAll(".js-wrap").forEach((btn) => {
       btn.addEventListener("click", () => wrap(btn.dataset.before || "", btn.dataset.after || ""));
     });
-    document.querySelectorAll(".js-insert-emoji").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        insertAtCursor(btn.dataset.emoji || "");
-        closePicker();
-      });
+    document.querySelector(".chat-form .js-emoji-picker")?.addEventListener("emoji-select", (event) => {
+      insertAtCursor(event.detail.emoji || "");
     });
 
     input.addEventListener("input", resizeInput);
     resizeInput();
-
-    if (toggle && popover) {
-      toggle.addEventListener("click", (event) => {
-        event.stopPropagation();
-        const open = popover.hidden;
-        popover.hidden = !open;
-        toggle.setAttribute("aria-expanded", open ? "true" : "false");
-      });
-      document.addEventListener("click", (event) => {
-        if (popover.hidden) return;
-        if (popover.contains(event.target) || toggle.contains(event.target)) return;
-        closePicker();
-      });
-      document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && !popover.hidden) {
-          closePicker();
-          event.preventDefault();
-        }
-      });
-    }
   })();
 </script>
 {% endblock %}

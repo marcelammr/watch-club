@@ -357,7 +357,11 @@ def test_bio_and_avatar_editor_hidden():
     settings = person.get("/conta")
     assert 'id="open-avatar"' in settings.text
     assert "avatar-modal" in settings.text
+    assert 'aria-label="Adicionar emoji"' in settings.text
+    assert 'class="emoji-popover js-emoji-popover" hidden' in settings.text
     assert "🍿" in settings.text
+    assert 'id="photo-crop-dialog"' in settings.text
+    assert "Usar esta foto" in settings.text
     assert "Cinéfila de maratona." in settings.text
     public = person.get("/u/bio_user")
     assert public.status_code == 200
@@ -958,4 +962,107 @@ def test_leave_confirmation_ui_does_not_block_post():
     assert 'id="leave-dialog"' in account.text
     assert f'data-leave-action="/clubs/{club_id}/leave"' in account.text
     assert 'type="submit">Sair do clube</button>' not in room.text.split("leave-dialog")[0]
+
+
+PNG_1X1 = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+    "0000000a49444154789c63000100000500010d0a2db40000000049454e44ae426082"
+)
+
+
+def test_avatar_registry_upload_and_fallback():
+    from types import SimpleNamespace
+
+    from app.avatars import avatar_url, parse_illustrated_choice
+
+    fox = SimpleNamespace(avatar="fox", avatar_type="illustrated", avatar_provider="watchclub", avatar_value="fox")
+    assert avatar_url(fox) == "/static/avatars/fox.svg"
+    popcorn = SimpleNamespace(avatar="popcorn", avatar_type="illustrated", avatar_provider="watchclub", avatar_value="popcorn")
+    assert avatar_url(popcorn) == "/static/avatars/popcorn.svg"
+    tyger = SimpleNamespace(avatar="popcorn", avatar_type="illustrated", avatar_provider="tyger", avatar_value="TrIggy")
+    assert avatar_url(tyger) == "/static/avatars/tyger/TrIggy.svg"
+    invalid_provider = SimpleNamespace(avatar="fox", avatar_type="illustrated", avatar_provider="unknown", avatar_value="TrIggy")
+    assert avatar_url(invalid_provider) == "/static/avatars/fox.svg"
+    invalid_value = SimpleNamespace(avatar="popcorn", avatar_type="illustrated", avatar_provider="tyger", avatar_value="https://evil.example/x.svg")
+    assert avatar_url(invalid_value) == "/static/avatars/popcorn.svg"
+    missing_file = SimpleNamespace(avatar="popcorn", avatar_type="illustrated", avatar_provider="tyger", avatar_value="TrMissing")
+    assert avatar_url(missing_file) == "/static/avatars/popcorn.svg"
+    assert parse_illustrated_choice("https://evil.example/x.svg") is None
+    assert parse_illustrated_choice("tyger:https://evil.example/x.svg") is None
+    assert parse_illustrated_choice("tyger:/etc/passwd") is None
+    assert parse_illustrated_choice("tyger:TrIggy") == ("tyger", "TrIggy")
+
+    person = TestClient(app)
+    register_active(person, "avatar_sys", "avatar.sys@example.com")
+    account = person.get("/conta")
+    assert 'src="/static/avatars/popcorn.svg"' in account.text
+    assert 'data-presence="' in account.text
+    assert "Enviar foto" in account.text
+    assert "Escolher avatar" in account.text
+    assert "Escolha seu avatar" in account.text
+    assert 'id="photo-crop-dialog"' in account.text
+    assert 'value="tyger:TrIggy"' in account.text
+    assert "Buscar na TVMaze" not in account.text
+
+    legacy = person.post("/conta/avatar", data={"avatar": "fox"}, follow_redirects=False)
+    assert legacy.status_code == 303
+    fox_page = person.get("/conta")
+    assert 'src="/static/avatars/fox.svg"' in fox_page.text
+    assert 'data-slot="avatar-badge"' in fox_page.text
+    home = person.get("/")
+    assert 'src="/static/avatars/fox.svg"' in home.text
+    profile = person.get("/u/avatar_sys")
+    assert 'src="/static/avatars/fox.svg"' in profile.text
+
+    blocked = person.post(
+        "/conta/avatar",
+        data={"choice": "tyger:https://evil.example/hack.svg"},
+        follow_redirects=False,
+    )
+    assert blocked.status_code == 303
+    still_fox = person.get("/conta")
+    assert "evil.example" not in still_fox.text
+    assert 'src="/static/avatars/fox.svg"' in still_fox.text
+
+    invalid = person.post(
+        "/conta/avatar",
+        data={"choice": "nope:TrIggy"},
+        follow_redirects=False,
+    )
+    assert invalid.status_code == 303
+    assert 'src="/static/avatars/fox.svg"' in person.get("/conta").text
+
+    illustrated = person.post("/conta/avatar", data={"choice": "tyger:TrIggy"}, follow_redirects=False)
+    assert illustrated.status_code == 303
+    tyger_page = person.get("/conta")
+    assert 'src="/static/avatars/tyger/TrIggy.svg"' in tyger_page.text
+    assert 'src="/static/avatars/fox.svg"' not in tyger_page.text.split("avatar-modal")[0]
+    assert 'data-presence="' in tyger_page.text
+
+    svg_upload = person.post(
+        "/conta/avatar/foto",
+        files={"photo": ("face.svg", b'<svg xmlns="http://www.w3.org/2000/svg"></svg>', "image/svg+xml")},
+        follow_redirects=False,
+    )
+    assert svg_upload.status_code == 303
+    assert 'src="/static/avatars/tyger/TrIggy.svg"' in person.get("/conta").text
+
+    photo = person.post(
+        "/conta/avatar/foto",
+        files={"photo": ("face.png", PNG_1X1, "image/png")},
+        follow_redirects=False,
+    )
+    assert photo.status_code == 303
+    photo_page = person.get("/conta")
+    assert "/static/uploads/avatars/" in photo_page.text
+    assert photo_page.text.count(".png") >= 1
+    assert 'src="/static/avatars/tyger/TrIggy.svg"' not in photo_page.text.split("avatar-modal")[0]
+    friends = person.get("/amigos")
+    assert "/static/uploads/avatars/" in friends.text
+
+    back = person.post("/conta/avatar", data={"choice": "watchclub:popcorn"}, follow_redirects=False)
+    assert back.status_code == 303
+    restored = person.get("/conta")
+    assert 'src="/static/avatars/popcorn.svg"' in restored.text
+    assert "/static/uploads/avatars/" not in restored.text.split("avatar-modal")[0]
 

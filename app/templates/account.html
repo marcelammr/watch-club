@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "macros/avatar.html" import user_avatar %}
 {% from "macros/presence.html" import presence_mark %}
+{% from "macros/emoji.html" import emoji_picker %}
 {% block title %}Configurações · Watch Club{% endblock %}
 {% block page_heading %}Configurações{% endblock %}
 {% block content %}
@@ -11,45 +12,73 @@
 
 <section class="card">
   <div class="current-avatar">
-    <button type="button" class="avatar-trigger" id="open-avatar" aria-label="Editar foto de perfil" aria-haspopup="dialog" aria-controls="avatar-modal">
+    <div class="avatar-trigger">
       {{ user_avatar(user, 'lg') }}
-      <span class="avatar-edit-hint" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0 0-3L16.5 4.5a2.1 2.1 0 0 0-3 0L3 15v5z"/>
-          <path d="M12.5 6.5l5 5"/>
-          <path d="M4.5 15.5c2 1 3.5 2.5 4 4"/>
-        </svg>
-      </span>
-    </button>
+    </div>
     <div>
       <strong>{{ user.name }}</strong>
       <p class="status {{ presence_of(user) }}">{{ presence_mark(presence_of(user)) }}{{ presence_label(user) }}</p>
       <p><a href="/u/{{ user.username }}">Ver perfil público</a></p>
     </div>
   </div>
+  <h2>Imagem de perfil</h2>
+  <div class="avatar-actions">
+    <form class="js-photo-form" action="/conta/avatar/foto" method="post" enctype="multipart/form-data">
+      <input class="js-photo-input" type="file" name="photo" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+      <button type="button" class="js-photo-open">Enviar foto</button>
+    </form>
+    <button type="button" id="open-avatar" class="ghost" aria-haspopup="dialog" aria-controls="avatar-modal">Escolher avatar</button>
+  </div>
 </section>
 
 <dialog id="avatar-modal" class="avatar-modal">
   <div class="avatar-modal-card">
     <div class="avatar-modal-head">
-      <h2>Foto de perfil</h2>
+      <h2>Escolha seu avatar</h2>
       <button type="button" class="ghost" id="close-avatar" aria-label="Fechar">Fechar</button>
     </div>
+    <div class="avatar-preview">
+      <img class="js-avatar-preview" src="{{ avatar_url(user) }}" alt="Prévia do avatar">
+    </div>
     <form action="/conta/avatar" method="post" class="avatar-form">
-      {% for category, icons in avatar_groups.items() %}
-        <h3>{{ category }}</h3>
+      {% for group in avatar_groups %}
+        <h3>{{ group.heading }}</h3>
         <div class="avatar-grid">
-          {% for icon in icons %}
+          {% for icon in group.icons %}
             <label class="avatar-option">
-              <input type="radio" name="avatar" value="{{ icon.id }}" {% if user.avatar == icon.id %}checked{% endif %}>
-              <img src="/static/avatars/{{ icon.id }}.svg" alt="{{ icon.label }}">
+              <input
+                type="radio"
+                name="choice"
+                value="{{ group.provider }}:{{ icon.id }}"
+                data-preview="{{ icon.url }}"
+                {% if user.avatar_type != 'upload' and user.avatar_provider == group.provider and user.avatar_value == icon.id %}checked{% endif %}
+                {% if user.avatar_type != 'upload' and not user.avatar_provider and group.provider == 'watchclub' and user.avatar == icon.id %}checked{% endif %}
+              >
+              <img src="{{ icon.url }}" alt="{{ icon.label }}">
               <span>{{ icon.label }}</span>
             </label>
           {% endfor %}
         </div>
       {% endfor %}
-      <button type="submit">Salvar foto</button>
+      <div class="leave-dialog-actions">
+        <button type="button" class="ghost" id="cancel-avatar">Cancelar</button>
+        <button type="submit">Salvar</button>
+      </div>
     </form>
+  </div>
+</dialog>
+<dialog id="photo-crop-dialog" class="leave-dialog photo-crop-dialog" aria-labelledby="photo-crop-title">
+  <h2 id="photo-crop-title">Enquadrar foto</h2>
+  <p class="error js-crop-error" hidden></p>
+  <div class="photo-crop-stage">
+    <canvas class="js-crop-canvas" width="280" height="280" aria-label="Prévia circular da foto"></canvas>
+  </div>
+  <label class="photo-crop-zoom">Zoom
+    <input class="js-crop-zoom" type="range" min="1" max="4" step="0.01" value="1" aria-label="Zoom">
+  </label>
+  <div class="leave-dialog-actions">
+    <button type="button" class="ghost js-crop-cancel">Cancelar</button>
+    <button type="button" class="js-crop-confirm">Usar esta foto</button>
   </div>
 </dialog>
 
@@ -82,11 +111,9 @@
         <p class="muted">Novo e-mail aguardando confirmação: {{ user.pending_email }}</p>
       {% endif %}
       <div class="bio-field">
-        <p class="bio-label">Bio</p>
-        <div class="emoji-bar" id="emoji-bar" aria-label="Emojis e símbolos">
-          {% for item in ["🍿","🎬","📺","⭐","❤️","✨","🌙","🌸","🐱","🎧","☕","🔥","♪","★","♥","✦","☺","→","•","✿"] %}
-            <button type="button" class="emoji-btn" data-emoji="{{ item }}">{{ item }}</button>
-          {% endfor %}
+        <div class="bio-head">
+          <p class="bio-label">Bio</p>
+          {{ emoji_picker('Adicionar emoji', 'emoji-toggle') }}
         </div>
         <textarea id="bio" class="bio-box" name="bio" maxlength="{{ BIO_MAX }}" rows="4" placeholder="Conte um pouco sobre você">{{ user.bio or '' }}</textarea>
         <p class="muted bio-count"><span id="bio-count">0</span>/{{ BIO_MAX }}</p>
@@ -170,7 +197,7 @@
     btn.addEventListener("click", () => fillUsername(btn.dataset.username));
   });
   function insertEmoji(symbol) {
-    const max = Number(bio.getAttribute("maxlength") || 150);
+    const max = Number(bio.getAttribute("maxlength") || {{ BIO_MAX }});
     const start = bio.selectionStart ?? bio.value.length;
     const end = bio.selectionEnd ?? bio.value.length;
     const next = bio.value.slice(0, start) + symbol + bio.value.slice(end);
@@ -181,17 +208,26 @@
     bio.setSelectionRange(cursor, cursor);
     updateBio();
   }
-  document.getElementById("emoji-bar").querySelectorAll("[data-emoji]").forEach((btn) => {
-    btn.addEventListener("click", () => insertEmoji(btn.dataset.emoji));
+  document.querySelector(".bio-field .js-emoji-picker")?.addEventListener("emoji-select", (event) => {
+    insertEmoji(event.detail.emoji || "");
   });
   let timer;
   const avatarModal = document.getElementById("avatar-modal");
   const openAvatar = document.getElementById("open-avatar");
   const closeAvatar = document.getElementById("close-avatar");
+  const cancelAvatar = document.getElementById("cancel-avatar");
+  const preview = document.querySelector(".js-avatar-preview");
+  function closeAvatarModal() { avatarModal.close(); }
   openAvatar.addEventListener("click", () => avatarModal.showModal());
-  closeAvatar.addEventListener("click", () => avatarModal.close());
+  closeAvatar.addEventListener("click", closeAvatarModal);
+  cancelAvatar.addEventListener("click", closeAvatarModal);
   avatarModal.addEventListener("click", (event) => {
-    if (event.target === avatarModal) avatarModal.close();
+    if (event.target === avatarModal) closeAvatarModal();
+  });
+  document.querySelectorAll('#avatar-modal input[name="choice"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      if (input.checked && input.dataset.preview && preview) preview.src = input.dataset.preview;
+    });
   });
   (function () {
     const dialog = document.getElementById("leave-dialog");
@@ -230,4 +266,5 @@
     }, 250);
   });
 </script>
+<script src="/static/js/avatar-crop.js"></script>
 {% endblock %}

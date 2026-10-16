@@ -1,0 +1,23 @@
+{% macro emoji_picker(aria_label='Emoji', toggle_class='chat-tool') %}
+<div class="emoji-picker-wrap js-emoji-picker">
+  <button
+    type="button"
+    class="{{ toggle_class }} js-emoji-toggle"
+    aria-expanded="false"
+    aria-haspopup="true"
+    aria-label="{{ aria_label }}"
+    title="{{ aria_label }}"
+  >
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9"/>
+      <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+      <path d="M9 9.5h.01M15 9.5h.01"/>
+    </svg>
+  </button>
+  <div class="emoji-popover js-emoji-popover" hidden>
+    {% for item in emoji_catalog %}
+      <button type="button" class="emoji-btn" data-emoji="{{ item }}">{{ item }}</button>
+    {% endfor %}
+  </div>
+</div>
+{% endmacro %}

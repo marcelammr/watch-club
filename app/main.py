@@ -20,7 +20,17 @@ from app.accounts import (
     send_password_reset,
     utcnow,
 )
-from app.avatars import AVATARS, avatar_initials, avatars_by_category, valid_avatar
+from app.avatar_uploads import delete_upload, save_avatar_photo
+from app.avatars import (
+    AVATARS,
+    avatar_initials,
+    avatar_url,
+    illustrated_catalogs,
+    parse_illustrated_choice,
+    set_illustrated_avatar,
+    set_upload_avatar,
+    valid_avatar,
+)
 from app.catalog import (
     CONTENT_KINDS,
     add_manual_title,
@@ -53,6 +63,7 @@ from app.catalog import (
     valid_stars,
 )
 from app.covers import COVER_COLORS, cover_image_url, save_cover_image, valid_cover_color
+from app.emojis import EMOJI_CATALOG
 from app.markup import format_chat
 from app.config import BASE_DIR, BIO_MAX, EMAIL_DEV_SHOW_LINK, SECRET_KEY
 from app.db import Base, engine, get_db
@@ -112,6 +123,8 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
 templates.env.globals["presence_of"] = presence_of
 templates.env.globals["presence_label"] = lambda user: PRESENCE_LABELS[presence_of(user)]
 templates.env.globals["avatar_initials"] = avatar_initials
+templates.env.globals["avatar_url"] = avatar_url
+templates.env.globals["emoji_catalog"] = EMOJI_CATALOG
 templates.env.globals["google_enabled"] = google_enabled
 templates.env.globals["facebook_enabled"] = facebook_enabled
 templates.env.globals["BIO_MAX"] = BIO_MAX
@@ -612,7 +625,7 @@ def account(request: Request):
                 "error": request.query_params.get("error"),
                 "ok": request.query_params.get("ok"),
                 "suggestions": [],
-                "avatar_groups": avatars_by_category(),
+                "avatar_groups": illustrated_catalogs(),
                 **_account_extras(user),
             },
         )
@@ -637,7 +650,7 @@ def update_profile(
         display = name.strip()[:80]
         email = normalize_email(email)
         clubs = _user_clubs(db, user.id)
-        groups = avatars_by_category()
+        groups = illustrated_catalogs()
 
         def account_error(message: str, suggestions=None):
             return templates.TemplateResponse(
@@ -697,11 +710,43 @@ def update_profile(
 
 
 @app.post("/conta/avatar")
-def update_avatar(request: Request, avatar: str = Form(...)):
+def update_avatar(
+    request: Request,
+    choice: str = Form(""),
+    provider: str = Form(""),
+    value: str = Form(""),
+    avatar: str = Form(""),
+):
     db = db_session()
     try:
         user = login_required(request, db)
-        user.avatar = valid_avatar(avatar)
+        parsed = parse_illustrated_choice(choice, provider, value)
+        if not parsed and avatar:
+            parsed = parse_illustrated_choice(f"watchclub:{valid_avatar(avatar)}")
+        if not parsed:
+            return RedirectResponse("/conta?error=Escolha+um+avatar+valido", status_code=303)
+        if user.avatar_type == "upload":
+            delete_upload(user.avatar_value)
+        set_illustrated_avatar(user, parsed[0], parsed[1])
+        db.commit()
+        return RedirectResponse("/conta?ok=Foto+de+perfil+atualizada", status_code=303)
+    except HTTPException:
+        return RedirectResponse("/login", status_code=303)
+    finally:
+        db.close()
+
+
+@app.post("/conta/avatar/foto")
+async def update_avatar_photo(request: Request, photo: UploadFile | None = File(None)):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        filename = await save_avatar_photo(photo)
+        if not filename:
+            return RedirectResponse("/conta?error=Envie+uma+imagem+JPG,+PNG,+WEBP+ou+GIF", status_code=303)
+        if user.avatar_type == "upload":
+            delete_upload(user.avatar_value)
+        set_upload_avatar(user, filename)
         db.commit()
         return RedirectResponse("/conta?ok=Foto+de+perfil+atualizada", status_code=303)
     except HTTPException:
