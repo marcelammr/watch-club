@@ -982,6 +982,20 @@ def join_club(request: Request, join_code: str = Form(...), next: str = Form("/"
         if not club:
             sep = "&" if "?" in next_url else "?"
             return RedirectResponse(f"{next_url}{sep}error=Código+inválido", status_code=303)
+        if club_membership(db, club.id, user.id):
+            if next_url.startswith("/conta"):
+                return RedirectResponse(
+                    f"/conta?ok={quote('Você já participa do clube ' + club.name)}",
+                    status_code=303,
+                )
+            return RedirectResponse(f"/clubs/{club.id}", status_code=303)
+        if club.is_closed:
+            create_join_request(db, club, user.id)
+            db.commit()
+            return RedirectResponse(
+                f"/clubs/{club.id}?ok={quote('Pedido enviado')}",
+                status_code=303,
+            )
         add_club_member(db, club.id, user.id, clear_request=True)
         if next_url.startswith("/conta"):
             return RedirectResponse(
@@ -1830,6 +1844,15 @@ def send_direct_message(request: Request, username: str, body: str = Form("")):
         db.close()
 
 
+def _profile_ok_message(ok: str | None, relation: str) -> str | None:
+    text = (ok or "").strip()
+    if not text:
+        return None
+    if text in {"Pedido enviado", "Vocês são amigos"}:
+        return None
+    return text
+
+
 @app.get("/u/{username}", response_class=HTMLResponse)
 def public_profile(request: Request, username: str):
     db = db_session()
@@ -1864,7 +1887,7 @@ def public_profile(request: Request, username: str):
                 "context_role": context_role,
                 "context_role_label": context_role_label,
                 "error": request.query_params.get("error"),
-                "ok": request.query_params.get("ok"),
+                "ok": _profile_ok_message(request.query_params.get("ok"), relation),
             },
         )
     except HTTPException as exc:

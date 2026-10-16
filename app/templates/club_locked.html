@@ -5,7 +5,7 @@
 {% block content %}
 <section class="card narrow">
   <h1>🔒 {{ club.name }}</h1>
-  <p>Este clube é fechado. Só entra quem tem o código de convite ou quem for aceito por um administrador.</p>
+  <p>Este clube é fechado. Novas pessoas precisam ser aprovadas pela administração para entrar.</p>
   {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
   {% if join_pending %}

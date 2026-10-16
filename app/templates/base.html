@@ -21,11 +21,13 @@
       <header class="top">
         <div class="top-start">
           {% block top_start %}
+          {% if request.url.path != '/' %}
           <button type="button" class="back-btn js-back" aria-label="Voltar" hidden>
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M15 18l-6-6 6-6"/>
             </svg>
           </button>
+          {% endif %}
           {{ hamburger() }}
           <p class="page-heading">{% block page_heading %}Watch Club{% endblock %}</p>
           {% endblock %}

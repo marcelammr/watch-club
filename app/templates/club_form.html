@@ -44,7 +44,7 @@
         </label>
       </div>
     </div>
-    <label class="check"><input type="checkbox" name="is_closed" value="1"> Clube fechado (só entra com código)</label>
+    <label class="check"><input type="checkbox" name="is_closed" value="1"> Clube fechado — novas entradas precisam de aprovação.</label>
     <button class="btn btn-primary" type="submit">Criar clube</button>
   </form>
 </section>
@@ -150,7 +150,7 @@
         <label>Informações e regras
           <textarea name="rules" rows="5" maxlength="2000" placeholder="Combinados do grupo">{{ club.rules }}</textarea>
         </label>
-        <label class="check"><input type="checkbox" name="is_closed" value="1" {% if club.is_closed %}checked{% endif %}> Clube fechado (só entra com código)</label>
+        <label class="check"><input type="checkbox" name="is_closed" value="1" {% if club.is_closed %}checked{% endif %}> Clube fechado — novas entradas precisam de aprovação.</label>
         <button class="btn btn-primary" type="submit">Salvar</button>
       </section>
 
