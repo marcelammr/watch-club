@@ -48,8 +48,8 @@
         <span class="visually-hidden">Mensagem</span>
         <textarea name="body" rows="1" maxlength="2000" required placeholder="Escreva para {{ person.name }}"></textarea>
       </label>
-      <button type="submit">Enviar</button>
-      <a class="muted chat-refresh" href="/mensagens/{{ person.username }}">Atualizar</a>
+      <button class="btn btn-primary" type="submit">Enviar</button>
+      <a class="muted dm-refresh" href="/mensagens/{{ person.username }}">Atualizar</a>
     </form>
   {% else %}
     <p class="muted dm-locked">Vocês não são mais amigos. O histórico continua aqui, mas ninguém pode enviar novas mensagens até aceitarem um novo pedido.</p>

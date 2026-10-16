@@ -1257,6 +1257,12 @@
   .dm-locked {
     @apply border-t border-sidebar-border bg-sidebar px-5 py-4;
   }
+  .dm-refresh {
+    @apply ml-3 inline-flex items-center align-middle text-[0.88rem] no-underline;
+  }
+  .dm-refresh:hover {
+    @apply text-foreground;
+  }
   .club-tag {
     --tag-c1: #b892ff;
     --tag-c2: #b892ff;
