@@ -47,11 +47,13 @@ def test_logged_in_shell_and_clubes_page():
     home = member.get("/")
     assert home.status_code == 200
     assert "app-sidebar" in home.text
-    assert "WatchClub" in home.text
-    assert ">WC<" in home.text
+    assert "Watch Club" in home.text
+    assert ">WC<" not in home.text
     assert 'aria-label="Início"' in home.text
     assert 'aria-label="Meus Clubes"' in home.text
     assert 'aria-label="Amigos"' in home.text
+    assert 'aria-label="Configurações"' in home.text
+    assert 'href="/conta"' in home.text
     assert 'aria-label="Notificações"' in home.text
     assert 'href="/amigos"' in home.text
     assert 'id="open-clubs"' in home.text
@@ -223,7 +225,8 @@ def test_update_profile_password_and_avatar():
     assert "Ana Clara" in account.text
     home = other.get("/")
     assert "Olá, Ana Clara" in home.text
-    assert "@ana" not in home.text
+    assert "@ana" in home.text
+    assert "Editar perfil" in home.text
     public = other.get("/u/ana")
     assert "Ana Clara" in public.text
     assert "@ana" in public.text
@@ -376,6 +379,7 @@ def test_closed_club_is_locked_open_club_can_be_joined():
     locked = guest.get(f"/clubs/{closed_id}")
     assert locked.status_code == 403
     assert "fechado" in locked.text.lower() or "🔒" in locked.text
+    assert "Pedir para entrar" in locked.text
 
     preview = guest.get(f"/clubs/{open_id}")
     assert preview.status_code == 200
@@ -395,14 +399,34 @@ def test_member_count_list_and_presence():
     created = owner.post("/clubs", data={"name": "Contagem"}, follow_redirects=False)
     club_id = int(created.headers["location"].rsplit("/", 1)[-1])
     page = owner.get(f"/clubs/{club_id}")
-    assert "1 participante" in page.text
+    assert 'class="home-btn"' in page.text
+    assert 'href="/"' in page.text
+    assert "js-club-nav-toggle" in page.text
+    assert 'aria-controls="club-nav"' in page.text
+    assert 'aria-controls="app-sidebar"' not in page.text
+    assert 'aria-label="Voltar"' not in page.text
+    assert 'class="crumb"' not in page.text
+    assert "1 membro" in page.text
+    assert page.text.find("1 membro") < page.text.find("Bate-papo")
+    assert "club-people" not in page.text
+    assert 'id="members-dialog"' in page.text
+    assert "js-copy-code" in page.text
+    assert "Código copiado!" in page.text
+    assert 'id="leave-dialog"' in page.text
+    copy_idx = page.text.find("js-copy-code")
+    leave_idx = page.text.find("js-leave-open")
+    name_idx = page.text.find("<h1>")
+    assert name_idx != -1 and copy_idx != -1 and leave_idx != -1
+    assert name_idx < copy_idx < leave_idx
     people = owner.get(f"/clubs/{club_id}/membros")
     assert people.status_code == 200
     assert "Contador" in people.text
-    assert "@contador" not in people.text
     ping = owner.post("/presenca", data={"status": "away"})
     assert ping.status_code == 200
     assert ping.json()["ok"] is True
+    away_page = owner.get(f"/clubs/{club_id}/membros")
+    assert 'class="presence-moon"' in away_page.text
+    assert 'aria-label="Ausente"' in away_page.text
 
 
 def test_nickname_cooldown_and_unique():
@@ -485,7 +509,7 @@ def test_club_creator_is_admin_and_member_cannot_change_settings():
     register_active(guest, "membro_comum", "membro.comum@example.com")
     guest.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
     member_page = guest.get(f"/clubs/{club_id}")
-    assert "Configurações" not in member_page.text
+    assert f"/clubs/{club_id}/config" not in member_page.text
     blocked = guest.post(
         f"/clubs/{club_id}/config",
         data={"name": "Hackeado", "description": "", "rules": "", "cover_color": "#7a3048"},
@@ -514,7 +538,12 @@ def test_club_chat_and_watching_are_members_only():
     created = owner.post("/clubs", data={"name": "Sala Chat", "is_closed": "1"}, follow_redirects=False)
     club_id = int(created.headers["location"].rsplit("/", 1)[-1])
     default_tab = owner.get(f"/clubs/{club_id}")
-    assert "Assistindo agora" in default_tab.text
+    assert "Assistindo" in default_tab.text
+    assert "Finalizados" in default_tab.text
+    assert "Buscar na TVMaze" not in default_tab.text
+    assert "Pesquisar série, filme, animação..." in default_tab.text
+    assert 'aria-label="Adicionar manualmente"' in default_tab.text
+    assert "Nenhum título por aqui ainda." in default_tab.text
     assert "Escreva para o clube" not in default_tab.text
 
     sent = owner.post(f"/clubs/{club_id}/mensagens", data={"body": "Vamos maratonar?"}, follow_redirects=False)
@@ -522,6 +551,24 @@ def test_club_chat_and_watching_are_members_only():
     chat = owner.get(f"/clubs/{club_id}?aba=chat")
     assert "Vamos maratonar?" in chat.text
     assert "Chat Host" in chat.text or "chat_host" in chat.text.lower() or "chat host" in chat.text.lower()
+    assert "js-chat-input" in chat.text
+    assert 'aria-label="Emoji"' in chat.text
+    assert 'class="emoji-popover js-emoji-popover" hidden' in chat.text
+    assert 'aria-label="Spoiler"' in chat.text
+    assert 'aria-label="Atualizar"' in chat.text
+    assert "Atualizar" not in chat.text.split("chat-form")[-1]
+    formatted = owner.post(
+        f"/clubs/{club_id}/mensagens",
+        data={"body": "**negrito** *italico* ||spoiler|| <script>x</script>"},
+        follow_redirects=False,
+    )
+    assert formatted.status_code == 303
+    rich = owner.get(f"/clubs/{club_id}?aba=chat")
+    assert "<strong>negrito</strong>" in rich.text
+    assert "<em>italico</em>" in rich.text
+    assert 'class="chat-spoiler"' in rich.text
+    assert "<script>x</script>" not in rich.text
+    assert "&lt;script&gt;x&lt;/script&gt;" in rich.text
 
     added = owner.post(
         f"/clubs/{club_id}/titulos",
@@ -532,7 +579,7 @@ def test_club_chat_and_watching_are_members_only():
     watching = owner.get(f"/clubs/{club_id}")
     assert "Filme da Casa" in watching.text
     assert "Filme" in watching.text
-    assert "Assistindo agora" in watching.text
+    assert "Já assistimos" in watching.text
     assert "Ver detalhes" in watching.text
 
     db = SessionLocal()
@@ -547,9 +594,21 @@ def test_club_chat_and_watching_are_members_only():
         follow_redirects=False,
     )
     assert marked.status_code == 303
-    watched = owner.get(f"/clubs/{club_id}?aba=assistindo")
+    assert marked.headers["location"] == f"/clubs/{club_id}?aba=assistindo&lista=finalizados"
+    watched = owner.get(f"/clubs/{club_id}?aba=assistindo&lista=finalizados")
     assert "Já assistimos" in watched.text
     assert "Filme da Casa" in watched.text
+    assert "Voltar para Assistindo" in watched.text
+    empty_watching = owner.get(f"/clubs/{club_id}?aba=assistindo&lista=xyz")
+    assert "Filme da Casa" not in empty_watching.text
+    assert "Nenhum título por aqui ainda." in empty_watching.text
+    restored = owner.post(
+        f"/clubs/{club_id}/shows/{show_id}/status",
+        data={"watch_status": "watching"},
+        follow_redirects=False,
+    )
+    assert restored.status_code == 303
+    assert restored.headers["location"] == f"/clubs/{club_id}?aba=assistindo&lista=assistindo"
 
     stranger = TestClient(app)
     register_active(stranger, "fora", "fora.chat@example.com")
@@ -708,7 +767,7 @@ def test_friends_private_chat_history_and_auth():
     assert 'href="/mensagens/amizade_b"' in friends_page.text
 
     chat = host.get(f"/clubs/{club_id}?aba=chat")
-    assert "/mensagens/amizade_b" in chat.text
+    assert "/u/amizade_b" in chat.text
     people = host.get(f"/clubs/{club_id}/membros")
     assert "/mensagens/amizade_b" in people.text
 
@@ -755,4 +814,148 @@ def test_friends_private_chat_history_and_auth():
     other_thread = stranger.get("/mensagens/amizade_a")
     assert "segredo-do-par" not in other_thread.text
     assert "Nenhuma mensagem ainda" in other_thread.text
+
+
+def test_back_button_only_when_logged_in():
+    member = TestClient(app)
+    register_active(member, "volta_user", "volta.user@example.com")
+    home = member.get("/")
+    assert 'aria-label="Voltar"' in home.text
+    assert "js-back" in home.text
+    guest = TestClient(app)
+    home_guest = guest.get("/")
+    assert 'aria-label="Voltar"' not in home_guest.text
+
+
+def test_manual_presence_survives_heartbeat():
+    from datetime import timedelta
+
+    from app.accounts import utcnow
+    from app.presence import AWAY_SECONDS, ONLINE_SECONDS, presence_of
+
+    member = TestClient(app)
+    register_active(member, "pref_user", "pref.user@example.com")
+    away = member.post("/presenca", data={"status": "away", "prefer": "1"})
+    assert away.json()["status"] == "away"
+    ping = member.post("/presenca", data={"status": "online"})
+    assert ping.json()["status"] == "away"
+    db = SessionLocal()
+    try:
+        user = db.scalar(select(User).where(User.username_key == "pref_user"))
+        assert user.presence_pref == "away"
+        user.last_seen = utcnow() - timedelta(seconds=AWAY_SECONDS + 30)
+        db.commit()
+        db.refresh(user)
+        assert presence_of(user) == "offline"
+        user.presence_pref = "online"
+        user.last_seen = utcnow()
+        db.commit()
+        db.refresh(user)
+        assert presence_of(user) == "online"
+        user.last_seen = utcnow() - timedelta(seconds=ONLINE_SECONDS + 30)
+        db.commit()
+        db.refresh(user)
+        assert presence_of(user) == "offline"
+        user.presence_pref = "offline"
+        user.last_seen = utcnow()
+        db.commit()
+        db.refresh(user)
+        assert presence_of(user) == "offline"
+    finally:
+        db.close()
+    still = member.post("/presenca", data={"status": "online"})
+    db = SessionLocal()
+    try:
+        user = db.scalar(select(User).where(User.username_key == "pref_user"))
+        assert user.presence_pref == "offline"
+        assert presence_of(user) == "offline"
+    finally:
+        db.close()
+    assert still.json()["status"] == "offline"
+
+
+def test_closed_club_join_requests_and_code():
+    from app.models import ClubJoinRequest
+
+    owner = TestClient(app)
+    register_active(owner, "pedido_host", "pedido.host@example.com", name="Pedido Host")
+    created = owner.post("/clubs", data={"name": "Sala Pedido", "is_closed": "1"}, follow_redirects=False)
+    club_id = int(created.headers["location"].rsplit("/", 1)[-1])
+    db = SessionLocal()
+    try:
+        code = db.get(Club, club_id).join_code
+    finally:
+        db.close()
+
+    member = TestClient(app)
+    register_active(member, "pedido_membro", "pedido.membro@example.com", name="Pedido Membro")
+    member.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
+    inside = member.get(f"/clubs/{club_id}")
+    assert inside.status_code == 200
+    assert "Solicitações" not in inside.text
+    assert 'href="/u/pedido_host"' in inside.text
+
+    waiting = TestClient(app)
+    register_active(waiting, "pedido_guest", "pedido.guest@example.com", name="Pedido Guest")
+    asked = waiting.post(f"/clubs/{club_id}/solicitar", data={"next": f"/clubs/{club_id}"}, follow_redirects=False)
+    assert asked.status_code == 303
+    locked = waiting.get(f"/clubs/{club_id}")
+    assert locked.status_code == 403
+    assert "Pedido enviado" in locked.text
+
+    db = SessionLocal()
+    try:
+        guest = db.scalar(select(User).where(User.username_key == "pedido_guest"))
+        guest_id = guest.id
+        pending = db.scalar(
+            select(ClubJoinRequest).where(ClubJoinRequest.club_id == club_id, ClubJoinRequest.user_id == guest_id)
+        )
+        assert pending is not None
+    finally:
+        db.close()
+
+    blocked = member.post(f"/clubs/{club_id}/solicitacoes/{guest_id}/aceitar", follow_redirects=False)
+    assert blocked.status_code == 403
+    accepted = owner.post(f"/clubs/{club_id}/solicitacoes/{guest_id}/aceitar", follow_redirects=False)
+    assert accepted.status_code == 303
+    joined = waiting.get(f"/clubs/{club_id}")
+    assert joined.status_code == 200
+
+    other = TestClient(app)
+    register_active(other, "pedido_recusa", "pedido.recusa@example.com", name="Pedido Recusa")
+    other.post(f"/clubs/{club_id}/solicitar", data={"next": f"/clubs/{club_id}"}, follow_redirects=False)
+    db = SessionLocal()
+    try:
+        recusado = db.scalar(select(User).where(User.username_key == "pedido_recusa"))
+        recusado_id = recusado.id
+    finally:
+        db.close()
+    owner_page = owner.get(f"/clubs/{club_id}")
+    assert "Solicitações" in owner_page.text
+    assert "Pedido Recusa" in owner_page.text
+    refused = owner.post(f"/clubs/{club_id}/solicitacoes/{recusado_id}/recusar", follow_redirects=False)
+    assert refused.status_code == 303
+    still_out = other.get(f"/clubs/{club_id}")
+    assert still_out.status_code == 403
+    instant = TestClient(app)
+    register_active(instant, "pedido_codigo", "pedido.codigo@example.com")
+    joined_code = instant.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
+    assert joined_code.status_code == 303
+    assert joined_code.headers["location"] == f"/clubs/{club_id}"
+
+
+def test_leave_confirmation_ui_does_not_block_post():
+    owner = TestClient(app)
+    register_active(owner, "sai_host", "sai.host@example.com")
+    created = owner.post("/clubs", data={"name": "Sala Saida"}, follow_redirects=False)
+    club_id = int(created.headers["location"].rsplit("/", 1)[-1])
+    room = owner.get(f"/clubs/{club_id}")
+    assert "js-leave-open" in room.text
+    assert 'id="leave-dialog"' in room.text
+    assert 'action="/clubs/%s/leave"' % club_id in room.text
+    account = owner.get("/conta")
+    assert "js-leave-open" in account.text
+    assert 'id="leave-dialog"' in account.text
+    assert f'data-leave-action="/clubs/{club_id}/leave"' in account.text
+    assert 'type="submit">Sair do clube</button>' not in room.text.split("leave-dialog")[0]
 

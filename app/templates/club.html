@@ -1,8 +1,14 @@
 {% extends "base.html" %}
 {% from "macros/avatar.html" import user_avatar %}
+{% from "macros/presence.html" import presence_mark %}
+{% from "macros/sidebar.html" import club_menu_toggle, nav_icon %}
 {% block title %}{{ club.name }} · Watch Club{% endblock %}
-{% block page_heading %}{{ club.name }}{% endblock %}
 {% block body_class %}club-room{% endblock %}
+{% block top_start %}
+  <a class="home-btn" href="/" aria-label="Início" title="Início">{{ nav_icon('home') }}</a>
+  {{ club_menu_toggle() }}
+  <p class="page-heading">{{ club.name }}</p>
+{% endblock %}
 {% block content %}
 {% macro catalog_row(link, flag_label, flag_class, next_status, next_label, next_class) %}
   {% set info = ratings.get(link.show.id, {"average": None, "count": 0, "mine": None, "filled": 0}) %}
@@ -65,23 +71,20 @@
     </div>
   </article>
 {% endmacro %}
-<input class="club-toggle" type="checkbox" id="club-nav-toggle">
-<input class="club-toggle" type="checkbox" id="club-people-toggle">
 <div class="club-shell">
-  <label class="club-dim" for="club-nav-toggle"></label>
-  <label class="club-dim club-dim-people" for="club-people-toggle"></label>
-
-  <aside class="club-nav">
+  <div class="club-nav-dim js-club-nav-close" hidden></div>
+  <aside class="club-nav" id="club-nav" aria-hidden="true">
     <section class="club-cover-banner club-nav-cover" style="background: {{ club.cover_color or '#3a2348' }}">
       {% if club.cover_image %}
         <img src="{{ cover_image_url(club.cover_image) }}" alt="">
       {% endif %}
     </section>
     <div class="club-nav-copy">
-      <p class="crumb"><a href="/">Início</a></p>
       <h1>{{ club.name }} {% if club.is_closed %}<span class="lock" title="Clube fechado">🔒</span>{% endif %}</h1>
+      <button type="button" class="club-members-summary js-open-members">
+        {{ club.members|length }} membro{% if club.members|length != 1 %}s{% endif %} · {{ online_count }} online
+      </button>
       {% if club.description %}<p class="club-lead">{{ club.description }}</p>{% endif %}
-      <p class="muted">Código: <strong>{{ club.join_code }}</strong></p>
     </div>
     <nav class="club-side-nav">
       <a class="club-side-link {% if tab == 'chat' %}is-on{% endif %}" href="/clubs/{{ club.id }}?aba=chat">Bate-papo</a>
@@ -91,23 +94,36 @@
       {% endif %}
     </nav>
     <div class="club-leave">
-      <form action="/clubs/{{ club.id }}/leave" method="post">
-        <input type="hidden" name="next" value="/">
-        <button class="danger" type="submit">Sair do clube</button>
-      </form>
+      <div class="club-code">
+        <span class="muted">Código: <strong class="js-join-code">{{ club.join_code }}</strong></span>
+        <button type="button" class="club-copy js-copy-code" aria-label="Copiar código">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="9" y="9" width="11" height="11" rx="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+        </button>
+        <span class="club-copy-ok js-copy-feedback" hidden aria-live="polite">Código copiado!</span>
+      </div>
+      <button type="button" class="danger js-leave-open">Sair do clube</button>
     </div>
   </aside>
 
   <section class="club-main">
     <div class="club-mobile-bar">
-      <label class="ghost club-mobile-btn" for="club-nav-toggle">Menu</label>
-      <strong>{{ club.name }}</strong>
-      <label class="ghost club-mobile-btn" for="club-people-toggle">Membros</label>
+      <button type="button" class="ghost club-mobile-btn js-open-members">Membros</button>
     </div>
     {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
     {% if tab == 'chat' %}
       <section class="chat-panel">
+        <div class="chat-toolbar-top">
+          <a class="chat-refresh" href="/clubs/{{ club.id }}?aba=chat" aria-label="Atualizar" title="Atualizar">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-2.2-5.8"/>
+              <path d="M21 3v6h-6"/>
+            </svg>
+          </a>
+        </div>
         <div class="chat-log">
           {% for item in messages %}
             {% set follow = not loop.first and loop.previtem.user_id == item.user_id %}
@@ -124,7 +140,7 @@
                     <span class="muted">@{{ item.user.username }} · {{ item.created_at|when }}</span>
                   </p>
                 {% endif %}
-                <p class="chat-body">{{ item.body }}</p>
+                <p class="chat-body">{{ item.body|chat_format }}</p>
               </div>
             </article>
           {% else %}
@@ -132,38 +148,67 @@
           {% endfor %}
         </div>
         <form class="chat-form" action="/clubs/{{ club.id }}/mensagens" method="post">
-          <label class="chat-compose">
-            <span class="visually-hidden">Mensagem</span>
-            <textarea name="body" rows="1" maxlength="2000" required placeholder="Escreva para o clube"></textarea>
-          </label>
-          <button type="submit">Enviar</button>
-          <a class="muted chat-refresh" href="/clubs/{{ club.id }}?aba=chat">Atualizar</a>
+          <div class="chat-composer">
+            <label class="chat-compose">
+              <span class="visually-hidden">Mensagem</span>
+              <textarea name="body" class="js-chat-input" rows="1" maxlength="2000" required placeholder="Escreva para o clube"></textarea>
+            </label>
+            <div class="chat-toolbar">
+              <div class="chat-toolbar-tools">
+                <div class="emoji-picker-wrap">
+                  <button type="button" class="chat-tool js-emoji-toggle" aria-expanded="false" aria-haspopup="true" aria-label="Emoji">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9"/>
+                      <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                      <path d="M9 9.5h.01M15 9.5h.01"/>
+                    </svg>
+                  </button>
+                  <div class="emoji-popover js-emoji-popover" hidden>
+                    {% for item in ["🍿","🎬","📺","⭐","❤️","✨","🌙","🌸","🐱","🎧","☕","🔥","😂","😍","👍","👏","😮","😢","🎉","♪","★","♥","✦","☺"] %}
+                      <button type="button" class="emoji-btn js-insert-emoji" data-emoji="{{ item }}">{{ item }}</button>
+                    {% endfor %}
+                  </div>
+                </div>
+                <button type="button" class="chat-tool js-wrap" data-before="||" data-after="||" aria-label="Spoiler">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 3l18 18"/>
+                    <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"/>
+                    <path d="M9.9 5.1A9.8 9.8 0 0 1 12 5c5 0 9 4.5 10 7-.3.8-1 2-2.1 3.3"/>
+                    <path d="M6.1 6.1C4.2 7.6 2.7 9.5 2 12c1 2.5 5 7 10 7 1.4 0 2.7-.3 3.9-.8"/>
+                  </svg>
+                </button>
+                <button type="button" class="chat-tool js-wrap" data-before="**" data-after="**" aria-label="Negrito">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M7 5h6.5a3.5 3.5 0 0 1 0 7H7z"/>
+                    <path d="M7 12h7.5a3.5 3.5 0 0 1 0 7H7z"/>
+                  </svg>
+                </button>
+                <button type="button" class="chat-tool js-wrap" data-before="*" data-after="*" aria-label="Itálico">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                    <path d="M10 5h8M6 19h8M14.5 5l-5 14"/>
+                  </svg>
+                </button>
+              </div>
+              <button type="submit">Enviar</button>
+            </div>
+          </div>
         </form>
       </section>
     {% else %}
       <section class="watch-panel">
-        <div class="watch-add grid-2">
-          <form class="card" method="get">
+        <div class="watch-toolbar">
+          <form class="watch-search" method="get" role="search">
             <input type="hidden" name="aba" value="assistindo">
-            <h2>Buscar na TVMaze</h2>
-            <label>Título
-              <input name="q" value="{{ query }}" placeholder="Série, filme, animação…">
-            </label>
-            <button type="submit">Buscar</button>
+            <input type="hidden" name="lista" value="{{ watch_list }}">
+            <button type="submit" aria-label="Pesquisar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"></circle>
+                <path d="M20 20l-3-3"></path>
+              </svg>
+            </button>
+            <input name="q" value="{{ query }}" placeholder="Pesquisar série, filme, animação..." aria-label="Pesquisar série, filme, animação">
           </form>
-          <form class="card" action="/clubs/{{ club.id }}/titulos" method="post">
-            <h2>Adicionar manualmente</h2>
-            <label>Nome <input name="name" required maxlength="255" placeholder="Nome do título"></label>
-            <label>Tipo
-              <select name="kind">
-                {% for key, label in CONTENT_KINDS.items() %}
-                  <option value="{{ key }}">{{ label }}</option>
-                {% endfor %}
-              </select>
-            </label>
-            <label>URL da capa <input name="image_url" placeholder="https://…"></label>
-            <button type="submit">Adicionar</button>
-          </form>
+          <button class="watch-add-btn js-add-title-open" type="button" title="Adicionar manualmente" aria-label="Adicionar manualmente">+</button>
         </div>
 
         {% if results %}
@@ -186,50 +231,340 @@
           </ul>
         {% endif %}
 
-        <h2 class="watch-heading">Assistindo agora</h2>
-        <div class="watch-list">
-          {% for link in watching %}
-            {{ catalog_row(link, 'Assistindo', '', 'watched', 'Já assistimos', '') }}
-          {% else %}
-            <p class="muted">Nada em andamento. Adicione um título acima.</p>
-          {% endfor %}
-        </div>
+        <nav class="watch-tabs" aria-label="Lista de títulos">
+          <a class="watch-tab {% if watch_list != 'finalizados' %}is-on{% endif %}" href="/clubs/{{ club.id }}?aba=assistindo&lista=assistindo">Assistindo</a>
+          <a class="watch-tab {% if watch_list == 'finalizados' %}is-on{% endif %}" href="/clubs/{{ club.id }}?aba=assistindo&lista=finalizados">Finalizados</a>
+        </nav>
 
-        <h2 class="watch-heading">Já assistimos</h2>
-        <div class="watch-list">
-          {% for link in watched %}
-            {{ catalog_row(link, 'Já assistimos', 'is-done', 'watching', 'Voltar para Assistindo', 'ghost') }}
-          {% else %}
-            <p class="muted">Nenhum título encerrado ainda.</p>
-          {% endfor %}
-        </div>
+        {% if watch_list == 'finalizados' %}
+          <div class="watch-list">
+            {% for link in watched %}
+              {{ catalog_row(link, 'Já assistimos', 'is-done', 'watching', 'Voltar para Assistindo', 'ghost') }}
+            {% else %}
+              <p class="muted">Nenhum título finalizado ainda.</p>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="watch-list">
+            {% for link in watching %}
+              {{ catalog_row(link, 'Assistindo', '', 'watched', 'Já assistimos', '') }}
+            {% else %}
+              <p class="muted">Nenhum título por aqui ainda.</p>
+              <p class="muted">Pesquise uma série ou filme para começar.</p>
+            {% endfor %}
+          </div>
+        {% endif %}
       </section>
     {% endif %}
   </section>
 
-  <aside class="club-people">
-    <h2>
-      <a class="member-count" href="/clubs/{{ club.id }}/membros">{{ club.members|length }} participante{% if club.members|length != 1 %}s{% endif %}</a>
-    </h2>
-    <ul class="club-member-list">
-      {% for member in club.members %}
+</div>
+<dialog class="members-dialog" id="members-dialog" aria-labelledby="members-dialog-title">
+  <div class="members-dialog-head">
+    <h2 id="members-dialog-title">Membros</h2>
+    <button type="button" class="members-close js-close-members" aria-label="Fechar">&times;</button>
+  </div>
+  <label class="members-search">
+    <span class="visually-hidden">Buscar membros</span>
+    <input type="search" class="js-members-search" placeholder="Buscar por nome ou @">
+  </label>
+  <div class="members-tabs" role="tablist">
+    <button type="button" class="members-tab is-on js-members-tab" data-tab="todos">Todos</button>
+    <button type="button" class="members-tab js-members-tab" data-tab="online">Online</button>
+    {% if is_admin and club.is_closed %}
+      <button type="button" class="members-tab js-members-tab" data-tab="solicitacoes">Solicitações{% if join_requests %} ({{ join_requests|length }}){% endif %}</button>
+    {% endif %}
+  </div>
+  <ul class="club-member-list js-members-list">
+    {% for member in club.members %}
+      {% set status = presence_of(member.user) %}
+      <li class="js-member-row" data-name="{{ member.user.name|lower }}" data-username="{{ member.user.username|lower }}" data-online="{{ '1' if status == 'online' else '0' }}">
+        <a class="club-member" href="/u/{{ member.user.username }}">
+          {{ user_avatar(member.user, 'sm') }}
+          <span class="club-member-copy">
+            <strong>{{ member.user.name }}</strong>
+            <span class="muted">@{{ member.user.username }}{% if member.is_admin %} · admin{% endif %}</span>
+            <span class="status {{ status }}">{{ presence_mark(status) }}{{ presence_label(member.user) }}</span>
+          </span>
+        </a>
+      </li>
+    {% endfor %}
+  </ul>
+  {% if is_admin and club.is_closed %}
+    <ul class="club-member-list js-requests-list" hidden>
+      {% for item in join_requests %}
         <li>
-          <a class="club-member" href="{{ person_href(user.id, member.user, friend_ids) }}">
-            {{ user_avatar(member.user, 'sm') }}
+          <div class="club-member">
+            {{ user_avatar(item.user, 'sm') }}
             <span class="club-member-copy">
-              <strong>{{ member.user.name }}</strong>
-              <span class="muted">@{{ member.user.username }}{% if member.is_admin %} · admin{% endif %}</span>
+              <strong>{{ item.user.name }}</strong>
+              <span class="muted">@{{ item.user.username }}</span>
             </span>
-          </a>
+            <form action="/clubs/{{ club.id }}/solicitacoes/{{ item.user_id }}/aceitar" method="post">
+              <button type="submit">Aceitar</button>
+            </form>
+            <form action="/clubs/{{ club.id }}/solicitacoes/{{ item.user_id }}/recusar" method="post">
+              <button class="ghost" type="submit">Recusar</button>
+            </form>
+          </div>
         </li>
+      {% else %}
+        <li class="muted members-empty">Nenhuma solicitação pendente.</li>
       {% endfor %}
     </ul>
-  </aside>
-</div>
-{% if tab == 'chat' %}
+  {% endif %}
+  {% if is_admin %}
+    <p class="members-manage"><a href="/clubs/{{ club.id }}/membros">Gerenciar administradores</a></p>
+  {% endif %}
+</dialog>
+<dialog class="leave-dialog" id="add-title-dialog" aria-labelledby="add-title-dialog-title">
+  <h2 id="add-title-dialog-title">Adicionar manualmente</h2>
+  <form action="/clubs/{{ club.id }}/titulos" method="post">
+    <label>Nome <input name="name" required maxlength="255" placeholder="Nome do título"></label>
+    <label>Tipo
+      <select name="kind">
+        {% for key, label in CONTENT_KINDS.items() %}
+          <option value="{{ key }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>URL da capa <input name="image_url" placeholder="https://…"></label>
+    <div class="leave-dialog-actions">
+      <button type="button" class="ghost js-add-title-cancel">Cancelar</button>
+      <button type="submit">Adicionar</button>
+    </div>
+  </form>
+</dialog>
+<dialog class="leave-dialog" id="leave-dialog" aria-labelledby="leave-dialog-title">
+  <h2 id="leave-dialog-title">Sair do clube</h2>
+  <p>Tem certeza de que deseja sair de <strong>{{ club.name }}</strong>?</p>
+  <div class="leave-dialog-actions">
+    <button type="button" class="ghost js-leave-cancel">Cancelar</button>
+    <form action="/clubs/{{ club.id }}/leave" method="post">
+      <input type="hidden" name="next" value="/">
+      <button class="danger" type="submit">Sair do clube</button>
+    </form>
+  </div>
+</dialog>
 <script>
+  {% if tab == 'chat' %}
   const log = document.querySelector(".chat-log");
   if (log) log.scrollTop = log.scrollHeight;
+  {% endif %}
+  (function () {
+    const root = document.documentElement;
+    const nav = document.getElementById("club-nav");
+    const toggles = document.querySelectorAll(".js-club-nav-toggle");
+    const dim = document.querySelector(".js-club-nav-close");
+
+    function isOpen() {
+      return root.classList.contains("club-nav-open");
+    }
+
+    function sync() {
+      const expanded = isOpen();
+      toggles.forEach((btn) => btn.setAttribute("aria-expanded", expanded ? "true" : "false"));
+      if (nav) nav.setAttribute("aria-hidden", expanded ? "false" : "true");
+      if (dim) dim.hidden = !expanded;
+    }
+
+    function setOpen(open) {
+      root.classList.toggle("club-nav-open", open);
+      sync();
+    }
+
+    toggles.forEach((btn) => btn.addEventListener("click", () => setOpen(!isOpen())));
+    if (dim) dim.addEventListener("click", () => setOpen(false));
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || !isOpen()) return;
+      const account = document.getElementById("account-popover");
+      if (account && !account.hidden) return;
+      const emoji = document.querySelector(".js-emoji-popover");
+      if (emoji && !emoji.hidden) return;
+      setOpen(false);
+    });
+    sync();
+  })();
+  (function () {
+    const dialog = document.getElementById("members-dialog");
+    if (!dialog) return;
+    const search = dialog.querySelector(".js-members-search");
+    const rows = dialog.querySelectorAll(".js-member-row");
+    const membersList = dialog.querySelector(".js-members-list");
+    const requestsList = dialog.querySelector(".js-requests-list");
+    let tab = "todos";
+
+    function applyFilter() {
+      const query = (search && search.value || "").trim().toLowerCase();
+      const showMembers = tab !== "solicitacoes";
+      if (membersList) membersList.hidden = !showMembers;
+      if (requestsList) requestsList.hidden = showMembers;
+      if (search) search.hidden = !showMembers;
+      rows.forEach((row) => {
+        const hay = (row.getAttribute("data-name") || "") + " @" + (row.getAttribute("data-username") || "");
+        const onlineOk = tab !== "online" || row.getAttribute("data-online") === "1";
+        row.hidden = !(onlineOk && hay.includes(query));
+      });
+    }
+
+    document.querySelectorAll(".js-open-members").forEach((btn) => {
+      btn.addEventListener("click", () => dialog.showModal());
+    });
+    dialog.querySelectorAll(".js-close-members").forEach((btn) => {
+      btn.addEventListener("click", () => dialog.close());
+    });
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+    dialog.querySelectorAll(".js-members-tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        tab = btn.getAttribute("data-tab") || "todos";
+        dialog.querySelectorAll(".js-members-tab").forEach((item) => item.classList.toggle("is-on", item === btn));
+        applyFilter();
+      });
+    });
+    if (search) search.addEventListener("input", applyFilter);
+  })();
+
+  (function () {
+    const copyBtn = document.querySelector(".js-copy-code");
+    const codeEl = document.querySelector(".js-join-code");
+    const feedback = document.querySelector(".js-copy-feedback");
+    if (!copyBtn || !codeEl) return;
+    copyBtn.addEventListener("click", async () => {
+      const text = (codeEl.textContent || "").trim();
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (error) {
+        const helper = document.createElement("textarea");
+        helper.value = text;
+        document.body.appendChild(helper);
+        helper.select();
+        document.execCommand("copy");
+        helper.remove();
+      }
+      if (feedback) {
+        feedback.hidden = false;
+        window.setTimeout(() => { feedback.hidden = true; }, 2000);
+      }
+    });
+  })();
+
+  (function () {
+    const dialog = document.getElementById("add-title-dialog");
+    if (!dialog) return;
+    document.querySelectorAll(".js-add-title-open").forEach((btn) => {
+      btn.addEventListener("click", () => dialog.showModal());
+    });
+    dialog.querySelectorAll(".js-add-title-cancel").forEach((btn) => {
+      btn.addEventListener("click", () => dialog.close());
+    });
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+  })();
+
+  (function () {
+    const dialog = document.getElementById("leave-dialog");
+    if (!dialog) return;
+    document.querySelectorAll(".js-leave-open").forEach((btn) => {
+      btn.addEventListener("click", () => dialog.showModal());
+    });
+    dialog.querySelectorAll(".js-leave-cancel").forEach((btn) => {
+      btn.addEventListener("click", () => dialog.close());
+    });
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+  })();
+
+  document.querySelector(".chat-log")?.addEventListener("click", (event) => {
+    const spoiler = event.target.closest(".chat-spoiler");
+    if (!spoiler) return;
+    const open = spoiler.getAttribute("aria-expanded") === "true";
+    spoiler.setAttribute("aria-expanded", open ? "false" : "true");
+    spoiler.classList.toggle("is-open", !open);
+  });
+
+  (function () {
+    const input = document.querySelector(".js-chat-input");
+    if (!input) return;
+    const popover = document.querySelector(".js-emoji-popover");
+    const toggle = document.querySelector(".js-emoji-toggle");
+
+    function insertAtCursor(chunk) {
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? input.value.length;
+      const next = input.value.slice(0, start) + chunk + input.value.slice(end);
+      if (next.length > 2000) return;
+      input.value = next;
+      const cursor = start + chunk.length;
+      input.focus();
+      input.setSelectionRange(cursor, cursor);
+      resizeInput();
+    }
+
+    function wrap(before, after) {
+      const start = input.selectionStart ?? 0;
+      const end = input.selectionEnd ?? 0;
+      const selected = input.value.slice(start, end);
+      const chunk = before + selected + after;
+      if ((input.value.length - selected.length + chunk.length) > 2000) return;
+      input.value = input.value.slice(0, start) + chunk + input.value.slice(end);
+      if (selected) {
+        input.setSelectionRange(start + before.length, start + before.length + selected.length);
+      } else {
+        const cursor = start + before.length;
+        input.setSelectionRange(cursor, cursor);
+      }
+      input.focus();
+      resizeInput();
+    }
+
+    function closePicker() {
+      if (!popover || !toggle) return;
+      popover.hidden = true;
+      toggle.setAttribute("aria-expanded", "false");
+    }
+
+    function resizeInput() {
+      input.style.height = "auto";
+      const max = 128;
+      input.style.height = Math.min(input.scrollHeight, max) + "px";
+    }
+
+    document.querySelectorAll(".js-wrap").forEach((btn) => {
+      btn.addEventListener("click", () => wrap(btn.dataset.before || "", btn.dataset.after || ""));
+    });
+    document.querySelectorAll(".js-insert-emoji").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        insertAtCursor(btn.dataset.emoji || "");
+        closePicker();
+      });
+    });
+
+    input.addEventListener("input", resizeInput);
+    resizeInput();
+
+    if (toggle && popover) {
+      toggle.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const open = popover.hidden;
+        popover.hidden = !open;
+        toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+      document.addEventListener("click", (event) => {
+        if (popover.hidden) return;
+        if (popover.contains(event.target) || toggle.contains(event.target)) return;
+        closePicker();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !popover.hidden) {
+          closePicker();
+          event.preventDefault();
+        }
+      });
+    }
+  })();
 </script>
-{% endif %}
 {% endblock %}

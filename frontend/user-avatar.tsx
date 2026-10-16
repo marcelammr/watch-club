@@ -1,4 +1,4 @@
-import { createRoot } from "react-dom/client";
+import { createRoot, type Root } from "react-dom/client";
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { BadgeProps } from "@/components/ui/badge";
@@ -23,9 +23,17 @@ const presenceVariant: Record<string, NonNullable<BadgeProps["variant"]>> = {
 
 const presenceClass: Record<string, string> = {
   online: "bg-[#3ddc84] hover:bg-[#3ddc84]",
-  away: "",
+  away: "overflow-hidden bg-background p-0 text-chart-1 hover:bg-background",
   offline: "bg-muted-foreground",
 };
+
+function CrescentMoon() {
+  return (
+    <svg className="presence-moon h-full w-full" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M13.2 10.15A6.2 6.2 0 0 1 5.85 2.8 6.35 6.35 0 1 0 13.2 13.6a6.2 6.2 0 0 1 0-3.45z" />
+    </svg>
+  );
+}
 
 export type AvatarSize = keyof typeof sizes;
 
@@ -59,11 +67,15 @@ export function UserAvatar({
           className={cn(badgeSizes[size], presenceClass[status])}
           title={presenceLabel}
           aria-label={presenceLabel}
-        />
+        >
+          {status === "away" ? <CrescentMoon /> : null}
+        </AvatarBadge>
       ) : null}
     </Avatar>
   );
 }
+
+const avatarRoots = new WeakMap<HTMLElement, Root>();
 
 export function mountUserAvatars(root: ParentNode = document) {
   root.querySelectorAll<HTMLElement>("[data-user-avatar]").forEach((node) => {
@@ -75,7 +87,12 @@ export function mountUserAvatars(root: ParentNode = document) {
       return;
     }
     node.dataset.mounted = "true";
-    createRoot(node).render(
+    let reactRoot = avatarRoots.get(node);
+    if (!reactRoot) {
+      reactRoot = createRoot(node);
+      avatarRoots.set(node, reactRoot);
+    }
+    reactRoot.render(
       <UserAvatar
         src={src}
         alt={node.dataset.alt || ""}
@@ -86,4 +103,11 @@ export function mountUserAvatars(root: ParentNode = document) {
       />
     );
   });
+}
+
+export function remountUserAvatars(root: ParentNode = document) {
+  root.querySelectorAll<HTMLElement>("[data-user-avatar]").forEach((node) => {
+    node.dataset.mounted = "false";
+  });
+  mountUserAvatars(root);
 }

@@ -23,6 +23,7 @@ class User(Base):
     facebook_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
     last_seen: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     presence: Mapped[str] = mapped_column(String(12), default="offline", nullable=False)
+    presence_pref: Mapped[str] = mapped_column(String(12), default="auto", nullable=False)
     username_changed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
@@ -75,6 +76,18 @@ class ClubMember(Base):
 
     club: Mapped[Club] = relationship(back_populates="members")
     user: Mapped[User] = relationship(back_populates="memberships")
+
+
+class ClubJoinRequest(Base):
+    __tablename__ = "club_join_requests"
+    __table_args__ = (UniqueConstraint("club_id", "user_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    user: Mapped[User] = relationship()
 
 
 class Show(Base):

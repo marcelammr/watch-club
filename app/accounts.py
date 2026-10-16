@@ -134,6 +134,7 @@ def create_user(db: Session, username: str, email: str, password: str, name: str
         avatar=DEFAULT_AVATAR,
         bio="",
         presence="offline",
+        presence_pref="auto",
         username_changed_at=utcnow(),
     )
     db.add(user)
@@ -168,6 +169,7 @@ def login_or_create_oauth(db: Session, profile: dict) -> User:
             avatar=DEFAULT_AVATAR,
             bio="",
             presence="offline",
+            presence_pref="auto",
             username_changed_at=utcnow(),
         )
         db.add(user)

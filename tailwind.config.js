@@ -34,6 +34,7 @@ module.exports = {
         destructive: {
           DEFAULT: "var(--destructive)",
         },
+        rose: "var(--rose)",
         border: "var(--border)",
         input: "var(--input)",
         ring: "var(--ring)",
@@ -61,7 +62,8 @@ module.exports = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        display: ['"Iowan Old Style"', '"Palatino Linotype"', "Palatino", "serif"],
+        sans: ['"Work Sans"', "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ['"Fugaz One"', "ui-sans-serif", "system-ui", "sans-serif"],
       },
     },
   },

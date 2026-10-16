@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "macros/avatar.html" import user_avatar %}
+{% from "macros/presence.html" import presence_mark %}
 {% block title %}Participantes · {{ club.name }}{% endblock %}
 {% block page_heading %}Participantes{% endblock %}
 {% block content %}
@@ -13,7 +14,7 @@
         {{ user_avatar(member.user, 'md') }}
         <span>{{ member.user.name }}</span>
         {% if member.is_admin %}<span class="muted">admin</span>{% endif %}
-        <span class="status {{ presence_of(member.user) }}"><span class="dot"></span>{{ presence_label(member.user) }}</span>
+        <span class="status {{ presence_of(member.user) }}">{{ presence_mark(presence_of(member.user)) }}{{ presence_label(member.user) }}</span>
       </a>
       {% if is_admin and member.user_id != user.id %}
         {% if member.is_admin %}

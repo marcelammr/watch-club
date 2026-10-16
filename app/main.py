@@ -25,17 +25,24 @@ from app.catalog import (
     CONTENT_KINDS,
     add_manual_title,
     add_show_to_club,
+    accept_join_request,
     admin_count,
+    clear_join_request,
     club_membership,
     club_messages,
+    create_join_request,
     club_rating_stats,
     fill_missing_genres,
     is_club_admin,
     leave_club as remove_club_membership,
     load_show,
     parse_genres,
+    list_join_requests,
+    pending_join_request,
     post_club_message,
     refresh_news,
+    reject_join_request,
+    requested_club_ids,
     remove_show_from_club,
     require_club_admin,
     require_club_member,
@@ -46,6 +53,7 @@ from app.catalog import (
     valid_stars,
 )
 from app.covers import COVER_COLORS, cover_image_url, save_cover_image, valid_cover_color
+from app.markup import format_chat
 from app.config import BASE_DIR, BIO_MAX, EMAIL_DEV_SHOW_LINK, SECRET_KEY
 from app.db import Base, engine, get_db
 from app.friends import (
@@ -75,7 +83,7 @@ from app.oauth import (
     new_state,
 )
 from app.presence import LABELS as PRESENCE_LABELS
-from app.presence import presence_of, touch_presence
+from app.presence import mark_logout, presence_of, touch_presence
 from app.schema import migrate_schema
 from app.security import hash_password, make_join_code, verify_password
 from app.services import tvmaze
@@ -114,6 +122,7 @@ templates.env.globals["person_href"] = person_href
 templates.env.filters["when"] = lambda value: value.strftime("%d/%m/%Y %H:%M") if value else ""
 templates.env.filters["genres"] = parse_genres
 templates.env.filters["avg_pt"] = lambda value: f"{value:.1f}".replace(".", ",") if value is not None else ""
+templates.env.filters["chat_format"] = format_chat
 
 
 def current_user(request: Request, db: Session) -> User | None:
@@ -490,7 +499,7 @@ def logout(request: Request):
     try:
         user = current_user(request, db)
         if user:
-            touch_presence(user, "offline")
+            mark_logout(user)
             db.commit()
     finally:
         db.close()
@@ -742,7 +751,8 @@ def join_club(request: Request, join_code: str = Form(...), next: str = Form("/"
         )
         if not existing:
             db.add(ClubMember(club_id=club.id, user_id=user.id, is_admin=False))
-            db.commit()
+        clear_join_request(db, club.id, user.id)
+        db.commit()
         if next_url.startswith("/conta"):
             return RedirectResponse(
                 f"/conta?ok={quote('Você entrou no clube ' + club.name)}",
@@ -795,7 +805,13 @@ def join_open_club(request: Request, club_id: int):
 
 
 @app.get("/clubs/{club_id}", response_class=HTMLResponse)
-async def club_detail(request: Request, club_id: int, q: str | None = Query(None), aba: str | None = Query(None)):
+async def club_detail(
+    request: Request,
+    club_id: int,
+    q: str | None = Query(None),
+    aba: str | None = Query(None),
+    lista: str | None = Query(None),
+):
     db = db_session()
     try:
         user = login_required(request, db)
@@ -807,7 +823,13 @@ async def club_detail(request: Request, club_id: int, q: str | None = Query(None
             return templates.TemplateResponse(
                 request,
                 "club_locked.html",
-                {"user": user, "club": club},
+                {
+                    "user": user,
+                    "club": club,
+                    "join_pending": pending_join_request(db, club.id, user.id) is not None,
+                    "ok": request.query_params.get("ok"),
+                    "error": request.query_params.get("error"),
+                },
                 status_code=403,
             )
         if not member:
@@ -824,6 +846,10 @@ async def club_detail(request: Request, club_id: int, q: str | None = Query(None
             await fill_missing_genres(db, [link.show for link in club.shows])
             db.commit()
         ratings = club_rating_stats(db, club.id, user.id)
+        admin = is_club_admin(db, club.id, user.id)
+        members = list(club.members)
+        online_count = sum(1 for item in members if presence_of(item.user) == "online")
+        join_requests = list_join_requests(db, club.id) if admin and club.is_closed else []
         return templates.TemplateResponse(
             request,
             "club.html",
@@ -833,13 +859,16 @@ async def club_detail(request: Request, club_id: int, q: str | None = Query(None
                 "query": q or "",
                 "results": results,
                 "is_member": True,
-                "is_admin": is_club_admin(db, club.id, user.id),
+                "is_admin": admin,
                 "tab": tab,
+                "watch_list": "finalizados" if lista == "finalizados" else "assistindo",
                 "messages": club_messages(db, club.id) if tab == "chat" else [],
                 "watching": watching,
                 "watched": watched,
                 "ratings": ratings,
                 "friend_ids": friend_id_set(db, user.id),
+                "online_count": online_count,
+                "join_requests": join_requests,
                 "error": request.query_params.get("error"),
             },
         )
@@ -1030,7 +1059,7 @@ def add_title(
         user = login_required(request, db)
         club = require_club_member(db, club_id, user.id)
         add_manual_title(db, club, user.id, name, kind, image_url)
-        return RedirectResponse(f"/clubs/{club_id}?aba=assistindo", status_code=303)
+        return RedirectResponse(f"/clubs/{club_id}?aba=assistindo&lista=assistindo", status_code=303)
     except HTTPException as exc:
         if exc.status_code == 401:
             return RedirectResponse("/login", status_code=303)
@@ -1038,7 +1067,7 @@ def add_title(
             return RedirectResponse(f"/clubs/{club_id}", status_code=303)
         if exc.status_code == 400:
             return RedirectResponse(
-                f"/clubs/{club_id}?aba=assistindo&error={quote(str(exc.detail))}",
+                f"/clubs/{club_id}?aba=assistindo&lista=assistindo&error={quote(str(exc.detail))}",
                 status_code=303,
             )
         raise
@@ -1053,7 +1082,8 @@ def update_watch_status(request: Request, club_id: int, show_id: int, watch_stat
         user = login_required(request, db)
         require_club_member(db, club_id, user.id)
         set_watch_status(db, club_id, show_id, watch_status)
-        return RedirectResponse(f"/clubs/{club_id}?aba=assistindo", status_code=303)
+        lista = "finalizados" if watch_status == "watched" else "assistindo"
+        return RedirectResponse(f"/clubs/{club_id}?aba=assistindo&lista={lista}", status_code=303)
     except HTTPException as exc:
         if exc.status_code == 401:
             return RedirectResponse("/login", status_code=303)
@@ -1165,7 +1195,7 @@ def api_command(request: Request):
                 "items": [
                     {"label": "Início", "href": "/"},
                     {"label": "Meus Clubes", "href": "/clubes"},
-                    {"label": "Minha conta", "href": "/conta"},
+                    {"label": "Configurações", "href": "/conta"},
                     {"label": "Criar um clube", "href": "/clubs/novo"},
                     {"label": "Meu perfil", "href": f"/u/{user.username}"},
                     {"label": "Amigos", "href": "/amigos"},
@@ -1387,6 +1417,7 @@ def public_profile(request: Request, username: str):
                 "person": person,
                 "clubs": clubs,
                 "mine": mine,
+                "requested_ids": requested_club_ids(db, viewer.id),
                 "status": presence_of(person),
                 "status_label": PRESENCE_LABELS[presence_of(person)],
                 "relation": relation,
@@ -1403,16 +1434,74 @@ def public_profile(request: Request, username: str):
         db.close()
 
 
+@app.post("/clubs/{club_id}/solicitar")
+def request_club_join(request: Request, club_id: int, next: str = Form("")):
+    db = db_session()
+    dest = _safe_next(next, f"/clubs/{club_id}")
+    try:
+        user = login_required(request, db)
+        club = db.get(Club, club_id)
+        if not club:
+            raise HTTPException(status_code=404, detail="Clube não encontrado")
+        create_join_request(db, club, user.id)
+        db.commit()
+        sep = "&" if "?" in dest else "?"
+        return RedirectResponse(f"{dest}{sep}ok={quote('Pedido enviado')}", status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 400:
+            sep = "&" if "?" in dest else "?"
+            return RedirectResponse(f"{dest}{sep}error={quote(str(exc.detail))}", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/clubs/{club_id}/solicitacoes/{user_id}/aceitar")
+def accept_club_join(request: Request, club_id: int, user_id: int):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        accept_join_request(db, club_id, user_id, user.id)
+        db.commit()
+        return RedirectResponse(f"/clubs/{club_id}", status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/clubs/{club_id}/solicitacoes/{user_id}/recusar")
+def reject_club_join(request: Request, club_id: int, user_id: int):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        reject_join_request(db, club_id, user_id, user.id)
+        db.commit()
+        return RedirectResponse(f"/clubs/{club_id}", status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
 @app.post("/presenca")
-def ping_presence(request: Request, status: str = Form("online")):
+def ping_presence(request: Request, status: str = Form("online"), prefer: str = Form("")):
     db = db_session()
     try:
         user = current_user(request, db)
         if not user:
             return {"ok": False}
-        touch_presence(user, status if status in {"online", "away", "offline"} else "online")
+        chosen = status if status in PRESENCE_LABELS else "online"
+        touch_presence(user, chosen, prefer=prefer in {"1", "true", "yes"})
         db.commit()
-        return {"ok": True, "status": presence_of(user)}
+        shown = presence_of(user)
+        return {"ok": True, "status": shown, "status_label": PRESENCE_LABELS[shown]}
     finally:
         db.close()
 
