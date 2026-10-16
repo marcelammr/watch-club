@@ -1,6 +1,8 @@
 node_modules/
 app/static/uploads/clubs/*
 !app/static/uploads/clubs/.gitkeep
+app/static/uploads/avatars/*
+!app/static/uploads/avatars/.gitkeep
 .venv/
 __pycache__/
 *.py[cod]

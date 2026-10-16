@@ -20,6 +20,12 @@ def migrate_schema() -> None:
         alters.append("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 0")
     if "avatar" not in columns:
         alters.append("ALTER TABLE users ADD COLUMN avatar VARCHAR(40) DEFAULT 'popcorn'")
+    if "avatar_type" not in columns:
+        alters.append("ALTER TABLE users ADD COLUMN avatar_type VARCHAR(16) DEFAULT 'illustrated'")
+    if "avatar_provider" not in columns:
+        alters.append("ALTER TABLE users ADD COLUMN avatar_provider VARCHAR(32) DEFAULT 'watchclub'")
+    if "avatar_value" not in columns:
+        alters.append("ALTER TABLE users ADD COLUMN avatar_value VARCHAR(120) DEFAULT 'popcorn'")
     if "pending_email" not in columns:
         alters.append("ALTER TABLE users ADD COLUMN pending_email VARCHAR(255)")
     if "bio" not in columns:
@@ -66,6 +72,33 @@ def migrate_schema() -> None:
             text(
                 "UPDATE users SET username_changed_at = created_at "
                 "WHERE username_changed_at IS NULL AND created_at IS NOT NULL"
+            )
+        )
+        connection.execute(
+            text(
+                "UPDATE users SET avatar_type = 'illustrated' "
+                "WHERE avatar_type IS NULL OR avatar_type = ''"
+            )
+        )
+        connection.execute(
+            text(
+                "UPDATE users SET avatar_provider = 'watchclub' "
+                "WHERE avatar_type = 'illustrated' AND (avatar_provider IS NULL OR avatar_provider = '')"
+            )
+        )
+        connection.execute(
+            text(
+                "UPDATE users SET avatar_value = avatar "
+                "WHERE avatar_type = 'illustrated' "
+                "AND avatar_provider = 'watchclub' "
+                "AND avatar_value = 'popcorn' "
+                "AND avatar IS NOT NULL AND avatar != '' AND avatar != 'popcorn'"
+            )
+        )
+        connection.execute(
+            text(
+                "UPDATE users SET avatar_value = COALESCE(NULLIF(avatar_value, ''), avatar, 'popcorn') "
+                "WHERE avatar_value IS NULL OR avatar_value = ''"
             )
         )
     inspector = inspect(engine)
