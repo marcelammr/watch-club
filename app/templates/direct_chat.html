@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "macros/avatar.html" import user_avatar %}
 {% from "macros/presence.html" import presence_mark %}
+{% from "macros/club_tag.html" import club_tag_chip %}
 {% block title %}{{ person.name }} · Mensagens{% endblock %}
 {% block page_heading %}{{ person.name }}{% endblock %}
 {% block body_class %}dm-page{% endblock %}
@@ -10,7 +11,7 @@
   <header class="dm-head">
     {{ user_avatar(person, 'md') }}
     <div>
-      <h1 class="profile-name">{{ person.name }}</h1>
+      <h1 class="profile-name">{{ person.name }} {{ club_tag_chip(person.display_tag) }}</h1>
       <p class="muted">@{{ person.username }}</p>
       <p class="status {{ presence_of(person) }}">{{ presence_mark(presence_of(person)) }}{{ presence_label(person) }}</p>
     </div>
@@ -30,6 +31,7 @@
           {% if not follow %}
             <p class="chat-meta">
               <strong>{{ item.sender.name }}</strong>
+              {{ club_tag_chip(item.sender.display_tag) }}
               <span class="muted">@{{ item.sender.username }} · {{ item.created_at|when }}</span>
             </p>
           {% endif %}

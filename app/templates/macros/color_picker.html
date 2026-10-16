@@ -1,0 +1,28 @@
+{% macro color_picker(field_name, value, presets, extra_class='') %}
+{% set hex = value if value else DEFAULT_HEX %}
+<div class="wc-color-picker js-color-picker {{ extra_class }}">
+  <input type="hidden" name="{{ field_name }}" class="js-color-value" value="{{ hex }}" maxlength="7">
+  <div class="color-row" role="list">
+    {% for preset in presets %}
+      <button
+        type="button"
+        class="color-swatch js-color-preset {% if hex == preset.hex %}is-on{% endif %}"
+        data-hex="{{ preset.hex }}"
+        title="{{ preset.label }}"
+        aria-label="{{ preset.label }}"
+        style="--swatch: {{ preset.hex }}"
+      ></button>
+    {% endfor %}
+  </div>
+  <button type="button" class="tag-guide-link js-color-toggle" aria-expanded="false" aria-haspopup="true">Personalizar cor</button>
+  <div class="wc-color-panel js-color-panel" hidden>
+    <div class="js-color-iro"></div>
+    <div class="wc-color-hex-row">
+      <span class="color-swatch js-color-preview" style="--swatch: {{ hex }}" aria-hidden="true"></span>
+      <label class="wc-color-hex-label">HEX
+        <input class="js-color-hex" maxlength="7" value="{{ hex }}" spellcheck="false" autocomplete="off">
+      </label>
+    </div>
+  </div>
+</div>
+{% endmacro %}

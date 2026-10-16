@@ -1,61 +1,809 @@
 {% extends "base.html" %}
-{% block title %}{% if mode == 'edit' %}Configurações · {{ club.name }}{% else %}Criar um clube{% endif %}{% endblock %}
-{% block page_heading %}{% if mode == 'edit' %}Configurações{% else %}Criar um clube{% endif %}{% endblock %}
+{% from "macros/avatar.html" import user_avatar %}
+{% from "macros/club_tag.html" import club_tag_chip, club_person_name, club_role_badge, club_tag_fields %}
+{% from "macros/color_picker.html" import color_picker %}
+{% block title %}{% if mode == 'tag' %}Tag · {{ club.name }}{% elif mode == 'edit' %}Configurações · {{ club.name }}{% else %}Criar um clube{% endif %}{% endblock %}
+{% block body_class %}club-ui{% if mode in ['edit', 'tag'] %} settings-overlay{% endif %}{% endblock %}
+{% block page_heading %}{% if mode == 'create' %}Criar um clube{% else %}Configurações{% endif %}{% endblock %}
 {% block content %}
-<p class="crumb"><a href="/">Início</a>{% if mode == 'edit' %} / <a href="/clubs/{{ club.id }}">{{ club.name }}</a> / Configurações{% else %} / Novo clube{% endif %}</p>
+{% set is_settings = mode in ['edit', 'tag'] %}
+{% if not is_settings %}
+<p class="crumb"><a href="/">Início</a> / Novo clube</p>
+{% endif %}
+{% if mode == 'create' %}
 <section class="card">
-  <h1>{% if mode == 'edit' %}Configurações do clube{% else %}Criar um clube{% endif %}</h1>
+  <h1>Criar um clube</h1>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
-  <div class="club-cover-banner cover-preview" id="cover-preview" style="background: {{ (club.cover_color if club else '#3a2348') }}">
-    {% if club and club.cover_image %}
-      <img id="cover-preview-img" src="{{ cover_image_url(club.cover_image) }}" alt="">
-    {% else %}
-      <img id="cover-preview-img" alt="" hidden>
-    {% endif %}
-  </div>
-  <form action="{% if mode == 'edit' %}/clubs/{{ club.id }}/config{% else %}/clubs{% endif %}" method="post" enctype="multipart/form-data">
+  <form action="/clubs" method="post" enctype="multipart/form-data">
     <label>Nome do clube
-      <input name="name" required maxlength="120" value="{{ club.name if club else '' }}" placeholder="Noite de série">
+      <input name="name" required maxlength="120" value="" placeholder="Noite de série">
     </label>
     <label>Descrição
-      <textarea name="description" rows="3" maxlength="800" placeholder="Sobre o clube">{{ club.description if club else '' }}</textarea>
+      <textarea name="description" rows="3" maxlength="800" placeholder="Sobre o clube"></textarea>
     </label>
     <label>Informações e regras
-      <textarea name="rules" rows="5" maxlength="2000" placeholder="Combinados do grupo">{{ club.rules if club else '' }}</textarea>
+      <textarea name="rules" rows="5" maxlength="2000" placeholder="Combinados do grupo"></textarea>
     </label>
-    <p class="bio-label">Capa</p>
-    <div class="color-row">
-      {% for color in COVER_COLORS %}
-        <label class="color-option">
-          <input type="radio" name="cover_color" value="{{ color }}" {% if (club.cover_color if club else '#3a2348') == color %}checked{% endif %}>
-          <span class="color-swatch" style="background: {{ color }}"></span>
+    <p class="bio-label">Fundo do clube</p>
+    {% set cover_hex = '#3A2348' %}
+    <div class="js-cover-editor" data-initial-tab="color">
+      <div class="cover-tabs" role="tablist" aria-label="Fundo do clube">
+        <button type="button" class="cover-tab js-cover-tab" data-tab="color" aria-selected="true">Cor</button>
+        <button type="button" class="cover-tab js-cover-tab" data-tab="image" aria-selected="false">Imagem</button>
+      </div>
+      <div class="js-cover-pane" data-tab="color">
+        <div class="club-cover-banner cover-preview js-cover-color-preview" style="background: {{ cover_hex }}"></div>
+        {{ color_picker('cover_color', cover_hex, COVER_PRESETS) }}
+      </div>
+      <div class="js-cover-pane" data-tab="image" hidden>
+        <div class="club-cover-banner cover-preview" id="cover-preview">
+          <img id="cover-preview-img" alt="" hidden>
+        </div>
+        <label>Imagem
+          <input type="file" name="cover_file" id="cover-file" accept="image/jpeg,image/png,image/webp,image/gif">
         </label>
-      {% endfor %}
+      </div>
     </div>
-    <label>Ou envie uma imagem
-      <input type="file" name="cover_file" id="cover-file" accept="image/jpeg,image/png,image/webp,image/gif">
-    </label>
-    {% if mode == 'edit' and club.cover_image %}
-      <label class="check"><input type="checkbox" name="clear_cover" value="1"> Remover imagem e usar só a cor</label>
-    {% endif %}
-    <label class="check"><input type="checkbox" name="is_closed" value="1" {% if club and club.is_closed %}checked{% endif %}> Clube fechado (só entra com código)</label>
-    {% if mode == 'edit' %}
-      <p><a href="/clubs/{{ club.id }}/membros">Gerenciar participantes</a></p>
-    {% endif %}
-    <button type="submit">{% if mode == 'edit' %}Salvar{% else %}Criar clube{% endif %}</button>
+    <label class="check"><input type="checkbox" name="is_closed" value="1"> Clube fechado (só entra com código)</label>
+    <button class="btn btn-primary" type="submit">Criar clube</button>
   </form>
 </section>
 <script>
-  const preview = document.getElementById("cover-preview");
-  const previewImg = document.getElementById("cover-preview-img");
-  document.querySelectorAll("input[name=cover_color]").forEach((input) => {
-    input.addEventListener("change", () => { preview.style.background = input.value; });
-  });
-  document.getElementById("cover-file").addEventListener("change", (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    previewImg.src = URL.createObjectURL(file);
-    previewImg.hidden = false;
-  });
+  (function () {
+    const editor = document.querySelector(".js-cover-editor");
+    if (!editor) return;
+    const panes = [...editor.querySelectorAll(".js-cover-pane")];
+    const tabs = [...editor.querySelectorAll(".js-cover-tab")];
+    function showTab(name) {
+      tabs.forEach((tab) => {
+        const on = tab.getAttribute("data-tab") === name;
+        tab.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      panes.forEach((pane) => {
+        pane.hidden = pane.getAttribute("data-tab") !== name;
+      });
+    }
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => showTab(tab.getAttribute("data-tab")));
+    });
+    const colorPreview = editor.querySelector(".js-cover-color-preview");
+    editor.addEventListener("color-change", (event) => {
+      if (colorPreview && event.detail && event.detail.hex) {
+        colorPreview.style.background = event.detail.hex;
+      }
+    });
+    const previewImg = document.getElementById("cover-preview-img");
+    const coverFile = document.getElementById("cover-file");
+    if (coverFile && previewImg) {
+      coverFile.addEventListener("change", (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        previewImg.src = URL.createObjectURL(file);
+        previewImg.hidden = false;
+      });
+    }
+  })();
 </script>
+{% else %}
+{% set admin_hex = (club.admin_name_color if club.admin_name_color else '#B892FF')|upper %}
+{% set sub_hex = (club.sub_name_color if club.sub_name_color else '#6C63FF')|upper %}
+{% set cover_hex = (club.cover_color if club.cover_color else '#3A2348')|upper %}
+{% set cover_tab = 'image' if club.cover_image else 'color' %}
+{% set total = member_total if member_total is defined else club.members|length %}
+{% set members = members if members is defined else [] %}
+{% set admin_total = admin_total if admin_total is defined else 0 %}
+{% set support_total = support_total if support_total is defined else 0 %}
+<div class="settings-overlay-root">
+<div
+  class="club-settings js-club-settings{% if mode == 'tag' %} is-tag-only is-section{% endif %}"
+  data-sections="{% if mode == 'edit' %}geral aparencia tag cargos membros{% else %}tag{% endif %}"
+  data-initial="{{ settings_section if settings_section else '' }}"
+  style="--club-admin-color: {{ admin_hex }}; --club-sub-color: {{ sub_hex }}"
+>
+  <a class="btn btn-icon settings-close" href="/clubs/{{ club.id }}" aria-label="Fechar configurações" title="Fechar">&times;</a>
+  <aside class="club-settings-nav" aria-label="Categorias de configuração">
+    <p class="club-settings-kicker">Configurações do clube</p>
+    <p class="club-settings-club">{{ club.name }}</p>
+    {% if mode == 'edit' %}
+    <p class="club-settings-kicker">Geral</p>
+    <div class="club-settings-tabs" role="tablist" aria-orientation="vertical">
+      <button type="button" class="club-settings-link js-settings-link" role="tab" data-section="geral" aria-selected="false" aria-controls="panel-geral" id="tab-geral">Geral <span class="club-settings-chevron" aria-hidden="true">›</span></button>
+      <button type="button" class="club-settings-link js-settings-link" role="tab" data-section="aparencia" aria-selected="false" aria-controls="panel-aparencia" id="tab-aparencia">Aparência <span class="club-settings-chevron" aria-hidden="true">›</span></button>
+    </div>
+    <p class="club-settings-kicker">Personalização</p>
+    <div class="club-settings-tabs" role="tablist" aria-orientation="vertical">
+      <button type="button" class="club-settings-link js-settings-link" role="tab" data-section="tag" aria-selected="false" aria-controls="panel-tag" id="tab-tag">Tag do clube <span class="club-settings-chevron" aria-hidden="true">›</span></button>
+      <button type="button" class="club-settings-link js-settings-link" role="tab" data-section="cargos" aria-selected="false" aria-controls="panel-cargos" id="tab-cargos">Cargos e permissões <span class="club-settings-chevron" aria-hidden="true">›</span></button>
+    </div>
+    <p class="club-settings-kicker">Gerenciamento</p>
+    <div class="club-settings-tabs" role="tablist" aria-orientation="vertical">
+      <button type="button" class="club-settings-link js-settings-link" role="tab" data-section="membros" aria-selected="false" aria-controls="panel-membros" id="tab-membros">Membros <span class="club-settings-chevron" aria-hidden="true">›</span></button>
+    </div>
+    {% else %}
+    <p class="club-settings-kicker">Personalização</p>
+    <div class="club-settings-tabs" role="tablist" aria-orientation="vertical">
+      <button type="button" class="club-settings-link js-settings-link is-on" role="tab" data-section="tag" aria-selected="true" aria-controls="panel-tag" id="tab-tag" aria-current="page">Tag do clube <span class="club-settings-chevron" aria-hidden="true">›</span></button>
+    </div>
+    {% endif %}
+    <a class="club-settings-back-club" href="/clubs/{{ club.id }}">Voltar ao clube</a>
+  </aside>
+  <div class="club-settings-main">
+    {% if mode == 'edit' %}
+    <button type="button" class="btn btn-ghost club-settings-back js-settings-back">&lt; Configurações</button>
+    {% endif %}
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+
+    {% if mode == 'edit' %}
+    <form id="club-config-form" class="club-settings-form" action="/clubs/{{ club.id }}/config" method="post" enctype="multipart/form-data">
+      <input type="hidden" name="settings_section" class="js-settings-section" value="{{ settings_section if settings_section else 'geral' }}">
+
+      <section class="club-settings-panel" data-panel="geral" id="panel-geral" role="tabpanel" aria-labelledby="tab-geral" hidden>
+        <h1>Geral</h1>
+        <p class="club-settings-lead">Nome, descrição, regras e se o clube é aberto ou fechado.</p>
+        <label>Nome do clube
+          <input name="name" required maxlength="120" value="{{ club.name }}" placeholder="Noite de série">
+        </label>
+        <label>Descrição
+          <textarea name="description" rows="3" maxlength="800" placeholder="Sobre o clube">{{ club.description }}</textarea>
+        </label>
+        <label>Informações e regras
+          <textarea name="rules" rows="5" maxlength="2000" placeholder="Combinados do grupo">{{ club.rules }}</textarea>
+        </label>
+        <label class="check"><input type="checkbox" name="is_closed" value="1" {% if club.is_closed %}checked{% endif %}> Clube fechado (só entra com código)</label>
+        <button class="btn btn-primary" type="submit">Salvar</button>
+      </section>
+
+      <section class="club-settings-panel" data-panel="aparencia" id="panel-aparencia" role="tabpanel" aria-labelledby="tab-aparencia" hidden>
+        <h1>Aparência</h1>
+        <p class="club-settings-lead">Fundo visual da sala do clube. A tag tem uma seção própria.</p>
+        <h2>Fundo do clube</h2>
+        <div class="js-cover-editor" data-initial-tab="{{ cover_tab }}">
+          <div class="cover-tabs" role="tablist" aria-label="Fundo do clube">
+            <button type="button" class="cover-tab js-cover-tab" data-tab="color" aria-selected="{{ 'true' if cover_tab == 'color' else 'false' }}">Cor</button>
+            <button type="button" class="cover-tab js-cover-tab" data-tab="image" aria-selected="{{ 'true' if cover_tab == 'image' else 'false' }}">Imagem</button>
+          </div>
+          <div class="js-cover-pane" data-tab="color" {% if cover_tab != 'color' %}hidden{% endif %}>
+            <div class="club-cover-banner cover-preview js-cover-color-preview" style="background: {{ cover_hex }}"></div>
+            {{ color_picker('cover_color', cover_hex, COVER_PRESETS) }}
+          </div>
+          <div class="js-cover-pane" data-tab="image" {% if cover_tab != 'image' %}hidden{% endif %}>
+            <div class="club-cover-banner cover-preview" id="cover-preview">
+              {% if club.cover_image %}
+                <img id="cover-preview-img" src="{{ cover_image_url(club.cover_image) }}" alt="">
+              {% else %}
+                <img id="cover-preview-img" alt="" hidden>
+              {% endif %}
+            </div>
+            <label>Imagem
+              <input type="file" name="cover_file" id="cover-file" accept="image/jpeg,image/png,image/webp,image/gif">
+            </label>
+            {% if club.cover_image %}
+              <label class="check"><input type="checkbox" name="clear_cover" value="1"> Remover imagem e usar só a cor</label>
+            {% endif %}
+          </div>
+        </div>
+        <button class="btn btn-primary" type="submit">Salvar fundo</button>
+      </section>
+
+      <section class="club-settings-panel js-role-colors-live" data-panel="cargos" id="panel-cargos" role="tabpanel" aria-labelledby="tab-cargos" hidden>
+        <h1>Cargos e permissões</h1>
+        <p class="club-settings-lead">Quem é ADM ou SUB neste clube e a cor dos nomes na sala.</p>
+        <p class="club-settings-counts">ADM {{ admin_total }}/{{ MAX_ADMINS }} · SUB {{ support_total }}/{{ MAX_SUPPORT }}</p>
+        <p class="muted">O dono conta como ADM e não pode ser rebaixado. As cores valem só neste clube e não mudam permissões.</p>
+        <p><button type="button" class="btn btn-secondary js-open-roles">Gerenciar cargos</button></p>
+        <h2>Aparência dos cargos</h2>
+        <input type="hidden" name="admin_name_color" class="js-admin-color-value" value="{{ admin_hex }}">
+        <input type="hidden" name="sub_name_color" class="js-sub-color-value" value="{{ sub_hex }}">
+        <button type="button" class="club-settings-color js-open-role-color" data-role="admin" aria-haspopup="dialog" aria-controls="admin-color-dialog">
+          <span>
+            <strong>Cor dos administradores</strong>
+            <span class="muted">Define a cor usada pelos ADM neste clube.</span>
+          </span>
+          <span class="club-settings-color-meta">
+            <span class="color-swatch js-admin-swatch" style="--swatch: {{ admin_hex }}" aria-hidden="true"></span>
+            Alterar <span aria-hidden="true">›</span>
+          </span>
+        </button>
+        <button type="button" class="club-settings-color js-open-role-color" data-role="sub" aria-haspopup="dialog" aria-controls="sub-color-dialog">
+          <span>
+            <strong>Cor dos subadministradores</strong>
+            <span class="muted">Define a cor usada pelos SUB neste clube.</span>
+          </span>
+          <span class="club-settings-color-meta">
+            <span class="color-swatch js-sub-swatch" style="--swatch: {{ sub_hex }}" aria-hidden="true"></span>
+            Alterar <span aria-hidden="true">›</span>
+          </span>
+        </button>
+        <button class="btn btn-primary" type="submit">Salvar</button>
+      </section>
+
+      <section class="club-settings-panel" data-panel="membros" id="panel-membros" role="tabpanel" aria-labelledby="tab-membros" hidden>
+        <h1>Membros</h1>
+        <p class="club-settings-lead">Limite de vagas. Reduzir o número não remove quem já está no clube.</p>
+        {% if club.member_limit %}
+          {% if total > club.member_limit %}
+            <p class="club-settings-counts">{{ total }} / {{ club.member_limit }} · Novas entradas bloqueadas</p>
+          {% elif total == club.member_limit %}
+            <p class="club-settings-counts">{{ total }} / {{ club.member_limit }} · Limite atingido</p>
+          {% else %}
+            <p class="club-settings-counts">{{ total }} / {{ club.member_limit }} membros</p>
+          {% endif %}
+        {% else %}
+          <p class="club-settings-counts">{{ total }} membros · Sem limite</p>
+        {% endif %}
+        <fieldset class="role-perms">
+          <legend>Limite de membros</legend>
+          <label class="check">
+            <input type="radio" name="member_limit_mode" class="js-limit-mode" value="off" {% if not club.member_limit %}checked{% endif %}>
+            Sem limite
+          </label>
+          <label class="check">
+            <input type="radio" name="member_limit_mode" class="js-limit-mode" value="on" {% if club.member_limit %}checked{% endif %}>
+            Limitar a
+          </label>
+          <input name="member_limit" class="js-member-limit" type="number" min="1" step="1" value="{{ club.member_limit if club.member_limit else '' }}" {% if not club.member_limit %}disabled{% endif %} placeholder="N">
+        </fieldset>
+        <p class="muted">Reduzir o número não remove quem já está no clube. ADM, SUB e Membro entram na conta.</p>
+        <p><a class="btn btn-ghost" href="/clubs/{{ club.id }}/membros">Ver participantes</a></p>
+        <button class="btn btn-primary" type="submit">Salvar</button>
+      </section>
+    </form>
+    {% endif %}
+
+    {% if can_tag %}
+    <section class="club-settings-panel" data-panel="tag" id="panel-tag" role="tabpanel" aria-labelledby="tab-tag" {% if mode == 'edit' %}hidden{% endif %}>
+      <h1>Tag do clube</h1>
+      <p class="club-settings-lead">Identificação visual que os membros podem exibir ao lado do nome. Não concede permissões.</p>
+      <div class="tag-section-head">
+        <h2 class="visually-hidden">Campos da tag</h2>
+        <button
+          type="button"
+          class="btn btn-secondary js-open-tag-guide"
+          aria-haspopup="dialog"
+          aria-controls="tag-guide-dialog"
+        >Ver orientações</button>
+      </div>
+      <form action="/clubs/{{ club.id }}/tag" method="post">
+        {{ club_tag_fields(club, tag, user.name) }}
+        <label class="check"><input type="checkbox" name="clear_tag" value="1"> Remover tag</label>
+        <button class="btn btn-primary" type="submit">Salvar tag</button>
+      </form>
+    </section>
+    {% endif %}
+  </div>
+</div>
+</div>
+
+{% if mode == 'edit' %}
+<dialog class="members-dialog" id="roles-dialog" aria-labelledby="roles-dialog-title" style="--club-admin-color: {{ admin_hex }}; --club-sub-color: {{ sub_hex }}">
+  <div class="members-dialog-head">
+    <h2 id="roles-dialog-title">Cargos do clube</h2>
+    <button type="button" class="btn btn-icon members-close js-close-roles" aria-label="Fechar" title="Fechar">&times;</button>
+  </div>
+  <p class="muted">Máximo: {{ MAX_ADMINS }} ADM e {{ MAX_SUPPORT }} SUB. O dono conta como ADM e não pode ser rebaixado.</p>
+  <p class="muted">{{ admin_total }} ADM · {{ support_total }} SUB</p>
+  <ul class="people">
+    {% for member in members %}
+      {% set role = member_role(member) %}
+      <li class="person-row person-row-manage">
+        <div class="person-row">
+          {{ user_avatar(member.user, 'md') }}
+          {{ club_person_name(member.user, member) }}
+          {{ club_tag_chip(member.user.display_tag) }}
+          {{ club_role_badge(member) }}
+          {% if member.user_id == club.owner_id %}<span class="muted">Dono</span>{% endif %}
+        </div>
+        {% if member.user_id == club.owner_id %}
+          <p class="muted">O dono permanece ADM enquanto for dono do clube.</p>
+        {% else %}
+          <form class="role-form js-role-form" action="/clubs/{{ club.id }}/membros/{{ member.user_id }}/papel" method="post">
+            <label class="visually-hidden" for="role-{{ member.user_id }}">Cargo</label>
+            <select id="role-{{ member.user_id }}" name="role" class="js-role-select">
+              <option value="member" {% if role == 'member' %}selected{% endif %}>Membro</option>
+              <option value="support" {% if role == 'support' %}selected{% endif %} {% if role != 'support' and support_total >= MAX_SUPPORT %}disabled{% endif %}>SUB</option>
+              <option value="admin" {% if role == 'admin' %}selected{% endif %} {% if role != 'admin' and admin_total >= MAX_ADMINS %}disabled{% endif %}>ADM</option>
+            </select>
+            <fieldset class="role-perms js-role-perms" {% if role != 'support' %}hidden{% endif %}>
+              <legend>Permissões de SUB</legend>
+              {% for perm in SUPPORT_PERMS %}
+                <label class="check">
+                  <input type="checkbox" name="support_perm" value="{{ perm }}" {% if perm in parse_support_perms(member.support_perms) %}checked{% endif %}>
+                  {{ SUPPORT_PERM_LABELS.get(perm, perm) }}
+                </label>
+              {% endfor %}
+            </fieldset>
+            <button class="btn btn-primary" type="submit">Salvar cargo</button>
+          </form>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+</dialog>
+<dialog class="leave-dialog tag-guide-dialog js-role-color-dialog" id="admin-color-dialog" data-role="admin" aria-labelledby="admin-color-title">
+  <div class="members-dialog-head">
+    <h2 id="admin-color-title">Cor dos administradores</h2>
+    <button type="button" class="btn btn-icon members-close js-close-role-color" aria-label="Fechar" title="Fechar">&times;</button>
+  </div>
+  <div class="tag-guide-body">
+    <p class="tag-live-preview js-role-color-preview">
+      <span class="club-person-name is-admin">ADM</span>
+      <span class="club-role is-admin">ADM</span>
+    </p>
+    {{ color_picker('', admin_hex, COLOR_PRESETS, 'js-role-color-draft') }}
+  </div>
+  <div class="leave-dialog-actions">
+    <button type="button" class="btn btn-ghost js-cancel-role-color">Cancelar</button>
+    <button type="button" class="btn btn-primary js-apply-role-color">Aplicar</button>
+  </div>
+</dialog>
+<dialog class="leave-dialog tag-guide-dialog js-role-color-dialog" id="sub-color-dialog" data-role="sub" aria-labelledby="sub-color-title">
+  <div class="members-dialog-head">
+    <h2 id="sub-color-title">Cor dos subadministradores</h2>
+    <button type="button" class="btn btn-icon members-close js-close-role-color" aria-label="Fechar" title="Fechar">&times;</button>
+  </div>
+  <div class="tag-guide-body">
+    <p class="tag-live-preview js-role-color-preview">
+      <span class="club-person-name is-support">SUB</span>
+      <span class="club-role is-support">SUB</span>
+    </p>
+    {{ color_picker('', sub_hex, COLOR_PRESETS, 'js-role-color-draft') }}
+  </div>
+  <div class="leave-dialog-actions">
+    <button type="button" class="btn btn-ghost js-cancel-role-color">Cancelar</button>
+    <button type="button" class="btn btn-primary js-apply-role-color">Aplicar</button>
+  </div>
+</dialog>
+{% endif %}
+
+{% if can_tag %}
+<dialog class="leave-dialog tag-guide-dialog" id="tag-guide-dialog" aria-labelledby="tag-guide-title">
+  <div class="members-dialog-head">
+    <h2 id="tag-guide-title">Como funcionam as tags?</h2>
+    <button type="button" class="btn btn-icon members-close js-close-tag-guide" aria-label="Fechar" title="Fechar">&times;</button>
+  </div>
+  <div class="tag-guide-body">
+    <p>A tag é uma pequena identificação do seu clube que os membros podem escolher exibir ao lado do nome.</p>
+    <h3>Sigla</h3>
+    <p>Escolha de 1 a 4 letras ou números que representem o clube.</p>
+    <p class="muted">Exemplos: MC, CERI</p>
+    <h3>Emoji</h3>
+    <p>Escolha 1 ou até 2 emojis para representar o clube.</p>
+    <p class="muted">Exemplos: 😇 MC, 😇😈 MC</p>
+    <h3>Posição dos emojis</h3>
+    <p>Escolha se os emojis ficam no início, no final ou, com dois emojis, um de cada lado da sigla.</p>
+    <p class="muted">Exemplos: 😇😈 MC, MC 😇😈, 😇 MC 😈</p>
+    <p>Com um emoji, só início e final ficam disponíveis. Se você remover um emoji com a opção separados ativa, a tag volta para o início.</p>
+    <h3>Cor</h3>
+    <p>Use uma cor sólida ou um degradê com duas cores e uma direção.</p>
+    <p class="muted">As cores rápidas são só atalhos. Em Personalizar cor você escolhe qualquer tom.</p>
+    <h3>Intensidade do fundo</h3>
+    <p>Ajuste o quanto a cor aparece no fundo, sem deixar a tag chapada.</p>
+    <h3>Intensidade do contorno</h3>
+    <p>Ajuste o contorno para ele ficar mais visível que o fundo, inclusive no degradê.</p>
+    <h3>Quem pode usar?</h3>
+    <p>Os membros do clube podem decidir se querem exibir a tag. Cada pessoa pode usar apenas uma tag de clube por vez.</p>
+    <h3>Quem pode editar?</h3>
+    <p>Administradores e membros SUB que receberam permissão para gerenciar a tag podem alterá-la.</p>
+    <p class="tag-guide-note">A tag é apenas uma identificação visual e não concede permissões dentro do clube.</p>
+  </div>
+</dialog>
+{% endif %}
+{% endif %}
+
+{% if can_tag and club %}
+<script>
+  (function () {
+    const editor = document.querySelector(".js-tag-editor");
+    if (!editor) return;
+    const emojiInput = editor.querySelector(".js-tag-emoji-input");
+    const slugInput = editor.querySelector(".js-tag-slug");
+    const chip = editor.querySelector(".js-tag-chip");
+    const chipPrefix = editor.querySelector(".js-tag-chip-prefix");
+    const chipSlug = editor.querySelector(".js-tag-chip-slug");
+    const chipSuffix = editor.querySelector(".js-tag-chip-suffix");
+    const bgInput = editor.querySelector(".js-tag-bg");
+    const borderInput = editor.querySelector(".js-tag-border");
+    const bgLabel = editor.querySelector(".js-tag-bg-label");
+    const borderLabel = editor.querySelector(".js-tag-border-label");
+    const slots = [...editor.querySelectorAll(".js-tag-slot")];
+    const splitOption = editor.querySelector(".js-tag-position-split");
+    const solidFields = editor.querySelector(".js-tag-solid-fields");
+    const gradientFields = editor.querySelector(".js-tag-gradient-fields");
+    const angles = { right: "90deg", "down-right": "135deg", down: "180deg", "up-right": "45deg" };
+
+    function splitEmojis(value) {
+      const text = value || "";
+      if (typeof Intl !== "undefined" && Intl.Segmenter) {
+        return [...new Intl.Segmenter("und", { granularity: "grapheme" }).segment(text)]
+          .map((part) => part.segment)
+          .filter((part) => part.trim());
+      }
+      return Array.from(text);
+    }
+
+    let emojis = splitEmojis(emojiInput ? emojiInput.value : "").slice(0, 2);
+
+    function selectedMode() {
+      const checked = editor.querySelector(".js-tag-mode:checked");
+      return checked ? checked.value : "solid";
+    }
+
+    function pickerHex(root) {
+      const input = root && root.querySelector(".js-color-value");
+      const value = (input && input.value || "").toUpperCase();
+      return /^#[0-9A-F]{6}$/.test(value) ? value : "#B892FF";
+    }
+
+    function selectedColors() {
+      const mode = selectedMode();
+      if (mode === "gradient") {
+        return {
+          mode: mode,
+          color1: pickerHex(editor.querySelector(".js-tag-color-1-grad")),
+          color2: pickerHex(editor.querySelector(".js-tag-color-2")),
+        };
+      }
+      return {
+        mode: "solid",
+        color1: pickerHex(editor.querySelector(".js-tag-color-1")),
+        color2: pickerHex(editor.querySelector(".js-tag-color-1")),
+      };
+    }
+
+    function selectedDir() {
+      const checked = editor.querySelector(".js-tag-dir:checked");
+      return checked ? checked.value : "right";
+    }
+
+    function setFieldsetEnabled(root, enabled) {
+      if (!root) return;
+      root.querySelectorAll("input, button").forEach((node) => {
+        node.disabled = !enabled;
+      });
+    }
+
+    function selectedPosition() {
+      const checked = editor.querySelector(".js-tag-position:checked");
+      return checked ? checked.value : "start";
+    }
+
+    function setPosition(value) {
+      const radio = editor.querySelector('.js-tag-position[value="' + value + '"]');
+      if (radio) radio.checked = true;
+    }
+
+    function layoutParts(items, slug, position) {
+      if (position === "end") return { prefix: "", slug: slug, suffix: items.join("") };
+      if (position === "split" && items.length >= 2) {
+        return { prefix: items[0], slug: slug, suffix: items[1] };
+      }
+      return { prefix: items.join(""), slug: slug, suffix: "" };
+    }
+
+    function fillChip(node, parts) {
+      if (!node) return;
+      node.replaceChildren();
+      if (parts.prefix) {
+        const prefix = document.createElement("span");
+        prefix.className = "club-tag-emojis";
+        prefix.textContent = parts.prefix;
+        node.appendChild(prefix);
+      }
+      const slugNode = document.createElement("span");
+      slugNode.className = "club-tag-slug";
+      slugNode.textContent = parts.slug;
+      node.appendChild(slugNode);
+      if (parts.suffix) {
+        const suffix = document.createElement("span");
+        suffix.className = "club-tag-emojis";
+        suffix.textContent = parts.suffix;
+        node.appendChild(suffix);
+      }
+    }
+
+    function paintChip() {
+      if (!chip || !chipPrefix || !chipSlug || !chipSuffix || !bgInput || !borderInput) return;
+      const colors = selectedColors();
+      const gradient = colors.mode === "gradient";
+      if (solidFields) solidFields.hidden = gradient;
+      if (gradientFields) gradientFields.hidden = !gradient;
+      setFieldsetEnabled(solidFields, !gradient);
+      setFieldsetEnabled(gradientFields, gradient);
+      const canSplit = emojis.length >= 2;
+      if (splitOption) splitOption.hidden = !canSplit;
+      if (!canSplit && selectedPosition() === "split") setPosition("start");
+      const position = selectedPosition();
+      const slug = (slugInput.value || "MC").toUpperCase().slice(0, 4) || "MC";
+      const parts = layoutParts(emojis, slug, position);
+      const dir = selectedDir();
+      function paintSurface(node, extra) {
+        if (!node) return;
+        node.className = "club-tag" + (gradient ? " is-gradient" : "") + (extra ? " " + extra : "");
+        node.style.setProperty("--tag-c1", colors.color1);
+        node.style.setProperty("--tag-c2", colors.color2);
+        node.style.setProperty("--tag-angle", angles[dir] || "90deg");
+        node.style.setProperty("--tag-bg-intensity", bgInput.value);
+        node.style.setProperty("--tag-border-intensity", borderInput.value);
+      }
+      paintSurface(chip, "js-tag-chip");
+      chipPrefix.textContent = parts.prefix;
+      chipSlug.textContent = parts.slug;
+      chipSuffix.textContent = parts.suffix;
+      if (emojiInput) emojiInput.value = emojis.join("");
+      if (bgLabel) bgLabel.textContent = bgInput.value + "%";
+      if (borderLabel) borderLabel.textContent = borderInput.value + "%";
+      slots.forEach((slot, index) => {
+        const label = slot.querySelector(".js-tag-slot-value");
+        if (label) label.textContent = emojis[index] || "＋";
+        slot.classList.toggle("is-on", Boolean(emojis[index]));
+      });
+      editor.querySelectorAll(".js-pos-preview").forEach((preview) => {
+        preview.setAttribute("data-pos", preview.getAttribute("data-pos") || "");
+        paintSurface(preview, "js-pos-preview");
+        fillChip(preview, layoutParts(emojis, slug, preview.getAttribute("data-pos")));
+      });
+    }
+
+    editor.addEventListener("emoji-select", (event) => {
+      const next = event.detail.emoji || "";
+      if (!next || emojis.length >= 2) return;
+      emojis.push(next);
+      paintChip();
+    });
+    slots.forEach((slot, index) => {
+      slot.addEventListener("click", () => {
+        if (!emojis[index]) return;
+        emojis.splice(index, 1);
+        paintChip();
+      });
+    });
+    slugInput.addEventListener("input", paintChip);
+    bgInput.addEventListener("input", paintChip);
+    borderInput.addEventListener("input", paintChip);
+    editor.querySelectorAll(".js-tag-mode, .js-tag-dir, .js-tag-position").forEach((input) => {
+      input.addEventListener("change", paintChip);
+    });
+    editor.addEventListener("color-change", paintChip);
+    paintChip();
+  })();
+  (function () {
+    const dialog = document.getElementById("tag-guide-dialog");
+    if (!dialog) return;
+    document.querySelectorAll(".js-open-tag-guide").forEach((btn) => {
+      btn.addEventListener("click", () => dialog.showModal());
+    });
+    dialog.querySelectorAll(".js-close-tag-guide").forEach((btn) => {
+      btn.addEventListener("click", () => dialog.close());
+    });
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+  })();
+</script>
+{% endif %}
+{% if is_settings %}
+<script>
+  (function () {
+    const editor = document.querySelector(".js-cover-editor");
+    if (!editor) return;
+    const panes = [...editor.querySelectorAll(".js-cover-pane")];
+    const tabs = [...editor.querySelectorAll(".js-cover-tab")];
+    function showTab(name) {
+      tabs.forEach((tab) => {
+        const on = tab.getAttribute("data-tab") === name;
+        tab.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      panes.forEach((pane) => {
+        pane.hidden = pane.getAttribute("data-tab") !== name;
+      });
+    }
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => showTab(tab.getAttribute("data-tab")));
+    });
+    const colorPreview = editor.querySelector(".js-cover-color-preview");
+    editor.addEventListener("color-change", (event) => {
+      if (colorPreview && event.detail && event.detail.hex) {
+        colorPreview.style.background = event.detail.hex;
+      }
+    });
+    const previewImg = document.getElementById("cover-preview-img");
+    const coverFile = document.getElementById("cover-file");
+    if (coverFile && previewImg) {
+      coverFile.addEventListener("change", (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        previewImg.src = URL.createObjectURL(file);
+        previewImg.hidden = false;
+      });
+    }
+  })();
+  (function () {
+    const root = document.querySelector(".js-club-settings");
+    if (!root) return;
+    const panels = [...root.querySelectorAll("[data-panel]")];
+    const links = [...root.querySelectorAll(".js-settings-link")];
+    const sectionInput = root.querySelector(".js-settings-section");
+    const allowed = (root.getAttribute("data-sections") || "geral").trim().split(/\s+/);
+    const fallback = allowed[0] || "geral";
+    const isTagOnly = root.classList.contains("is-tag-only");
+    const mq = window.matchMedia("(max-width: 720px)");
+
+    function valid(name) {
+      return allowed.indexOf(name) >= 0 ? name : fallback;
+    }
+
+    function show(name, writeHash) {
+      const section = valid(name);
+      panels.forEach((panel) => {
+        panel.hidden = panel.getAttribute("data-panel") !== section;
+      });
+      links.forEach((link) => {
+        const on = link.getAttribute("data-section") === section;
+        link.classList.toggle("is-on", on);
+        link.setAttribute("aria-selected", on ? "true" : "false");
+        if (on) link.setAttribute("aria-current", "page");
+        else link.removeAttribute("aria-current");
+      });
+      if (sectionInput) sectionInput.value = section;
+      root.classList.add("is-section");
+      if (writeHash !== false) {
+        const url = new URL(window.location.href);
+        url.hash = section;
+        history.replaceState(null, "", url);
+      }
+    }
+
+    function fromLocation() {
+      const initial = root.getAttribute("data-initial") || "";
+      const raw = (window.location.hash || "").replace(/^#/, "") || initial;
+      if (!raw) {
+        if (!isTagOnly && mq.matches) {
+          root.classList.remove("is-section");
+          return;
+        }
+        show(fallback, false);
+        return;
+      }
+      show(raw, false);
+    }
+
+    links.forEach((link) => {
+      link.addEventListener("click", () => show(link.getAttribute("data-section")));
+    });
+    root.querySelectorAll(".js-settings-back").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const url = new URL(window.location.href);
+        history.replaceState(null, "", url.pathname + url.search);
+        root.classList.remove("is-section");
+        links.forEach((link) => {
+          link.classList.remove("is-on");
+          link.setAttribute("aria-selected", "false");
+          link.removeAttribute("aria-current");
+        });
+      });
+    });
+    window.addEventListener("hashchange", fromLocation);
+    mq.addEventListener("change", (event) => {
+      if (!event.matches) show((sectionInput && sectionInput.value) || fallback, false);
+    });
+    fromLocation();
+  })();
+  (function () {
+    const form = document.getElementById("club-config-form");
+    const limitField = document.querySelector(".js-member-limit");
+    const modes = [...document.querySelectorAll(".js-limit-mode")];
+    if (!limitField || !modes.length) return;
+    function syncLimit() {
+      const unlimited = modes.some((item) => item.checked && item.value === "off");
+      limitField.disabled = unlimited;
+      if (unlimited) limitField.value = "";
+    }
+    modes.forEach((item) => item.addEventListener("change", syncLimit));
+    if (form) {
+      form.addEventListener("submit", () => {
+        limitField.disabled = false;
+        const unlimited = modes.some((item) => item.checked && item.value === "off");
+        if (unlimited) limitField.value = "";
+      });
+    }
+  })();
+  (function () {
+    const dialog = document.getElementById("roles-dialog");
+    if (!dialog) return;
+    document.querySelectorAll(".js-open-roles").forEach((btn) => {
+      btn.addEventListener("click", () => dialog.showModal());
+    });
+    dialog.querySelectorAll(".js-close-roles").forEach((btn) => {
+      btn.addEventListener("click", () => dialog.close());
+    });
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+    document.querySelectorAll(".js-role-form").forEach((form) => {
+      const select = form.querySelector(".js-role-select");
+      const perms = form.querySelector(".js-role-perms");
+      const sync = () => {
+        if (!perms) return;
+        perms.hidden = select.value !== "support";
+      };
+      select.addEventListener("change", sync);
+      sync();
+    });
+  })();
+  (function () {
+    function cssVar(role) {
+      return role === "admin" ? "--club-admin-color" : "--club-sub-color";
+    }
+    function persistedOf(role) {
+      return document.querySelector(role === "admin" ? ".js-admin-color-value" : ".js-sub-color-value");
+    }
+    function swatchOf(role) {
+      return document.querySelector(role === "admin" ? ".js-admin-swatch" : ".js-sub-swatch");
+    }
+    document.querySelectorAll(".js-role-color-dialog").forEach((dialog) => {
+      const role = dialog.getAttribute("data-role");
+      const draft = dialog.querySelector(".js-color-picker");
+      const preview = dialog.querySelector(".js-role-color-preview");
+      let applied = false;
+      function paint(hex) {
+        dialog.style.setProperty(cssVar(role), hex);
+        if (preview) preview.style.setProperty(cssVar(role), hex);
+      }
+      function currentPersisted() {
+        const field = persistedOf(role);
+        return (field && field.value) || "#B892FF";
+      }
+      function setDraft(hex) {
+        if (window.WatchClub && window.WatchClub.setColorPickerHex && draft) {
+          window.WatchClub.setColorPickerHex(draft, hex);
+        } else if (draft) {
+          const hidden = draft.querySelector(".js-color-value");
+          const hexField = draft.querySelector(".js-color-hex");
+          if (hidden) hidden.value = hex;
+          if (hexField) hexField.value = hex;
+        }
+        paint(hex);
+      }
+      document.querySelectorAll('.js-open-role-color[data-role="' + role + '"]').forEach((btn) => {
+        btn.addEventListener("click", () => {
+          applied = false;
+          setDraft(currentPersisted());
+          dialog.showModal();
+        });
+      });
+      if (draft) {
+        draft.addEventListener("color-change", (event) => {
+          if (event.detail && event.detail.hex) paint(event.detail.hex);
+        });
+      }
+      dialog.querySelectorAll(".js-close-role-color, .js-cancel-role-color").forEach((btn) => {
+        btn.addEventListener("click", () => dialog.close());
+      });
+      dialog.querySelectorAll(".js-apply-role-color").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const hidden = draft && draft.querySelector(".js-color-value");
+          const hex = hidden ? hidden.value : currentPersisted();
+          const persist = persistedOf(role);
+          if (persist) persist.value = hex;
+          const swatch = swatchOf(role);
+          if (swatch) swatch.style.setProperty("--swatch", hex);
+          document.querySelectorAll(".js-role-colors-live, .js-club-settings").forEach((node) => {
+            node.style.setProperty(cssVar(role), hex);
+          });
+          applied = true;
+          dialog.close();
+        });
+      });
+      dialog.addEventListener("click", (event) => {
+        if (event.target === dialog) dialog.close();
+      });
+      dialog.addEventListener("close", () => {
+        if (!applied) setDraft(currentPersisted());
+        applied = false;
+      });
+    });
+  })();
+</script>
+{% endif %}
 {% endblock %}

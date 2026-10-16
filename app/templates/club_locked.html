@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block body_class %}club-ui{% endblock %}
 {% block title %}Clube fechado · Watch Club{% endblock %}
 {% block page_heading %}{{ club.name }}{% endblock %}
 {% block content %}
@@ -12,9 +13,9 @@
   {% else %}
     <form action="/clubs/{{ club.id }}/solicitar" method="post">
       <input type="hidden" name="next" value="/clubs/{{ club.id }}">
-      <button type="submit">Pedir para entrar</button>
+      <button class="btn btn-primary" type="submit">Pedir para entrar</button>
     </form>
   {% endif %}
-  <p><a href="/">Voltar</a></p>
+  <p><a class="btn btn-ghost" href="/">Voltar</a></p>
 </section>
 {% endblock %}

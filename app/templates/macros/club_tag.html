@@ -1,0 +1,168 @@
+{% from "macros/emoji.html" import emoji_picker %}
+{% from "macros/color_picker.html" import color_picker %}
+{% macro club_tag_style(tag) %}
+{%- set c1 = tag.color_1 if tag and tag.color_1 else DEFAULT_HEX -%}
+{%- set c2 = tag.color_2 if tag and tag.color_2 else c1 -%}
+{%- set angle = tag.angle if tag and tag.angle else '90deg' -%}
+{%- set bg = tag.bg_intensity if tag and tag.bg_intensity is not none else TAG_BG_DEFAULT -%}
+{%- set border = tag.border_intensity if tag and tag.border_intensity is not none else TAG_BORDER_DEFAULT -%}
+{%- if tag and tag.surface_style -%}{{ tag.surface_style }}{%- else -%}--tag-c1: {{ c1 }}; --tag-c2: {{ c2 }}; --tag-angle: {{ angle }}; --tag-bg-intensity: {{ bg }}; --tag-border-intensity: {{ border }};{%- endif -%}
+{% endmacro %}
+{% macro club_tag_inner(prefix, slug, suffix) %}
+  {% if prefix %}<span class="club-tag-emojis">{{ prefix }}</span>{% endif %}
+  <span class="club-tag-slug">{{ slug }}</span>
+  {% if suffix %}<span class="club-tag-emojis">{{ suffix }}</span>{% endif %}
+{% endmacro %}
+{% macro club_tag_chip(tag, extra_class='') %}
+{% if tag %}
+  {% set parts = tag.parts if tag.parts is defined else {'prefix': tag.emoji or '', 'slug': tag.slug, 'suffix': ''} %}
+  <span class="club-tag {{ tag.surface_class if tag.surface_class is defined else '' }} {{ extra_class }}" style="{{ club_tag_style(tag) }}" aria-label="Tag {{ tag.slug }}">{{ club_tag_inner(parts.prefix, parts.slug, parts.suffix) }}</span>
+{% endif %}
+{% endmacro %}
+
+{% macro club_role_badge(member) %}
+{% set role = member_role(member) %}
+{% if role == 'admin' %}
+  <span class="club-role is-admin">ADM</span>
+{% elif role == 'support' %}
+  <span class="club-role is-support">SUB</span>
+{% endif %}
+{% endmacro %}
+{% macro club_person_name(user, member) %}
+{% set role = member_role(member) %}
+{% if role == 'admin' %}
+  <strong class="club-person-name is-admin">{{ user.name }}</strong>
+{% elif role == 'support' %}
+  <strong class="club-person-name is-support">{{ user.name }}</strong>
+{% else %}
+  <strong class="club-person-name">{{ user.name }}</strong>
+{% endif %}
+{% endmacro %}
+
+{% macro club_tag_fields(club, tag, preview_name='') %}
+{% set current = tag or {
+  'slug': club.tag_slug if club else '',
+  'emoji': club.tag_emoji if club else '',
+  'emojis': [],
+  'color_mode': club.tag_color_mode if club and club.tag_color_mode else 'solid',
+  'color_1': club.tag_color_1 if club and club.tag_color_1 else DEFAULT_HEX,
+  'color_2': club.tag_color_2 if club else DEFAULT_HEX,
+  'gradient_direction': club.tag_gradient_direction if club else 'right',
+  'angle': '90deg',
+  'surface_class': 'is-gradient' if club and club.tag_color_mode == 'gradient' else '',
+  'bg_intensity': club.tag_bg_intensity if club and club.tag_bg_intensity is not none else TAG_BG_DEFAULT,
+  'border_intensity': club.tag_border_intensity if club and club.tag_border_intensity is not none else TAG_BORDER_DEFAULT,
+  'position': club.tag_emoji_position if club and club.tag_emoji_position else TAG_POSITION_DEFAULT
+} %}
+{% set selected = current.emojis if current.emojis is defined and current.emojis else [] %}
+{% set mode = current.color_mode if current.color_mode else 'solid' %}
+{% set color_1 = current.color_1 if current.color_1 else DEFAULT_HEX %}
+{% set color_2 = current.color_2 if current.color_2 else color_1 %}
+{% set direction = current.gradient_direction if current.gradient_direction else 'right' %}
+{% set bg = current.bg_intensity if current.bg_intensity is not none else TAG_BG_DEFAULT %}
+{% set border = current.border_intensity if current.border_intensity is not none else TAG_BORDER_DEFAULT %}
+{% set position = current.position if current.position else TAG_POSITION_DEFAULT %}
+{% set parts = current.parts if current.parts is defined else {'prefix': current.emoji or '', 'slug': current.slug or 'MC', 'suffix': ''} %}
+<div class="tag-editor js-tag-editor">
+  <p class="bio-label">Prévia</p>
+  <div class="tag-live-preview">
+    <span class="tag-preview-name">{{ preview_name }}</span>
+    <span
+      class="club-tag {{ current.surface_class if current.surface_class is defined else '' }} js-tag-chip"
+      style="{{ club_tag_style(current) }}"
+      aria-hidden="true"
+    >
+      <span class="club-tag-emojis js-tag-chip-prefix">{{ parts.prefix }}</span>
+      <span class="club-tag-slug js-tag-chip-slug">{{ parts.slug or 'MC' }}</span>
+      <span class="club-tag-emojis js-tag-chip-suffix">{{ parts.suffix }}</span>
+    </span>
+  </div>
+  <label>Sigla
+    <input name="tag_slug" class="js-tag-slug" maxlength="4" value="{{ current.slug or '' }}" placeholder="WC" autocomplete="off">
+  </label>
+  <p class="bio-label">Emojis</p>
+  <div class="tag-emoji-field js-tag-emoji">
+    <input type="hidden" name="tag_emoji" class="js-tag-emoji-input" value="{{ current.emoji or '' }}">
+    <div class="tag-emoji-slots">
+      {% for index in [0, 1] %}
+        <button type="button" class="tag-emoji-slot js-tag-slot" data-index="{{ index }}" aria-label="Emoji {{ index + 1 }}">
+          <span class="js-tag-slot-value">{% if selected|length > index %}{{ selected[index] }}{% else %}＋{% endif %}</span>
+        </button>
+      {% endfor %}
+    </div>
+    {{ emoji_picker('Escolher emoji da tag', 'emoji-toggle', 'tag') }}
+  </div>
+  <p class="bio-label">Posição dos emojis</p>
+  <div class="tag-position-row" role="radiogroup" aria-label="Posição dos emojis">
+    <label class="tag-position-option">
+      <input type="radio" name="tag_emoji_position" value="start" class="js-tag-position" {% if position != 'end' and position != 'split' %}checked{% endif %}>
+      <span class="tag-position-card">
+        <span class="club-tag {{ current.surface_class if current.surface_class is defined else '' }} js-pos-preview" data-pos="start" style="{{ club_tag_style(current) }}" aria-hidden="true"></span>
+        <span class="tag-position-label">Início</span>
+      </span>
+    </label>
+    <label class="tag-position-option">
+      <input type="radio" name="tag_emoji_position" value="end" class="js-tag-position" {% if position == 'end' %}checked{% endif %}>
+      <span class="tag-position-card">
+        <span class="club-tag {{ current.surface_class if current.surface_class is defined else '' }} js-pos-preview" data-pos="end" style="{{ club_tag_style(current) }}" aria-hidden="true"></span>
+        <span class="tag-position-label">Final</span>
+      </span>
+    </label>
+    <label class="tag-position-option js-tag-position-split" {% if selected|length < 2 %}hidden{% endif %}>
+      <input type="radio" name="tag_emoji_position" value="split" class="js-tag-position" {% if position == 'split' and selected|length >= 2 %}checked{% endif %}>
+      <span class="tag-position-card">
+        <span class="club-tag {{ current.surface_class if current.surface_class is defined else '' }} js-pos-preview" data-pos="split" style="{{ club_tag_style(current) }}" aria-hidden="true"></span>
+        <span class="tag-position-label">Separados</span>
+      </span>
+    </label>
+  </div>
+  <p class="bio-label">Cor</p>
+  <div class="cover-tabs" role="radiogroup" aria-label="Tipo da cor">
+    <label class="cover-tab">
+      <input type="radio" name="tag_color_mode" value="solid" class="js-tag-mode" {% if mode != 'gradient' %}checked{% endif %}>
+      <span>Sólida</span>
+    </label>
+    <label class="cover-tab">
+      <input type="radio" name="tag_color_mode" value="gradient" class="js-tag-mode" {% if mode == 'gradient' %}checked{% endif %}>
+      <span>Degradê</span>
+    </label>
+  </div>
+  <div class="js-tag-solid-fields" {% if mode == 'gradient' %}hidden{% endif %}>
+    <p class="bio-label">Cor</p>
+    {{ color_picker('tag_color_1', color_1, COLOR_PRESETS, 'js-tag-color-1') }}
+  </div>
+  <div class="js-tag-gradient-fields" {% if mode != 'gradient' %}hidden{% endif %}>
+    <p class="bio-label">Cor 1</p>
+    {{ color_picker('tag_color_1', color_1, COLOR_PRESETS, 'js-tag-color-1-grad') }}
+    <p class="bio-label">Cor 2</p>
+    {{ color_picker('tag_color_2', color_2, COLOR_PRESETS, 'js-tag-color-2') }}
+    <p class="bio-label">Direção</p>
+    <div class="tag-position-row" role="radiogroup" aria-label="Direção do degradê">
+      <label class="tag-position-option">
+        <input type="radio" name="tag_gradient_direction" value="right" class="js-tag-dir" {% if direction == 'right' %}checked{% endif %}>
+        <span class="tag-position-card"><span class="tag-position-label">→</span></span>
+      </label>
+      <label class="tag-position-option">
+        <input type="radio" name="tag_gradient_direction" value="down-right" class="js-tag-dir" {% if direction == 'down-right' %}checked{% endif %}>
+        <span class="tag-position-card"><span class="tag-position-label">↘</span></span>
+      </label>
+      <label class="tag-position-option">
+        <input type="radio" name="tag_gradient_direction" value="down" class="js-tag-dir" {% if direction == 'down' %}checked{% endif %}>
+        <span class="tag-position-card"><span class="tag-position-label">↓</span></span>
+      </label>
+      <label class="tag-position-option">
+        <input type="radio" name="tag_gradient_direction" value="up-right" class="js-tag-dir" {% if direction == 'up-right' %}checked{% endif %}>
+        <span class="tag-position-card"><span class="tag-position-label">↗</span></span>
+      </label>
+    </div>
+  </div>
+  <label class="tag-range">Intensidade do fundo
+    <input class="js-tag-bg" type="range" name="tag_bg_intensity" min="{{ TAG_BG_MIN }}" max="{{ TAG_BG_MAX }}" value="{{ bg }}">
+    <span class="js-tag-bg-label">{{ bg }}%</span>
+  </label>
+  <label class="tag-range">Intensidade do contorno
+    <input class="js-tag-border" type="range" name="tag_border_intensity" min="{{ TAG_BORDER_MIN }}" max="{{ TAG_BORDER_MAX }}" value="{{ border }}">
+    <span class="js-tag-border-label">{{ border }}%</span>
+  </label>
+</div>
+{% endmacro %}

@@ -11,7 +11,7 @@ export default defineConfig({
   },
   build: {
     outDir: "app/static/js",
-    emptyOutDir: true,
+    emptyOutDir: false,
     rollupOptions: {
       input: path.resolve(__dirname, "frontend/main.tsx"),
       output: {

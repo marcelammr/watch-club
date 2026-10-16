@@ -3,8 +3,9 @@
 {% from "macros/presence.html" import presence_mark %}
 {% from "macros/sidebar.html" import club_menu_toggle, nav_icon %}
 {% from "macros/emoji.html" import emoji_picker %}
+{% from "macros/club_tag.html" import club_tag_chip, club_person_name %}
 {% block title %}{{ club.name }} · Watch Club{% endblock %}
-{% block body_class %}club-room{% endblock %}
+{% block body_class %}club-room club-ui{% endblock %}
 {% block top_start %}
   <a class="home-btn" href="/" aria-label="Início" title="Início">{{ nav_icon('home') }}</a>
   {{ club_menu_toggle() }}
@@ -61,18 +62,18 @@
         <a href="/clubs/{{ club.id }}/shows/{{ link.show.id }}">Ver detalhes</a>
         <form action="/clubs/{{ club.id }}/shows/{{ link.show.id }}/status" method="post">
           <input type="hidden" name="watch_status" value="{{ next_status }}">
-          <button class="{{ next_class }}" type="submit">{{ next_label }}</button>
+          <button class="btn {{ next_class }}" type="submit">{{ next_label }}</button>
         </form>
-        {% if is_admin %}
+        {% if can_titles %}
           <form action="/clubs/{{ club.id }}/shows/{{ link.show.id }}/remover" method="post" onsubmit="return confirm('Remover “{{ link.show.name }}” deste clube?');">
-            <button class="danger" type="submit">Remover do clube</button>
+            <button class="btn btn-danger" type="submit">Remover do clube</button>
           </form>
         {% endif %}
       </div>
     </div>
   </article>
 {% endmacro %}
-<div class="club-shell">
+<div class="club-shell" style="--club-admin-color: {{ club.admin_name_color or '#B892FF' }}; --club-sub-color: {{ club.sub_name_color or '#6C63FF' }}">
   <div class="club-nav-dim js-club-nav-close" hidden></div>
   <aside class="club-nav" id="club-nav" aria-hidden="true">
     <section class="club-cover-banner club-nav-cover" style="background: {{ club.cover_color or '#3a2348' }}">
@@ -92,6 +93,8 @@
       <a class="club-side-link {% if tab == 'assistindo' %}is-on{% endif %}" href="/clubs/{{ club.id }}?aba=assistindo">Assistindo</a>
       {% if is_admin %}
         <a class="club-side-link is-quiet" href="/clubs/{{ club.id }}/config">Configurações</a>
+      {% elif can_tag %}
+        <a class="club-side-link is-quiet" href="/clubs/{{ club.id }}/tag">Tag do clube</a>
       {% endif %}
     </nav>
     <div class="club-leave">
@@ -105,13 +108,13 @@
         </button>
         <span class="club-copy-ok js-copy-feedback" hidden aria-live="polite">Código copiado!</span>
       </div>
-      <button type="button" class="danger js-leave-open">Sair do clube</button>
+      <button type="button" class="btn btn-danger js-leave-open">Sair do clube</button>
     </div>
   </aside>
 
   <section class="club-main">
     <div class="club-mobile-bar">
-      <button type="button" class="ghost club-mobile-btn js-open-members">Membros</button>
+      <button type="button" class="btn btn-ghost club-mobile-btn js-open-members">Membros</button>
     </div>
     {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
@@ -132,13 +135,16 @@
               {% if follow %}
                 <span class="chat-gutter" aria-hidden="true"></span>
               {% else %}
-                {{ user_avatar(item.user, 'md') }}
+                <a class="chat-avatar" href="/u/{{ item.user.username }}?clube={{ club.id }}">{{ user_avatar(item.user, 'md') }}</a>
               {% endif %}
               <div>
                 {% if not follow %}
                   <p class="chat-meta">
-                    <a class="chat-name" href="{{ person_href(user.id, item.user, friend_ids) }}"><strong>{{ item.user.name }}</strong></a>
-                    <span class="muted">@{{ item.user.username }} · {{ item.created_at|when }}</span>
+                    <span class="chat-meta-who">
+                      <a class="chat-name" href="/u/{{ item.user.username }}?clube={{ club.id }}">{{ club_person_name(item.user, members_by_user.get(item.user_id)) }}</a>
+                      {{ club_tag_chip(item.user.display_tag) }}
+                    </span>
+                    <span class="chat-meta-when muted">{{ item.created_at.strftime('%H:%M') if item.created_at else '' }}</span>
                   </p>
                 {% endif %}
                 <p class="chat-body">{{ item.body|chat_format }}</p>
@@ -177,7 +183,7 @@
                   </svg>
                 </button>
               </div>
-              <button type="submit">Enviar</button>
+              <button class="btn btn-primary" type="submit">Enviar</button>
             </div>
           </div>
         </form>
@@ -211,7 +217,7 @@
                   <form action="/clubs/{{ club.id }}/shows" method="post">
                     <input type="hidden" name="tvmaze_id" value="{{ item.tvmaze_id }}">
                     <input type="hidden" name="kind" value="{{ item.kind or 'serie' }}">
-                    <button type="submit">Adicionar ao clube</button>
+                    <button class="btn btn-primary" type="submit">Adicionar ao clube</button>
                   </form>
                 </div>
               </li>
@@ -227,7 +233,7 @@
         {% if watch_list == 'finalizados' %}
           <div class="watch-list">
             {% for link in watched %}
-              {{ catalog_row(link, 'Já assistimos', 'is-done', 'watching', 'Voltar para Assistindo', 'ghost') }}
+              {{ catalog_row(link, 'Já assistimos', 'is-done', 'watching', 'Voltar para Assistindo', 'btn-ghost') }}
             {% else %}
               <p class="muted">Nenhum título finalizado ainda.</p>
             {% endfor %}
@@ -235,7 +241,7 @@
         {% else %}
           <div class="watch-list">
             {% for link in watching %}
-              {{ catalog_row(link, 'Assistindo', '', 'watched', 'Já assistimos', '') }}
+              {{ catalog_row(link, 'Assistindo', '', 'watched', 'Já assistimos', 'btn-primary') }}
             {% else %}
               <p class="muted">Nenhum título por aqui ainda.</p>
               <p class="muted">Pesquise uma série ou filme para começar.</p>
@@ -250,7 +256,7 @@
 <dialog class="members-dialog" id="members-dialog" aria-labelledby="members-dialog-title">
   <div class="members-dialog-head">
     <h2 id="members-dialog-title">Membros</h2>
-    <button type="button" class="members-close js-close-members" aria-label="Fechar">&times;</button>
+    <button type="button" class="btn btn-icon members-close js-close-members" aria-label="Fechar" title="Fechar">&times;</button>
   </div>
   <label class="members-search">
     <span class="visually-hidden">Buscar membros</span>
@@ -259,26 +265,34 @@
   <div class="members-tabs" role="tablist">
     <button type="button" class="members-tab is-on js-members-tab" data-tab="todos">Todos</button>
     <button type="button" class="members-tab js-members-tab" data-tab="online">Online</button>
-    {% if is_admin and club.is_closed %}
+    {% if can_joins and club.is_closed %}
       <button type="button" class="members-tab js-members-tab" data-tab="solicitacoes">Solicitações{% if join_requests %} ({{ join_requests|length }}){% endif %}</button>
     {% endif %}
   </div>
-  <ul class="club-member-list js-members-list">
-    {% for member in club.members %}
-      {% set status = presence_of(member.user) %}
-      <li class="js-member-row" data-name="{{ member.user.name|lower }}" data-username="{{ member.user.username|lower }}" data-online="{{ '1' if status == 'online' else '0' }}">
-        <a class="club-member" href="/u/{{ member.user.username }}">
-          {{ user_avatar(member.user, 'sm') }}
-          <span class="club-member-copy">
-            <strong>{{ member.user.name }}</strong>
-            <span class="muted">@{{ member.user.username }}{% if member.is_admin %} · admin{% endif %}</span>
-            <span class="status {{ status }}">{{ presence_mark(status) }}{{ presence_label(member.user) }}</span>
-          </span>
-        </a>
-      </li>
+  <div class="club-member-list js-members-list">
+    {% for group in member_groups %}
+      <section class="js-member-group">
+        <h3 class="member-group-heading">{{ group.label }} — {{ group.members|length }}</h3>
+        <ul class="club-member-group-list">
+          {% for member in group.members %}
+            {% set status = presence_of(member.user) %}
+            <li class="js-member-row" data-name="{{ member.user.name|lower }}" data-username="{{ member.user.username|lower }}" data-online="{{ '1' if status == 'online' else '0' }}">
+              <a class="club-member" href="/u/{{ member.user.username }}?clube={{ club.id }}">
+                {{ user_avatar(member.user, 'sm') }}
+                <span class="club-member-copy">
+                  {{ club_person_name(member.user, member) }}
+                  {{ club_tag_chip(member.user.display_tag) }}
+                  <span class="muted">@{{ member.user.username }}</span>
+                  <span class="status {{ status }}">{{ presence_mark(status) }}{{ presence_label(member.user) }}</span>
+                </span>
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
     {% endfor %}
-  </ul>
-  {% if is_admin and club.is_closed %}
+  </div>
+  {% if can_joins and club.is_closed %}
     <ul class="club-member-list js-requests-list" hidden>
       {% for item in join_requests %}
         <li>
@@ -289,10 +303,10 @@
               <span class="muted">@{{ item.user.username }}</span>
             </span>
             <form action="/clubs/{{ club.id }}/solicitacoes/{{ item.user_id }}/aceitar" method="post">
-              <button type="submit">Aceitar</button>
+              <button class="btn btn-primary" type="submit">Aceitar</button>
             </form>
             <form action="/clubs/{{ club.id }}/solicitacoes/{{ item.user_id }}/recusar" method="post">
-              <button class="ghost" type="submit">Recusar</button>
+              <button class="btn btn-ghost" type="submit">Recusar</button>
             </form>
           </div>
         </li>
@@ -302,7 +316,7 @@
     </ul>
   {% endif %}
   {% if is_admin %}
-    <p class="members-manage"><a href="/clubs/{{ club.id }}/membros">Gerenciar administradores</a></p>
+    <p class="members-manage"><a class="btn btn-secondary" href="/clubs/{{ club.id }}/config#cargos">Gerenciar cargos</a></p>
   {% endif %}
 </dialog>
 <dialog class="leave-dialog" id="add-title-dialog" aria-labelledby="add-title-dialog-title">
@@ -318,8 +332,8 @@
     </label>
     <label>URL da capa <input name="image_url" placeholder="https://…"></label>
     <div class="leave-dialog-actions">
-      <button type="button" class="ghost js-add-title-cancel">Cancelar</button>
-      <button type="submit">Adicionar</button>
+      <button type="button" class="btn btn-ghost js-add-title-cancel">Cancelar</button>
+      <button class="btn btn-primary" type="submit">Adicionar</button>
     </div>
   </form>
 </dialog>
@@ -327,10 +341,10 @@
   <h2 id="leave-dialog-title">Sair do clube</h2>
   <p>Tem certeza de que deseja sair de <strong>{{ club.name }}</strong>?</p>
   <div class="leave-dialog-actions">
-    <button type="button" class="ghost js-leave-cancel">Cancelar</button>
+    <button type="button" class="btn btn-ghost js-leave-cancel">Cancelar</button>
     <form action="/clubs/{{ club.id }}/leave" method="post">
       <input type="hidden" name="next" value="/">
-      <button class="danger" type="submit">Sair do clube</button>
+      <button class="btn btn-danger" type="submit">Sair do clube</button>
     </form>
   </div>
 </dialog>
@@ -367,8 +381,7 @@
       if (event.key !== "Escape" || !isOpen()) return;
       const account = document.getElementById("account-popover");
       if (account && !account.hidden) return;
-      const emoji = document.querySelector(".js-emoji-popover");
-      if (emoji && !emoji.hidden) return;
+      if (document.querySelector(".js-emoji-picker.is-open")) return;
       setOpen(false);
     });
     sync();
@@ -378,6 +391,7 @@
     if (!dialog) return;
     const search = dialog.querySelector(".js-members-search");
     const rows = dialog.querySelectorAll(".js-member-row");
+    const groups = dialog.querySelectorAll(".js-member-group");
     const membersList = dialog.querySelector(".js-members-list");
     const requestsList = dialog.querySelector(".js-requests-list");
     let tab = "todos";
@@ -392,6 +406,10 @@
         const hay = (row.getAttribute("data-name") || "") + " @" + (row.getAttribute("data-username") || "");
         const onlineOk = tab !== "online" || row.getAttribute("data-online") === "1";
         row.hidden = !(onlineOk && hay.includes(query));
+      });
+      groups.forEach((group) => {
+        const visible = Array.from(group.querySelectorAll(".js-member-row")).some((row) => !row.hidden);
+        group.hidden = !visible;
       });
     }
 

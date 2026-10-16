@@ -2,6 +2,7 @@
 {% from "macros/avatar.html" import user_avatar %}
 {% from "macros/presence.html" import presence_mark %}
 {% from "macros/emoji.html" import emoji_picker %}
+{% from "macros/club_tag.html" import club_tag_chip %}
 {% block title %}Configurações · Watch Club{% endblock %}
 {% block page_heading %}Configurações{% endblock %}
 {% block content %}
@@ -17,6 +18,7 @@
     </div>
     <div>
       <strong>{{ user.name }}</strong>
+      {{ club_tag_chip(user.display_tag) }}
       <p class="status {{ presence_of(user) }}">{{ presence_mark(presence_of(user)) }}{{ presence_label(user) }}</p>
       <p><a href="/u/{{ user.username }}">Ver perfil público</a></p>
     </div>
@@ -132,6 +134,29 @@
       <button type="submit">Alterar senha</button>
     </form>
   </div>
+</section>
+
+<section class="card">
+  <h2>Tag exibida</h2>
+  <p class="muted">Escolha no máximo uma tag entre os clubes de que você participa. Ela pode aparecer no perfil, nos amigos e nas mensagens. Não é clicável e não concede permissão.</p>
+  <form action="/conta/tag" method="post">
+    <label class="check">
+      <input type="radio" name="displayed_club_id" value="0" {% if not user.displayed_club_id %}checked{% endif %}>
+      Nenhuma
+    </label>
+    {% for item in tag_choices %}
+      <label class="check tag-choice">
+        <input type="radio" name="displayed_club_id" value="{{ item.club_id }}" {% if user.displayed_club_id == item.club_id %}checked{% endif %}>
+        {{ club_tag_chip(item) }}
+        <span class="muted">{{ item.club_name }}</span>
+      </label>
+    {% else %}
+      <p class="muted">Nenhum dos seus clubes tem tag ainda.</p>
+    {% endfor %}
+    {% if tag_choices %}
+      <button type="submit">Salvar tag exibida</button>
+    {% endif %}
+  </form>
 </section>
 
 <section class="card">

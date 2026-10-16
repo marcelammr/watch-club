@@ -358,8 +358,8 @@ def test_bio_and_avatar_editor_hidden():
     assert 'id="open-avatar"' in settings.text
     assert "avatar-modal" in settings.text
     assert 'aria-label="Adicionar emoji"' in settings.text
-    assert 'class="emoji-popover js-emoji-popover" hidden' in settings.text
-    assert "🍿" in settings.text
+    assert "js-emoji-picker" in settings.text
+    assert "js-emoji-panel" in settings.text
     assert 'id="photo-crop-dialog"' in settings.text
     assert "Usar esta foto" in settings.text
     assert "Cinéfila de maratona." in settings.text
@@ -496,9 +496,9 @@ def test_club_creator_is_admin_and_member_cannot_change_settings():
     try:
         club = db.get(Club, club_id)
         member = db.scalar(select(ClubMember).where(ClubMember.club_id == club_id))
-        assert club.cover_color == "#246b45"
+        assert club.cover_color == "#246B45"
         assert club.description == "Sobre o grupo"
-        assert member.is_admin is True
+        assert member.role == "admin"
         code = club.join_code
     finally:
         db.close()
@@ -557,7 +557,8 @@ def test_club_chat_and_watching_are_members_only():
     assert "Chat Host" in chat.text or "chat_host" in chat.text.lower() or "chat host" in chat.text.lower()
     assert "js-chat-input" in chat.text
     assert 'aria-label="Emoji"' in chat.text
-    assert 'class="emoji-popover js-emoji-popover" hidden' in chat.text
+    assert "js-emoji-picker" in chat.text
+    assert "js-emoji-panel" in chat.text
     assert 'aria-label="Spoiler"' in chat.text
     assert 'aria-label="Atualizar"' in chat.text
     assert "Atualizar" not in chat.text.split("chat-form")[-1]
@@ -771,9 +772,11 @@ def test_friends_private_chat_history_and_auth():
     assert 'href="/mensagens/amizade_b"' in friends_page.text
 
     chat = host.get(f"/clubs/{club_id}?aba=chat")
-    assert "/u/amizade_b" in chat.text
+    assert f"/u/amizade_b?clube={club_id}" in chat.text
+    assert "/mensagens/amizade_b" not in chat.text
     people = host.get(f"/clubs/{club_id}/membros")
-    assert "/mensagens/amizade_b" in people.text
+    assert f"/u/amizade_b?clube={club_id}" in people.text
+    assert "/mensagens/amizade_b" not in people.text
 
     undone = host.post("/amigos/amizade_b/desfazer", data={"next": "/amigos"}, follow_redirects=False)
     assert undone.status_code == 303
@@ -897,7 +900,7 @@ def test_closed_club_join_requests_and_code():
     inside = member.get(f"/clubs/{club_id}")
     assert inside.status_code == 200
     assert "Solicitações" not in inside.text
-    assert 'href="/u/pedido_host"' in inside.text
+    assert f'href="/u/pedido_host?clube={club_id}"' in inside.text
 
     waiting = TestClient(app)
     register_active(waiting, "pedido_guest", "pedido.guest@example.com", name="Pedido Guest")

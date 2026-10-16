@@ -27,6 +27,7 @@ class User(Base):
     last_seen: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     presence: Mapped[str] = mapped_column(String(12), default="offline", nullable=False)
     presence_pref: Mapped[str] = mapped_column(String(12), default="auto", nullable=False)
+    displayed_club_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     username_changed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
@@ -61,6 +62,20 @@ class Club(Base):
     rules: Mapped[str] = mapped_column(Text, default="", nullable=False)
     cover_color: Mapped[str] = mapped_column(String(7), default="#3a2348", nullable=False)
     cover_image: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    tag_slug: Mapped[str] = mapped_column(String(4), default="", nullable=False)
+    tag_emoji: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    # legado: token antigo (lavender, …). Não é lido nem escrito pelo código novo; remover depois.
+    tag_color: Mapped[str] = mapped_column(String(20), default="", nullable=False)
+    tag_color_mode: Mapped[str] = mapped_column(String(8), default="solid", nullable=False)
+    tag_color_1: Mapped[str] = mapped_column(String(7), default="#B892FF", nullable=False)
+    tag_color_2: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    tag_gradient_direction: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    tag_bg_intensity: Mapped[int] = mapped_column(Integer, default=18, nullable=False)
+    tag_border_intensity: Mapped[int] = mapped_column(Integer, default=55, nullable=False)
+    tag_emoji_position: Mapped[str] = mapped_column(String(8), default="start", nullable=False)
+    admin_name_color: Mapped[str] = mapped_column(String(7), default="#B892FF", nullable=False)
+    sub_name_color: Mapped[str] = mapped_column(String(7), default="#6C63FF", nullable=False)
+    member_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     members: Mapped[list["ClubMember"]] = relationship(back_populates="club")
@@ -75,7 +90,8 @@ class ClubMember(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    is_admin: Mapped[bool] = mapped_column(default=False, nullable=False)
+    role: Mapped[str] = mapped_column(String(16), default="member", nullable=False)
+    support_perms: Mapped[str] = mapped_column(Text, default="", nullable=False)
 
     club: Mapped[Club] = relationship(back_populates="members")
     user: Mapped[User] = relationship(back_populates="memberships")

@@ -1,35 +1,33 @@
 {% extends "base.html" %}
 {% from "macros/avatar.html" import user_avatar %}
 {% from "macros/presence.html" import presence_mark %}
+{% from "macros/club_tag.html" import club_tag_chip, club_person_name %}
+{% block body_class %}club-ui{% endblock %}
 {% block title %}Participantes · {{ club.name }}{% endblock %}
 {% block page_heading %}Participantes{% endblock %}
 {% block content %}
+<div style="--club-admin-color: {{ club.admin_name_color or '#B892FF' }}; --club-sub-color: {{ club.sub_name_color or '#6C63FF' }}">
 <p class="crumb"><a href="/">Início</a> / <a href="/clubs/{{ club.id }}">{{ club.name }}</a> / Participantes</p>
 <h1>{{ club.members|length }} participante{% if club.members|length != 1 %}s{% endif %}</h1>
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
-<ul class="people">
-  {% for member in members %}
-    <li class="person-row">
-      <a class="person-row" href="{{ person_href(user.id, member.user, friend_ids) }}">
-        {{ user_avatar(member.user, 'md') }}
-        <span>{{ member.user.name }}</span>
-        {% if member.is_admin %}<span class="muted">admin</span>{% endif %}
-        <span class="status {{ presence_of(member.user) }}">{{ presence_mark(presence_of(member.user)) }}{{ presence_label(member.user) }}</span>
-      </a>
-      {% if is_admin and member.user_id != user.id %}
-        {% if member.is_admin %}
-          <form action="/clubs/{{ club.id }}/membros/{{ member.user_id }}/admin" method="post">
-            <input type="hidden" name="action" value="revoke">
-            <button class="danger" type="submit" {% if admin_total <= 1 %}disabled{% endif %}>Remover admin</button>
-          </form>
-        {% else %}
-          <form action="/clubs/{{ club.id }}/membros/{{ member.user_id }}/admin" method="post">
-            <input type="hidden" name="action" value="grant">
-            <button type="submit">Tornar admin</button>
-          </form>
-        {% endif %}
-      {% endif %}
-    </li>
-  {% endfor %}
-</ul>
+{% for group in member_groups %}
+  <h2 class="member-group-heading">{{ group.label }} — {{ group.members|length }}</h2>
+  <ul class="people">
+    {% for member in group.members %}
+      <li class="person-row">
+        <a class="person-row" href="/u/{{ member.user.username }}?clube={{ club.id }}">
+          {{ user_avatar(member.user, 'md') }}
+          <span>{{ club_person_name(member.user, member) }}</span>
+          {{ club_tag_chip(member.user.display_tag) }}
+          <span class="muted">@{{ member.user.username }}</span>
+          <span class="status {{ presence_of(member.user) }}">{{ presence_mark(presence_of(member.user)) }}{{ presence_label(member.user) }}</span>
+        </a>
+      </li>
+    {% endfor %}
+  </ul>
+{% endfor %}
+{% if is_admin %}
+  <p class="members-manage"><a class="btn btn-secondary" href="/clubs/{{ club.id }}/config#cargos">Gerenciar cargos</a></p>
+{% endif %}
+</div>
 {% endblock %}

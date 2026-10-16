@@ -1,6 +1,7 @@
 {% from "macros/avatar.html" import user_avatar %}
 {% from "macros/sidebar.html" import app_sidebar, hamburger %}
 {% from "macros/presence.html" import presence_mark %}
+{% from "macros/club_tag.html" import club_tag_chip %}
 <!DOCTYPE html>
 <html lang="pt-BR" class="dark" dir="ltr">
 <head>
@@ -46,6 +47,7 @@
                 {{ user_avatar(user, 'md') }}
                 <div>
                   <strong>{{ user.name }}</strong>
+                  {{ club_tag_chip(user.display_tag) }}
                   <p class="muted">@{{ user.username }}</p>
                   <p class="status {{ presence_of(user) }} js-account-status">{{ presence_mark(presence_of(user)) }}{{ presence_label(user) }}</p>
                 </div>
@@ -226,6 +228,5 @@
   {% endif %}
   <div id="command-root"></div>
   <script type="module" src="/static/js/command.js"></script>
-  <script src="/static/js/emoji-picker.js"></script>
 </body>
 </html>
