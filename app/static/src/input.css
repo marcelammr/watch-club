@@ -362,6 +362,47 @@
   .auth-page main {
     @apply flex min-h-[calc(100dvh-5.5rem)] items-center justify-center px-4 py-10;
   }
+  .password-field {
+    position: relative;
+    display: block;
+  }
+  main label > .password-field {
+    margin-top: 0.375rem;
+  }
+  main .password-field input {
+    margin-top: 0;
+    padding-right: 2.75rem;
+  }
+  main .password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 0.35rem;
+    z-index: 1;
+    display: inline-flex;
+    width: 2rem;
+    height: 2rem;
+    margin: 0;
+    padding: 0;
+    transform: translateY(-50%);
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 0.375rem;
+    background: transparent;
+    color: var(--muted-foreground);
+    font-weight: 400;
+    line-height: 1;
+    box-shadow: none;
+    cursor: pointer;
+  }
+  main .password-toggle:hover {
+    background: var(--accent);
+    color: var(--foreground);
+  }
+  main .password-toggle:focus-visible {
+    outline: 2px solid var(--btn-focus);
+    outline-offset: 2px;
+  }
   .muted {
     @apply text-muted-foreground;
   }

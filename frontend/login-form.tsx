@@ -12,6 +12,60 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+function EyeIcon({ crossed }: { crossed: boolean }) {
+  if (crossed) {
+    return (
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M3 3l18 18" />
+        <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+        <path d="M9.9 5.1A9.8 9.8 0 0 1 12 5c5 0 9 4.5 10 7-.3.8-1 2-2.1 3.3" />
+        <path d="M6.1 6.1C4.2 7.6 2.7 9.5 2 12c1 2.5 5 7 10 7 1.4 0 2.7-.3 3.9-.8" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function PasswordField({
+  id,
+  name,
+  autoComplete,
+}: {
+  id: string;
+  name: string;
+  autoComplete?: string;
+}) {
+  const [visible, setVisible] = useState(false);
+  const label = visible ? "Ocultar senha" : "Mostrar senha";
+  return (
+    <div className="password-field">
+      <Input
+        id={id}
+        name={name}
+        type={visible ? "text" : "password"}
+        required
+        minLength={4}
+        autoComplete={autoComplete}
+      />
+      <button
+        type="button"
+        className="password-toggle"
+        aria-label={label}
+        aria-pressed={visible}
+        aria-controls={id}
+        onClick={() => setVisible((open) => !open)}
+      >
+        <EyeIcon crossed={visible} />
+      </button>
+    </div>
+  );
+}
+
 type AuthMode = "login" | "register" | "forgot" | "reset";
 
 type AuthProps = {
@@ -174,18 +228,11 @@ export function LoginForm({ mode, error, ok, suggestions, form, dev_code }: Auth
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="new_password">Nova senha</Label>
-                      <Input id="new_password" name="new_password" type="password" required minLength={4} autoComplete="new-password" />
+                      <PasswordField id="new_password" name="new_password" autoComplete="new-password" />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="confirm_password">Confirmar nova senha</Label>
-                      <Input
-                        id="confirm_password"
-                        name="confirm_password"
-                        type="password"
-                        required
-                        minLength={4}
-                        autoComplete="new-password"
-                      />
+                      <PasswordField id="confirm_password" name="confirm_password" autoComplete="new-password" />
                     </div>
                   </>
                 ) : null}
@@ -199,19 +246,16 @@ export function LoginForm({ mode, error, ok, suggestions, form, dev_code }: Auth
                         </a>
                       ) : null}
                     </div>
-                    <Input
+                    <PasswordField
                       id="password"
                       name="password"
-                      type="password"
-                      required
-                      minLength={4}
                       autoComplete={isLogin ? "current-password" : "new-password"}
                     />
                   </div>
                 ) : null}
-                <Button type="submit" className="w-full">
+                <button className="btn btn-primary w-full" type="submit">
                   {isForgot ? "Enviar código" : isReset ? "Redefinir senha" : isLogin ? "Entrar" : "Cadastrar"}
-                </Button>
+                </button>
                 {isReset ? (
                   <Button variant="outline" className="w-full" asChild>
                     <a href="/recuperar-senha">Enviar outro código</a>
