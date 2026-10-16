@@ -22,11 +22,11 @@
         </a>
         <form action="/amigos/{{ person.username }}/aceitar" method="post">
           <input type="hidden" name="next" value="/amigos">
-          <button type="submit">Aceitar</button>
+          <button class="btn btn-primary" type="submit">Aceitar</button>
         </form>
         <form action="/amigos/{{ person.username }}/recusar" method="post">
           <input type="hidden" name="next" value="/amigos">
-          <button class="ghost" type="submit">Recusar</button>
+          <button class="btn btn-ghost" type="submit">Recusar</button>
         </form>
       </li>
     {% else %}
@@ -47,7 +47,7 @@
           <span class="muted">@{{ person.username }}</span>
           <span class="status {{ presence_of(person) }}">{{ presence_mark(presence_of(person)) }}{{ presence_label(person) }}</span>
         </a>
-        <a class="btn" href="/mensagens/{{ person.username }}">Conversar</a>
+        <a class="btn btn-primary" href="/mensagens/{{ person.username }}">Conversar</a>
       </li>
     {% else %}
       <li class="muted">Você ainda não tem amigos. Envie um pedido pelo perfil de alguém do clube.</li>
