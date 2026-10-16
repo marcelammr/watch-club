@@ -4,7 +4,17 @@
 {% block content %}
 <section class="card narrow">
   <h1>🔒 {{ club.name }}</h1>
-  <p>Este clube é fechado. Só entra quem tem o código de convite.</p>
+  <p>Este clube é fechado. Só entra quem tem o código de convite ou quem for aceito por um administrador.</p>
+  {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% if join_pending %}
+    <p class="muted">Pedido enviado. Aguarde um administrador.</p>
+  {% else %}
+    <form action="/clubs/{{ club.id }}/solicitar" method="post">
+      <input type="hidden" name="next" value="/clubs/{{ club.id }}">
+      <button type="submit">Pedir para entrar</button>
+    </form>
+  {% endif %}
   <p><a href="/">Voltar</a></p>
 </section>
 {% endblock %}

@@ -10,7 +10,17 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import NEWS_TTL_SECONDS
-from app.models import Club, ClubMember, ClubMessage, ClubShow, ClubShowRating, NewsItem, Season, Show
+from app.models import (
+    Club,
+    ClubJoinRequest,
+    ClubMember,
+    ClubMessage,
+    ClubShow,
+    ClubShowRating,
+    NewsItem,
+    Season,
+    Show,
+)
 from app.services import news as news_service
 from app.services import tvmaze
 
@@ -74,6 +84,65 @@ def admin_count(db: Session, club_id: int) -> int:
     return len(list(db.scalars(select(ClubMember).where(ClubMember.club_id == club_id, ClubMember.is_admin.is_(True)))))
 
 
+def pending_join_request(db: Session, club_id: int, user_id: int) -> ClubJoinRequest | None:
+    return db.scalar(
+        select(ClubJoinRequest).where(ClubJoinRequest.club_id == club_id, ClubJoinRequest.user_id == user_id)
+    )
+
+
+def list_join_requests(db: Session, club_id: int) -> list[ClubJoinRequest]:
+    return list(
+        db.scalars(
+            select(ClubJoinRequest)
+            .options(selectinload(ClubJoinRequest.user))
+            .where(ClubJoinRequest.club_id == club_id)
+            .order_by(ClubJoinRequest.created_at)
+        )
+    )
+
+
+def requested_club_ids(db: Session, user_id: int) -> set[int]:
+    return set(db.scalars(select(ClubJoinRequest.club_id).where(ClubJoinRequest.user_id == user_id)))
+
+
+def clear_join_request(db: Session, club_id: int, user_id: int) -> None:
+    request = pending_join_request(db, club_id, user_id)
+    if request:
+        db.delete(request)
+
+
+def create_join_request(db: Session, club: Club, user_id: int) -> ClubJoinRequest:
+    if not club.is_closed:
+        raise HTTPException(status_code=400, detail="Este clube é aberto")
+    if club_membership(db, club.id, user_id):
+        raise HTTPException(status_code=400, detail="Você já participa deste clube")
+    existing = pending_join_request(db, club.id, user_id)
+    if existing:
+        return existing
+    request = ClubJoinRequest(club_id=club.id, user_id=user_id)
+    db.add(request)
+    db.flush()
+    return request
+
+
+def accept_join_request(db: Session, club_id: int, user_id: int, admin_id: int) -> None:
+    require_club_admin(db, club_id, admin_id)
+    request = pending_join_request(db, club_id, user_id)
+    if not request:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada")
+    if not club_membership(db, club_id, user_id):
+        db.add(ClubMember(club_id=club_id, user_id=user_id, is_admin=False))
+    db.delete(request)
+
+
+def reject_join_request(db: Session, club_id: int, user_id: int, admin_id: int) -> None:
+    require_club_admin(db, club_id, admin_id)
+    request = pending_join_request(db, club_id, user_id)
+    if not request:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada")
+    db.delete(request)
+
+
 def leave_club(db: Session, club_id: int, user_id: int) -> str:
     club = require_club_member(db, club_id, user_id)
     member = club_membership(db, club_id, user_id)
@@ -87,6 +156,7 @@ def leave_club(db: Session, club_id: int, user_id: int) -> str:
         db.execute(delete(ClubShowRating).where(ClubShowRating.club_id == club_id))
         db.execute(delete(ClubMessage).where(ClubMessage.club_id == club_id))
         db.execute(delete(ClubShow).where(ClubShow.club_id == club_id))
+        db.execute(delete(ClubJoinRequest).where(ClubJoinRequest.club_id == club_id))
         db.delete(club)
         db.commit()
         return f"Você saiu e o clube “{club_name}” foi encerrado."

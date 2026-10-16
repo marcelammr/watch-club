@@ -1,0 +1,13 @@
+{% macro crescent_moon() %}
+<svg class="presence-moon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+  <path d="M13.2 10.15A6.2 6.2 0 0 1 5.85 2.8 6.35 6.35 0 1 0 13.2 13.6a6.2 6.2 0 0 1 0-3.45z"/>
+</svg>
+{% endmacro %}
+
+{% macro presence_mark(status) %}
+{% if status == 'away' %}
+  {{ crescent_moon() }}
+{% else %}
+  <span class="dot"></span>
+{% endif %}
+{% endmacro %}

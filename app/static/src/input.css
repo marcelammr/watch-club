@@ -36,40 +36,42 @@
     --sidebar-accent-foreground: oklch(0.212 0.019 322.12);
     --sidebar-border: oklch(0.922 0.005 325.62);
     --sidebar-ring: oklch(0.711 0.019 323.02);
+    --rose: #ff5d8f;
   }
 
   .dark {
-    --background: oklch(0.145 0.008 326);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.212 0.019 322.12);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.212 0.019 322.12);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0.005 325.62);
-    --primary-foreground: oklch(0.212 0.019 322.12);
-    --secondary: oklch(0.263 0.024 320.12);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.263 0.024 320.12);
-    --muted-foreground: oklch(0.711 0.019 323.02);
-    --accent: oklch(0.263 0.024 320.12);
-    --accent-foreground: oklch(0.985 0 0);
+    --background: #1f1b24;
+    --foreground: #f7f0ff;
+    --card: #26222c;
+    --card-foreground: #f7f0ff;
+    --popover: #2a2530;
+    --popover-foreground: #f7f0ff;
+    --primary: #b892ff;
+    --primary-foreground: #1f1b24;
+    --secondary: #2a2530;
+    --secondary-foreground: #f7f0ff;
+    --muted: #2a2530;
+    --muted-foreground: color-mix(in srgb, #f7f0ff 62%, #1f1b24);
+    --accent: color-mix(in srgb, #6c63ff 22%, #1f1b24);
+    --accent-foreground: #f7f0ff;
     --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.542 0.034 322.5);
-    --chart-1: oklch(0.865 0.012 325.68);
-    --chart-2: oklch(0.542 0.034 322.5);
-    --chart-3: oklch(0.435 0.029 321.78);
-    --chart-4: oklch(0.364 0.029 323.89);
-    --chart-5: oklch(0.263 0.024 320.12);
-    --sidebar: oklch(0.212 0.019 322.12);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.263 0.024 320.12);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.542 0.034 322.5);
+    --rose: #ff5d8f;
+    --border: color-mix(in srgb, #f7f0ff 10%, transparent);
+    --input: color-mix(in srgb, #f7f0ff 14%, transparent);
+    --ring: #b892ff;
+    --chart-1: #b892ff;
+    --chart-2: color-mix(in srgb, #f7f0ff 62%, #1f1b24);
+    --chart-3: #6c63ff;
+    --chart-4: color-mix(in srgb, #6c63ff 55%, #1f1b24);
+    --chart-5: #26222c;
+    --sidebar: #26222c;
+    --sidebar-foreground: #f7f0ff;
+    --sidebar-primary: #b892ff;
+    --sidebar-primary-foreground: #1f1b24;
+    --sidebar-accent: color-mix(in srgb, #6c63ff 28%, #1f1b24);
+    --sidebar-accent-foreground: #f7f0ff;
+    --sidebar-border: color-mix(in srgb, #f7f0ff 10%, transparent);
+    --sidebar-ring: #b892ff;
   }
 
   html {
@@ -78,8 +80,20 @@
   html.dark {
     color-scheme: dark;
   }
+  html.dark::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    pointer-events: none;
+    opacity: 0.03;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 180px 180px;
+  }
   body {
-    @apply m-0 min-h-screen bg-background font-display text-foreground;
+    @apply m-0 min-h-screen bg-background font-sans text-foreground;
   }
   a {
     @apply text-primary no-underline;
@@ -112,11 +126,13 @@
     @apply flex min-h-dvh;
   }
   .app-sidebar {
-    @apply relative z-30 flex w-64 shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground;
-    transition: width 300ms ease;
+    @apply pointer-events-none fixed inset-y-0 left-0 z-40 flex w-64 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground;
+    transform: translateX(-100%);
+    transition: transform 300ms ease;
   }
-  html.sidebar-collapsed .app-sidebar {
-    width: 4.5rem;
+  html.sidebar-open .app-sidebar {
+    @apply pointer-events-auto;
+    transform: translateX(0);
   }
   .sidebar-head {
     @apply flex items-center gap-1 px-2 py-3;
@@ -125,19 +141,13 @@
     @apply flex min-w-0 flex-1 items-center px-2 text-sidebar-foreground no-underline;
   }
   .sidebar-brand-full {
-    @apply truncate text-[1.05rem] font-bold tracking-wide;
-  }
-  .sidebar-brand-short {
-    @apply hidden text-sm font-bold tracking-wider;
-  }
-  html.sidebar-collapsed .sidebar-brand-full {
-    @apply hidden;
-  }
-  html.sidebar-collapsed .sidebar-brand-short {
-    @apply inline;
+    @apply truncate font-display text-[1.05rem] font-normal tracking-wide;
   }
   .app-nav {
     @apply flex flex-col gap-1 px-2 py-2;
+  }
+  .app-nav-foot {
+    @apply mt-auto border-t border-sidebar-border;
   }
   .app-nav-link {
     @apply flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sidebar-foreground no-underline;
@@ -151,14 +161,12 @@
   }
   .app-nav-label {
     @apply overflow-hidden whitespace-nowrap text-[0.95rem] font-medium;
-    transition: opacity 200ms ease 60ms;
-  }
-  html.sidebar-collapsed .app-nav-label {
-    @apply w-0 opacity-0;
-    transition: opacity 150ms ease, width 300ms ease;
   }
   .sidebar-dim {
-    @apply pointer-events-none fixed inset-0 z-20 hidden bg-black/50;
+    @apply pointer-events-none fixed inset-0 z-30 hidden bg-black/50;
+  }
+  html.sidebar-open .sidebar-dim {
+    @apply pointer-events-auto block;
   }
   .app-main {
     @apply flex min-w-0 flex-1 flex-col;
@@ -171,24 +179,25 @@
     @apply flex items-center gap-3;
   }
   .page-heading {
-    @apply m-0 text-lg font-semibold text-foreground;
+    @apply m-0 font-display text-lg font-normal text-foreground;
   }
   .top nav {
     @apply flex items-center gap-4;
   }
   header .sidebar-toggle,
   header .bell-btn,
-  .app-sidebar .sidebar-toggle {
+  header .back-btn,
+  header .home-btn {
     @apply m-0 inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 text-foreground;
+  }
+  header .home-btn {
+    @apply text-foreground no-underline;
   }
   header .bell-btn:disabled {
     @apply cursor-default opacity-70;
   }
-  .sidebar-toggle-mobile {
-    @apply hidden;
-  }
   .logo {
-    @apply whitespace-nowrap font-bold tracking-wide text-foreground;
+    @apply whitespace-nowrap font-display font-normal tracking-wide text-foreground;
   }
   main {
     @apply mx-auto max-w-[980px] px-5 pb-16 pt-8;
@@ -209,7 +218,7 @@
     @apply py-12;
   }
   .hero h1 {
-    @apply mb-3 mt-0 text-[2.4rem];
+    @apply mb-3 mt-0 font-display text-[2.4rem] font-normal;
   }
   .card {
     @apply my-4 mb-8 rounded-2xl border border-border bg-card p-5 text-card-foreground;
@@ -282,8 +291,35 @@
   .chip {
     @apply mt-0 rounded-full border border-border bg-secondary px-3 py-1.5 font-semibold text-foreground;
   }
-  .account-link {
+  .account-link,
+  .account-trigger {
     @apply flex items-center gap-2 text-foreground;
+  }
+  .account-menu {
+    @apply relative;
+  }
+  .account-trigger {
+    @apply m-0 cursor-pointer rounded-md border-0 bg-transparent p-0;
+  }
+  .account-popover {
+    @apply absolute right-0 top-[calc(100%+0.5rem)] z-30 w-72 rounded-2xl border border-border bg-card p-3 text-card-foreground shadow-lg;
+  }
+  .account-popover-head {
+    @apply mb-3 flex items-start gap-3;
+  }
+  .account-popover-head p {
+    @apply m-0;
+  }
+  .account-popover-link,
+  .status-option {
+    @apply mt-0 block w-full cursor-pointer rounded-[10px] border-0 bg-transparent px-3 py-2 text-left font-medium text-foreground;
+  }
+  .account-popover-link:hover,
+  .status-option:hover {
+    @apply bg-accent;
+  }
+  .status-submenu {
+    @apply mt-1 flex flex-col;
   }
   .avatar-option img,
   .member-chip img {
@@ -407,11 +443,18 @@
   .status.online .dot {
     @apply bg-[#3ddc84];
   }
-  .status.away .dot {
-    @apply bg-chart-1;
-  }
   .status.offline .dot {
     @apply bg-chart-2;
+  }
+  .presence-moon {
+    @apply block h-2.5 w-2.5 shrink-0 text-chart-1;
+  }
+  .status .presence-moon {
+    @apply h-2.5 w-2.5;
+  }
+  .presence-badge.is-away .presence-moon,
+  [data-slot="avatar-badge"].is-away .presence-moon {
+    @apply h-full w-full;
   }
   .people {
     @apply list-none p-0;
@@ -430,7 +473,7 @@
     @apply min-w-[200px] flex-1 border-0 p-0;
   }
   .profile-name {
-    @apply mb-0.5 mt-0 text-[1.7rem];
+    @apply mb-0.5 mt-0 font-display text-[1.7rem] font-normal;
   }
   .profile-nick {
     @apply mb-3 mt-0 text-muted-foreground;
@@ -444,7 +487,8 @@
   .account-logout {
     @apply mt-10;
   }
-  .home .account-link {
+  .home .account-link,
+  .home .account-trigger {
     @apply relative gap-0 text-foreground;
   }
   .home main {
@@ -457,7 +501,7 @@
     @apply mb-3.5 mt-0 text-[0.78rem] uppercase tracking-widest text-primary;
   }
   .home-hero h1 {
-    @apply mb-4 mt-0 text-[clamp(2.1rem,5vw,3.3rem)] font-semibold leading-tight;
+    @apply mb-4 mt-0 font-display text-[clamp(2.1rem,5vw,3.3rem)] font-normal leading-tight;
   }
   .home-hero p {
     @apply mb-7 mt-0 text-[1.12rem] leading-relaxed text-muted-foreground;
@@ -466,7 +510,7 @@
     @apply pb-6 pt-12;
   }
   .home-hello h1 {
-    @apply m-0 text-[clamp(2.1rem,5vw,3.1rem)] font-semibold;
+    @apply m-0 font-display text-[clamp(2.1rem,5vw,3.1rem)] font-normal;
   }
   .home-launch {
     @apply mt-7 grid max-w-xl grid-cols-2 gap-4;
@@ -512,7 +556,7 @@
   }
   .club-cover img,
   .club-cover-banner img {
-    @apply block h-full w-full object-cover;
+    @apply block h-full w-full object-cover object-center;
   }
   .club-cover-banner {
     @apply mb-5 h-40;
@@ -542,13 +586,46 @@
     @apply mb-6;
   }
   .club-identity h1 {
-    @apply mb-2 mt-0;
+    @apply mb-2 mt-0 font-display font-normal;
   }
   .club-lead {
     @apply mb-3 mt-0 max-w-xl text-muted-foreground;
   }
   .watch-heading {
     @apply mb-1.5 mt-7 text-[1.05rem] font-semibold uppercase tracking-wide text-muted-foreground;
+  }
+  .watch-toolbar {
+    @apply mb-6 flex items-center gap-2;
+  }
+  .watch-search {
+    @apply relative m-0 min-w-0 flex-1;
+  }
+  .watch-search button {
+    @apply absolute left-0 top-0 z-10 m-0 inline-flex h-10 w-10 items-center justify-center border-0 bg-transparent p-0 text-muted-foreground;
+  }
+  .watch-search svg {
+    @apply h-4 w-4;
+  }
+  .watch-search input {
+    @apply mt-0 w-full pl-10;
+  }
+  .watch-add-btn {
+    @apply m-0 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-card p-0 text-xl font-medium leading-none text-foreground;
+  }
+  .watch-add-btn:hover {
+    @apply bg-muted;
+  }
+  .watch-tabs {
+    @apply mb-5 flex gap-1 border-b border-border;
+  }
+  .watch-tab {
+    @apply -mb-px border-b-2 border-transparent px-3 py-2 text-sm font-medium text-muted-foreground no-underline;
+  }
+  .watch-tab:hover {
+    @apply text-foreground;
+  }
+  .watch-tab.is-on {
+    @apply border-primary text-foreground;
   }
   .watch-list {
     @apply mb-6 mt-0 flex flex-col;
@@ -632,32 +709,38 @@
     @apply min-h-0;
   }
   body.club-room .top {
-    @apply shrink-0;
+    @apply relative z-[25] shrink-0 bg-background;
   }
   body.club-room .app-main main {
     @apply m-0 flex min-h-0 w-full max-w-none flex-1 p-0;
   }
-  .club-toggle {
-    @apply pointer-events-none absolute opacity-0;
-  }
   .club-shell {
-    @apply grid min-h-0 w-full flex-1 grid-cols-1 bg-background min-[901px]:grid-cols-[240px_minmax(0,1fr)_240px];
+    @apply relative grid min-h-0 w-full flex-1 grid-cols-1 bg-background;
   }
-  .club-nav,
-  .club-people {
-    @apply flex min-h-0 flex-col overflow-auto border-r border-sidebar-border bg-sidebar;
+  .club-nav {
+    @apply pointer-events-none fixed bottom-0 left-0 top-[4.5rem] z-20 flex w-[min(280px,86vw)] min-h-0 flex-col overflow-auto border-r border-sidebar-border bg-sidebar;
+    transform: translateX(-105%);
+    transition: transform 300ms ease;
   }
-  .club-people {
-    @apply border-l border-r-0;
+  html.club-nav-open .club-nav {
+    @apply pointer-events-auto;
+    transform: translateX(0);
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
+  }
+  .club-nav-dim {
+    @apply pointer-events-none fixed inset-0 z-[15] hidden bg-black/50;
+  }
+  html.club-nav-open .club-nav-dim {
+    @apply pointer-events-auto block;
   }
   .club-nav-cover {
-    @apply m-0 h-[88px] rounded-none;
+    @apply m-0 mb-0 aspect-[16/10] h-auto w-full rounded-none;
   }
   .club-nav-copy {
     @apply px-4 pb-2 pt-4;
   }
   .club-nav-copy h1 {
-    @apply mb-1.5 mt-0 text-[1.15rem];
+    @apply mb-1.5 mt-0 font-display text-[1.15rem] font-normal;
   }
   .club-nav-copy .club-lead {
     @apply mb-2 mt-0 max-w-none text-[0.92rem];
@@ -672,22 +755,68 @@
     @apply bg-sidebar-accent text-sidebar-accent-foreground;
   }
   .club-side-link.is-quiet {
-    @apply mt-2 text-[0.92rem] font-medium text-muted-foreground;
+    @apply mt-2 w-full cursor-pointer border-0 bg-transparent text-left text-[0.92rem] font-medium text-muted-foreground;
+  }
+  .club-members-summary {
+    @apply mt-1 mb-2 w-full cursor-pointer rounded-[10px] border-0 bg-transparent px-0 py-1 text-left text-[0.92rem] font-medium text-muted-foreground;
+  }
+  .club-members-summary:hover {
+    @apply text-foreground;
   }
   .club-leave {
     @apply mt-auto px-4 pb-4 pt-3;
+  }
+  .club-code {
+    @apply mb-3 flex flex-wrap items-center gap-1.5;
+  }
+  .club-copy {
+    @apply m-0 inline-flex h-8 w-8 items-center justify-center rounded-md border-0 bg-transparent p-0 text-muted-foreground;
+  }
+  .club-copy:hover {
+    @apply text-foreground;
+  }
+  .club-copy-ok {
+    @apply text-[0.8rem] text-chart-2;
+  }
+  .leave-dialog {
+    @apply w-[min(24rem,calc(100vw-2rem))] rounded-2xl border border-border bg-card p-5 text-card-foreground;
+  }
+  .leave-dialog::backdrop {
+    background: rgba(10, 8, 14, 0.55);
+  }
+  .leave-dialog h2 {
+    @apply mb-2 mt-0 text-lg;
+  }
+  .leave-dialog form {
+    @apply m-0 flex flex-col gap-3;
+  }
+  .leave-dialog-actions {
+    @apply mt-5 flex flex-wrap items-center justify-end gap-2;
+  }
+  .leave-dialog-actions form,
+  .leave-dialog-actions button {
+    @apply m-0;
   }
   .club-main {
     @apply flex min-h-0 min-w-0 flex-col bg-background;
   }
   .club-mobile-bar {
-    @apply flex items-center justify-between gap-3 border-b border-border px-3.5 py-2.5 min-[901px]:hidden;
+    @apply flex items-center justify-end gap-3 border-b border-border px-3.5 py-2.5 min-[901px]:hidden;
   }
   .club-mobile-btn {
     @apply m-0 cursor-pointer rounded-full border border-border px-3 py-1 text-[0.88rem] text-muted-foreground;
   }
   .chat-panel {
-    @apply flex min-h-0 flex-1 flex-col;
+    @apply flex min-h-0 min-w-0 flex-1 flex-col;
+  }
+  .chat-toolbar-top {
+    @apply flex shrink-0 justify-end px-4 pt-2;
+  }
+  .chat-refresh {
+    @apply m-0 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground;
+  }
+  .chat-refresh:hover {
+    @apply bg-accent text-foreground;
   }
   .watch-panel {
     @apply min-h-0 flex-1 overflow-auto p-5;
@@ -713,26 +842,103 @@
   .chat-body {
     @apply m-0 whitespace-pre-wrap leading-snug;
   }
+  .chat-spoiler {
+    @apply m-0 cursor-pointer rounded-sm border-0 px-1 py-0 text-transparent;
+    font: inherit;
+    background: var(--muted-foreground);
+  }
+  .chat-spoiler.is-open,
+  .chat-spoiler[aria-expanded="true"] {
+    @apply text-foreground;
+    background: color-mix(in oklch, var(--muted-foreground) 22%, transparent);
+  }
   .chat-form {
-    @apply flex items-end gap-2.5 border-t border-sidebar-border bg-sidebar px-5 pb-[1.1rem] pt-3.5;
+    @apply min-w-0 overflow-visible border-t border-sidebar-border bg-sidebar px-4 pb-[1.1rem] pt-3;
+  }
+  .chat-composer {
+    @apply relative min-w-0 max-w-full overflow-visible rounded-[12px] border border-border bg-background;
   }
   .chat-compose {
-    @apply m-0 flex-1;
+    @apply m-0 my-0 block min-w-0;
   }
-  .chat-form textarea {
-    @apply mt-0 max-h-32 min-h-[2.8rem] resize-y;
+  main .chat-form textarea.js-chat-input {
+    @apply mt-0 max-h-32 min-h-[2.4rem] w-full resize-none overflow-y-auto rounded-none border-0 bg-transparent px-3 py-2.5 leading-snug shadow-none;
   }
-  .chat-form button {
-    @apply mt-0;
+  .chat-toolbar {
+    @apply flex min-w-0 items-center justify-between gap-2 border-t border-border px-1.5 py-1;
   }
-  .chat-refresh {
-    @apply whitespace-nowrap text-[0.88rem];
+  .chat-toolbar-tools {
+    @apply flex items-center gap-0.5;
   }
-  .club-people h2 {
-    @apply m-0 px-4 pb-2 pt-4 text-[0.82rem] uppercase tracking-wider;
+  main .chat-form .chat-tool {
+    @apply m-0 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border-0 bg-transparent p-0 text-muted-foreground;
+  }
+  main .chat-form .chat-tool:hover {
+    @apply bg-accent text-foreground;
+  }
+  main .chat-form button[type="submit"] {
+    @apply m-0 shrink-0 rounded-full px-3.5 py-1.5 text-sm;
+  }
+  .emoji-picker-wrap {
+    @apply relative;
+  }
+  .emoji-popover {
+    @apply absolute bottom-[calc(100%+0.35rem)] left-0 z-30 w-[11rem] max-w-[min(11rem,calc(100vw-6rem))] grid-cols-6 gap-0.5 rounded-xl border border-border bg-card p-1.5 shadow-lg;
+    display: none;
+  }
+  .emoji-popover:not([hidden]) {
+    display: grid;
+  }
+  main .chat-form .emoji-btn {
+    @apply m-0 inline-flex h-8 w-8 items-center justify-center rounded-md border-0 bg-transparent p-0 text-base leading-none text-foreground;
+  }
+  main .chat-form .emoji-btn:hover {
+    @apply bg-accent;
   }
   .club-member-list {
     @apply mb-4 ml-0 mr-0 mt-0 list-none px-2.5 pb-4;
+  }
+  .members-dialog {
+    @apply w-[min(26rem,calc(100vw-2rem))] max-h-[min(36rem,calc(100dvh-4rem))] flex-col overflow-hidden rounded-2xl border border-border bg-card p-0 text-card-foreground;
+  }
+  .members-dialog[open] {
+    @apply flex;
+  }
+  .members-dialog::backdrop {
+    background: rgba(10, 8, 14, 0.55);
+  }
+  .members-dialog-head {
+    @apply flex items-center justify-between gap-3 px-4 pb-2 pt-4;
+  }
+  .members-dialog-head h2 {
+    @apply m-0 text-base;
+  }
+  .members-close {
+    @apply m-0 inline-flex h-8 w-8 items-center justify-center rounded-full border-0 bg-transparent p-0 text-xl leading-none text-muted-foreground;
+  }
+  .members-search {
+    @apply mx-4 mb-2 mt-0;
+  }
+  .members-search input {
+    @apply mt-0;
+  }
+  .members-tabs {
+    @apply mx-4 mb-2 flex gap-1;
+  }
+  .members-tab {
+    @apply m-0 rounded-full border border-transparent bg-transparent px-3 py-1 text-[0.88rem] font-medium text-muted-foreground;
+  }
+  .members-tab.is-on {
+    @apply border-border bg-accent text-foreground;
+  }
+  .members-dialog .club-member-list {
+    @apply min-h-0 flex-1 overflow-auto;
+  }
+  .members-manage {
+    @apply m-0 border-t border-border px-4 py-3 text-[0.88rem];
+  }
+  .members-empty {
+    @apply px-2 py-3;
   }
   .club-member {
     @apply flex items-center gap-2.5 rounded-[10px] px-1.5 py-2 text-foreground;
@@ -748,9 +954,6 @@
   }
   .club-member .muted {
     @apply text-[0.8rem];
-  }
-  .club-dim {
-    @apply hidden;
   }
   .chat-name {
     @apply text-foreground no-underline;
@@ -781,79 +984,6 @@
   }
 }
 
-@media (max-width: 900px) {
-  .app-sidebar {
-    position: fixed;
-    inset: 0 auto 0 0;
-    z-index: 40;
-    width: 16rem;
-    transform: translateX(-100%);
-    transition: transform 300ms ease;
-  }
-  html.sidebar-collapsed .app-sidebar {
-    width: 16rem;
-  }
-  html.sidebar-open .app-sidebar {
-    transform: translateX(0);
-  }
-  html.sidebar-collapsed .sidebar-brand-full {
-    display: inline;
-  }
-  html.sidebar-collapsed .sidebar-brand-short {
-    display: none;
-  }
-  html.sidebar-collapsed .app-nav-label {
-    width: auto;
-    opacity: 1;
-  }
-  .sidebar-toggle-desk {
-    display: none;
-  }
-  .sidebar-toggle-mobile {
-    display: inline-flex;
-  }
-  html.sidebar-open .sidebar-dim {
-    display: block;
-    pointer-events: auto;
-    z-index: 30;
-  }
-  .club-nav,
-  .club-people {
-    position: fixed;
-    top: 0;
-    bottom: 0;
-    z-index: 20;
-    width: min(280px, 86vw);
-    box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
-  }
-  .club-nav {
-    left: 0;
-    transform: translateX(-105%);
-  }
-  .club-people {
-    right: 0;
-    left: auto;
-    transform: translateX(105%);
-  }
-  #club-nav-toggle:checked ~ .club-shell .club-nav,
-  #club-people-toggle:checked ~ .club-shell .club-people {
-    transform: none;
-  }
-  #club-nav-toggle:checked ~ .club-shell .club-dim,
-  #club-people-toggle:checked ~ .club-shell .club-dim-people {
-    display: block;
-    position: fixed;
-    inset: 0;
-    z-index: 15;
-    background: rgba(10, 8, 14, 0.55);
-  }
-  #club-people-toggle:checked ~ .club-shell .club-dim:not(.club-dim-people) {
-    display: none;
-  }
-  #club-nav-toggle:checked ~ .club-shell .club-dim-people {
-    display: none;
-  }
-}
 
 @media (max-width: 720px) {
   .watch-add.grid-2 {

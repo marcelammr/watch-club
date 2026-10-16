@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% from "macros/avatar.html" import user_avatar %}
-{% block title %}Minha conta · Watch Club{% endblock %}
-{% block page_heading %}Minha conta{% endblock %}
+{% from "macros/presence.html" import presence_mark %}
+{% block title %}Configurações · Watch Club{% endblock %}
+{% block page_heading %}Configurações{% endblock %}
 {% block content %}
 <p class="crumb"><a href="/">Início</a> / Minha conta</p>
 <h1>Configurações</h1>
@@ -22,7 +23,7 @@
     </button>
     <div>
       <strong>{{ user.name }}</strong>
-      <p class="status {{ presence_of(user) }}"><span class="dot"></span>{{ presence_label(user) }}</p>
+      <p class="status {{ presence_of(user) }}">{{ presence_mark(presence_of(user)) }}{{ presence_label(user) }}</p>
       <p><a href="/u/{{ user.username }}">Ver perfil público</a></p>
     </div>
   </div>
@@ -126,10 +127,12 @@
             {% if club.is_closed %}<span class="lock" title="Clube fechado">🔒</span>{% endif %}
             <span class="muted"><a class="member-count" href="/clubs/{{ club.id }}/membros">{{ club.members|length }} participantes</a> · código {{ club.join_code }}</span>
           </div>
-          <form action="/clubs/{{ club.id }}/leave" method="post">
-            <input type="hidden" name="next" value="/conta">
-            <button class="danger" type="submit">Sair do clube</button>
-          </form>
+          <button
+            type="button"
+            class="danger js-leave-open"
+            data-leave-action="/clubs/{{ club.id }}/leave"
+            data-leave-name="{{ club.name }}"
+          >Sair do clube</button>
         </li>
       {% endfor %}
     </ul>
@@ -140,6 +143,17 @@
 <form class="logout-form account-logout" action="/logout" method="post">
   <button type="submit">Sair da sessão</button>
 </form>
+<dialog class="leave-dialog" id="leave-dialog" aria-labelledby="leave-dialog-title">
+  <h2 id="leave-dialog-title">Sair do clube</h2>
+  <p>Tem certeza de que deseja sair de <strong class="js-leave-name"></strong>?</p>
+  <div class="leave-dialog-actions">
+    <button type="button" class="ghost js-leave-cancel">Cancelar</button>
+    <form class="js-leave-form" action="/clubs/0/leave" method="post">
+      <input type="hidden" name="next" value="/conta">
+      <button class="danger" type="submit">Sair do clube</button>
+    </form>
+  </div>
+</dialog>
 <script>
   const input = document.getElementById("username");
   const live = document.getElementById("live-suggestions");
@@ -179,6 +193,25 @@
   avatarModal.addEventListener("click", (event) => {
     if (event.target === avatarModal) avatarModal.close();
   });
+  (function () {
+    const dialog = document.getElementById("leave-dialog");
+    const form = dialog && dialog.querySelector(".js-leave-form");
+    const nameEl = dialog && dialog.querySelector(".js-leave-name");
+    if (!dialog || !form) return;
+    document.querySelectorAll(".js-leave-open").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        form.setAttribute("action", btn.getAttribute("data-leave-action") || form.getAttribute("action"));
+        if (nameEl) nameEl.textContent = btn.getAttribute("data-leave-name") || "";
+        dialog.showModal();
+      });
+    });
+    dialog.querySelectorAll(".js-leave-cancel").forEach((btn) => {
+      btn.addEventListener("click", () => dialog.close());
+    });
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+  })();
   input.addEventListener("input", () => {
     if (input.readOnly) return;
     clearTimeout(timer);

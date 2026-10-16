@@ -1,31 +1,33 @@
 {% from "macros/avatar.html" import user_avatar %}
 {% from "macros/sidebar.html" import app_sidebar, hamburger %}
+{% from "macros/presence.html" import presence_mark %}
 <!DOCTYPE html>
 <html lang="pt-BR" class="dark" dir="ltr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Watch Club{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fugaz+One&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
-  {% if user %}
-  <script>
-    try {
-      if (localStorage.getItem("watchclub-sidebar") === "collapsed") {
-        document.documentElement.classList.add("sidebar-collapsed");
-      }
-    } catch (error) {}
-  </script>
-  {% endif %}
 </head>
-<body class="min-h-screen bg-background font-display text-foreground {% block body_class %}{% endblock %}">
+<body class="min-h-screen bg-background font-sans text-foreground {% block body_class %}{% endblock %}">
   {% if user %}
   <div class="app-shell">
     {{ app_sidebar(request) }}
     <div class="app-main">
       <header class="top">
         <div class="top-start">
-          {{ hamburger('sidebar-toggle-mobile') }}
+          {% block top_start %}
+          <button type="button" class="back-btn js-back" aria-label="Voltar" hidden>
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6"/>
+            </svg>
+          </button>
+          {{ hamburger() }}
           <p class="page-heading">{% block page_heading %}Watch Club{% endblock %}</p>
+          {% endblock %}
         </div>
         <nav class="top-end" aria-label="Conta">
           <button type="button" class="bell-btn" aria-label="Notificações" title="Notificações" disabled>
@@ -34,10 +36,35 @@
               <path d="M10 20a2 2 0 0 0 4 0"/>
             </svg>
           </button>
-          <a class="account-link" href="/conta" title="{{ user.name }}" aria-label="Minha conta">
-            {{ user_avatar(user, 'md') }}
-            <span class="account-label">Minha conta</span>
-          </a>
+          <div class="account-menu">
+            <button type="button" class="account-trigger js-account-toggle" aria-expanded="false" aria-haspopup="dialog" aria-controls="account-popover" aria-label="Minha conta" title="{{ user.name }}">
+              {{ user_avatar(user, 'md') }}
+              <span class="account-label">Minha conta</span>
+            </button>
+            <div id="account-popover" class="account-popover" hidden role="dialog" aria-label="Conta">
+              <div class="account-popover-head">
+                {{ user_avatar(user, 'md') }}
+                <div>
+                  <strong>{{ user.name }}</strong>
+                  <p class="muted">@{{ user.username }}</p>
+                  <p class="status {{ presence_of(user) }} js-account-status">{{ presence_mark(presence_of(user)) }}{{ presence_label(user) }}</p>
+                </div>
+              </div>
+              <a class="account-popover-link" href="/conta">Editar perfil</a>
+              <button type="button" class="account-popover-link js-status-toggle" aria-expanded="false" aria-controls="status-submenu">Status</button>
+              <div id="status-submenu" class="status-submenu" hidden>
+                <button type="button" class="status-option js-set-status" data-status="online">
+                  <span class="status online">{{ presence_mark('online') }}Online</span>
+                </button>
+                <button type="button" class="status-option js-set-status" data-status="away">
+                  <span class="status away">{{ presence_mark('away') }}Ausente</span>
+                </button>
+                <button type="button" class="status-option js-set-status" data-status="offline">
+                  <span class="status offline">{{ presence_mark('offline') }}Offline</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </nav>
       </header>
   {% else %}
@@ -74,45 +101,124 @@
     window.addEventListener("pagehide", () => ping("away"));
 
     (function () {
+      const back = document.querySelector(".js-back");
+      try {
+        const referrer = document.referrer ? new URL(document.referrer) : null;
+        if (back && referrer && referrer.origin === window.location.origin) {
+          back.hidden = false;
+          back.addEventListener("click", () => history.back());
+        }
+      } catch (error) {}
+    })();
+
+    (function () {
       const root = document.documentElement;
+      const sidebar = document.getElementById("app-sidebar");
       const toggles = document.querySelectorAll(".js-sidebar-toggle");
       const dim = document.querySelector(".js-sidebar-close");
-      const mobile = () => window.matchMedia("(max-width: 900px)").matches;
+      const accountToggle = document.querySelector(".js-account-toggle");
+      const popover = document.getElementById("account-popover");
+      const statusToggle = document.querySelector(".js-status-toggle");
+      const submenu = document.getElementById("status-submenu");
+      const statusLine = document.querySelector(".js-account-status");
+      const moonSvg = `<svg class="presence-moon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M13.2 10.15A6.2 6.2 0 0 1 5.85 2.8 6.35 6.35 0 1 0 13.2 13.6a6.2 6.2 0 0 1 0-3.45z"/></svg>`;
+
+      function isOpen() {
+        return root.classList.contains("sidebar-open");
+      }
 
       function sync() {
-        const expanded = mobile() ? root.classList.contains("sidebar-open") : !root.classList.contains("sidebar-collapsed");
+        const expanded = isOpen();
         toggles.forEach((btn) => btn.setAttribute("aria-expanded", expanded ? "true" : "false"));
-        if (dim) dim.hidden = !mobile() || !root.classList.contains("sidebar-open");
+        if (sidebar) sidebar.setAttribute("aria-hidden", expanded ? "false" : "true");
+        if (dim) dim.hidden = !expanded;
       }
 
-      function toggle() {
-        if (mobile()) {
-          root.classList.toggle("sidebar-open");
-        } else {
-          root.classList.toggle("sidebar-collapsed");
-          try {
-            localStorage.setItem(
-              "watchclub-sidebar",
-              root.classList.contains("sidebar-collapsed") ? "collapsed" : "open"
-            );
-          } catch (error) {}
+      function setOpen(open) {
+        root.classList.toggle("sidebar-open", open);
+        sync();
+      }
+
+      function accountOpen() {
+        return Boolean(popover && !popover.hidden);
+      }
+
+      function setSubmenu(open) {
+        if (!submenu || !statusToggle) return;
+        submenu.hidden = !open;
+        statusToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+
+      function setAccount(open) {
+        if (!popover || !accountToggle) return;
+        popover.hidden = !open;
+        accountToggle.setAttribute("aria-expanded", open ? "true" : "false");
+        if (!open) setSubmenu(false);
+      }
+
+      function markHtml(status, label) {
+        const icon = status === "away" ? moonSvg : '<span class="dot"></span>';
+        return icon + label;
+      }
+
+      function applyStatus(status, label) {
+        document.querySelectorAll("[data-user-avatar]").forEach((node) => {
+          const inAccount = node.closest(".account-menu");
+          if (!inAccount) return;
+          node.dataset.presence = status;
+          node.dataset.presenceLabel = label;
+          node.dataset.mounted = "false";
+        });
+        if (statusLine) {
+          statusLine.className = "status " + status + " js-account-status";
+          statusLine.innerHTML = markHtml(status, label);
         }
-        sync();
+        if (window.WatchClub && typeof window.WatchClub.remountUserAvatars === "function") {
+          window.WatchClub.remountUserAvatars(document.querySelector(".account-menu"));
+        }
       }
 
-      function closeMobile() {
-        root.classList.remove("sidebar-open");
-        sync();
+      toggles.forEach((btn) => btn.addEventListener("click", () => setOpen(!isOpen())));
+      if (dim) dim.addEventListener("click", () => setOpen(false));
+      if (accountToggle) {
+        accountToggle.addEventListener("click", (event) => {
+          event.stopPropagation();
+          setAccount(!accountOpen());
+        });
       }
-
-      toggles.forEach((btn) => btn.addEventListener("click", toggle));
-      if (dim) dim.addEventListener("click", closeMobile);
-      document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") closeMobile();
+      if (statusToggle) {
+        statusToggle.addEventListener("click", (event) => {
+          event.stopPropagation();
+          setSubmenu(submenu && submenu.hidden);
+        });
+      }
+      document.querySelectorAll(".js-set-status").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const status = btn.getAttribute("data-status");
+          fetch("/presenca", {
+            method: "POST",
+            headers: {"Content-Type": "application/x-www-form-urlencoded"},
+            body: "status=" + encodeURIComponent(status) + "&prefer=1"
+          }).then((response) => response.json()).then((data) => {
+            if (!data.ok) return;
+            applyStatus(data.status, data.status_label);
+            setAccount(false);
+          }).catch(() => {});
+        });
       });
-      window.addEventListener("resize", () => {
-        if (!mobile()) root.classList.remove("sidebar-open");
-        sync();
+      document.addEventListener("click", (event) => {
+        if (accountOpen() && popover && !popover.contains(event.target) && !accountToggle.contains(event.target)) {
+          setAccount(false);
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        if (accountOpen()) {
+          setAccount(false);
+          event.preventDefault();
+          return;
+        }
+        setOpen(false);
       });
       sync();
     })();

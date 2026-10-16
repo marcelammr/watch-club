@@ -34,6 +34,9 @@ def migrate_schema() -> None:
         alters.append("ALTER TABLE users ADD COLUMN presence VARCHAR(12) DEFAULT 'offline'")
     if "username_changed_at" not in columns:
         alters.append("ALTER TABLE users ADD COLUMN username_changed_at DATETIME")
+    if "presence_pref" not in columns:
+        alters.append("ALTER TABLE users ADD COLUMN presence_pref VARCHAR(12) DEFAULT 'auto'")
+        alters.append("UPDATE users SET presence_pref = 'auto' WHERE presence_pref IS NULL")
     with engine.begin() as connection:
         for statement in alters:
             connection.execute(text(statement))
