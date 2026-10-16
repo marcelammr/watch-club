@@ -4,7 +4,7 @@ App web em FastAPI para gerenciar as séries que você assiste com amigos.
 
 As contas ficam no SQLite (`watch_club.db`). Dá para entrar com **e-mail**, **Gmail** ou **Facebook**. Cadastro por e-mail só libera o login depois da confirmação. Nomes de usuário são únicos; se o desejado estiver ocupado, o site sugere variações. No perfil a foto cartoon fica em **Editar foto de perfil**, e a bio tem até 150 caracteres (como no Instagram).
 
-Depois do login, a página inicial mostra só a saudação e três ações: **Meus Clubes**, **Criar um clube** e **Entrar com código**. Dentro do clube há **Chat** (mensagens no banco) e **Assistindo** (séries, filmes e outros títulos, com status). Quem cria o clube vira administradora e pode definir descrição, regras e capa (cor ou imagem). Clubes abertos podem ser acessados pelo perfil de alguém. Clubes fechados mostram cadeado e só entram com código. No clube aparece a quantidade de participantes; o número abre a lista, o perfil e o status (online, ausente, offline).
+Depois do login, a página inicial mostra só a saudação e três ações: **Meus Clubes**, **Criar um clube** e **Entrar com código**. Dentro do clube há **Chat** (mensagens no banco) e **Assistindo** (séries, filmes e outros títulos, com status). Quem cria o clube vira administradora e pode definir descrição, regras e capa (cor ou imagem). Clubes abertos podem ser acessados pelo perfil de alguém ou pelo código do clube, que entra direto. Clubes fechados mostram cadeado: o código só localiza o clube e a entrada vira pedido para a administração (ADM ou SUB com permissão de solicitações) aprovar. No clube aparece a quantidade de participantes; o número abre a lista, o perfil e o status (online, ausente, offline).
 
 ## Rodar
 
@@ -26,7 +26,7 @@ Sem SMTP configurado, o link de ativação aparece na página de verificação (
 
 - Criar conta, confirmar o e-mail e montar um clube
 - Abrir **Minha conta** para nome de usuário, e-mail, senha e avatar
-- Entrar em um clube com o código e sair quando quiser
+- Entrar em um clube aberto com o código (fechado: o código envia um pedido) e sair quando quiser
 - Buscar uma série pelo nome e adicionar
 - Ver fotos, temporadas e notícias
 

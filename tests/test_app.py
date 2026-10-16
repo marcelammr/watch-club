@@ -1,10 +1,10 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 
 from app.db import SessionLocal
 from app.main import app
-from app.models import Club, ClubMember, ClubShow, EmailToken, User
+from app.models import Club, ClubJoinRequest, ClubMember, ClubShow, EmailToken, User
 
 client = TestClient(app)
 
@@ -384,6 +384,8 @@ def test_closed_club_is_locked_open_club_can_be_joined():
     assert locked.status_code == 403
     assert "fechado" in locked.text.lower() or "🔒" in locked.text
     assert "Pedir para entrar" in locked.text
+    assert "código de convite" not in locked.text.lower()
+    assert "aprovadas pela administração" in locked.text.lower()
 
     preview = guest.get(f"/clubs/{open_id}")
     assert preview.status_code == 200
@@ -747,6 +749,11 @@ def test_friends_private_chat_history_and_auth():
 
     invited = host.post("/amigos/amizade_b/convidar", data={"next": "/u/amizade_b"}, follow_redirects=False)
     assert invited.status_code == 303
+    pending = host.get("/u/amizade_b?ok=Pedido+enviado")
+    assert pending.text.count("Pedido enviado") == 1
+    assert "Cancelar pedido" in pending.text
+    assert "Vocês são amigos" not in pending.text
+    assert "Desfazer amizade" not in pending.text
     again = host.post("/amigos/amizade_b/convidar", data={"next": "/u/amizade_b"}, follow_redirects=False)
     assert "error=" in again.headers["location"]
 
@@ -757,6 +764,15 @@ def test_friends_private_chat_history_and_auth():
     assert "Seus amigos" in amigos.text
     accepted = guest.post("/amigos/amizade_a/aceitar", data={"next": "/amigos"}, follow_redirects=False)
     assert accepted.status_code == 303
+    stale = host.get("/u/amizade_b?ok=Pedido+enviado")
+    assert "Pedido enviado" not in stale.text
+    assert "Vocês são amigos" in stale.text
+    assert "Conversar" in stale.text
+    assert "Desfazer amizade" in stale.text
+    assert "Cancelar pedido" not in stale.text
+    other_side = guest.get("/u/amizade_a")
+    assert "Vocês são amigos" in other_side.text
+    assert "Conversar" in other_side.text
 
     sent = host.post("/mensagens/amizade_b", data={"body": "segredo-do-par"}, follow_redirects=False)
     assert sent.status_code == 303
@@ -827,8 +843,13 @@ def test_back_button_only_when_logged_in():
     member = TestClient(app)
     register_active(member, "volta_user", "volta.user@example.com")
     home = member.get("/")
-    assert 'aria-label="Voltar"' in home.text
-    assert "js-back" in home.text
+    assert 'aria-label="Voltar"' not in home.text
+    assert 'class="back-btn js-back"' not in home.text
+    assert "js-sidebar-toggle" in home.text
+    assert "Início" in home.text
+    conta = member.get("/conta")
+    assert 'class="back-btn js-back"' in conta.text
+    assert 'aria-label="Voltar"' in conta.text
     guest = TestClient(app)
     home_guest = guest.get("/")
     assert 'aria-label="Voltar"' not in home_guest.text
@@ -882,8 +903,6 @@ def test_manual_presence_survives_heartbeat():
 
 
 def test_closed_club_join_requests_and_code():
-    from app.models import ClubJoinRequest
-
     owner = TestClient(app)
     register_active(owner, "pedido_host", "pedido.host@example.com", name="Pedido Host")
     created = owner.post("/clubs", data={"name": "Sala Pedido", "is_closed": "1"}, follow_redirects=False)
@@ -896,7 +915,24 @@ def test_closed_club_join_requests_and_code():
 
     member = TestClient(app)
     register_active(member, "pedido_membro", "pedido.membro@example.com", name="Pedido Membro")
-    member.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
+    asked_member = member.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
+    assert asked_member.status_code == 303
+    assert "Pedido" in asked_member.headers["location"]
+    waiting_page = member.get(f"/clubs/{club_id}")
+    assert waiting_page.status_code == 403
+    db = SessionLocal()
+    try:
+        member_user = db.scalar(select(User).where(User.username_key == "pedido_membro"))
+        member_id = member_user.id
+        pending_member = db.scalar(
+            select(ClubJoinRequest).where(ClubJoinRequest.club_id == club_id, ClubJoinRequest.user_id == member_id)
+        )
+        assert pending_member is not None
+        assert db.scalar(select(ClubMember).where(ClubMember.club_id == club_id, ClubMember.user_id == member_id)) is None
+        assert db.scalar(select(func.count()).select_from(ClubMember).where(ClubMember.club_id == club_id)) == 1
+    finally:
+        db.close()
+    owner.post(f"/clubs/{club_id}/solicitacoes/{member_id}/aceitar", follow_redirects=False)
     inside = member.get(f"/clubs/{club_id}")
     assert inside.status_code == 200
     assert "Solicitações" not in inside.text
@@ -948,7 +984,29 @@ def test_closed_club_join_requests_and_code():
     register_active(instant, "pedido_codigo", "pedido.codigo@example.com")
     joined_code = instant.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
     assert joined_code.status_code == 303
-    assert joined_code.headers["location"] == f"/clubs/{club_id}"
+    assert joined_code.headers["location"].startswith(f"/clubs/{club_id}")
+    assert "Pedido" in joined_code.headers["location"]
+    still_locked = instant.get(f"/clubs/{club_id}")
+    assert still_locked.status_code == 403
+    db = SessionLocal()
+    try:
+        instant_id = db.scalar(select(User.id).where(User.username_key == "pedido_codigo"))
+        assert db.scalar(select(ClubJoinRequest).where(ClubJoinRequest.club_id == club_id, ClubJoinRequest.user_id == instant_id))
+        assert db.scalar(select(ClubMember).where(ClubMember.club_id == club_id, ClubMember.user_id == instant_id)) is None
+        first_id = db.scalar(select(ClubJoinRequest.id).where(ClubJoinRequest.club_id == club_id, ClubJoinRequest.user_id == instant_id))
+    finally:
+        db.close()
+    again = instant.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
+    assert again.status_code == 303
+    db = SessionLocal()
+    try:
+        dupes = list(
+            db.scalars(select(ClubJoinRequest).where(ClubJoinRequest.club_id == club_id, ClubJoinRequest.user_id == instant_id))
+        )
+        assert len(dupes) == 1
+        assert dupes[0].id == first_id
+    finally:
+        db.close()
 
 
 def test_leave_confirmation_ui_does_not_block_post():

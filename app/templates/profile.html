@@ -25,7 +25,7 @@
       <p class="bio-box muted">Sem bio ainda.</p>
     {% endif %}
     {% if person.id == user.id %}
-      <p><a href="/conta">Editar meu perfil</a></p>
+      <p><a class="btn btn-secondary" href="/conta">Editar meu perfil</a></p>
     {% else %}
       {% if error %}<p class="error">{{ error }}</p>{% endif %}
       {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
@@ -33,32 +33,33 @@
         {% if relation == 'none' %}
           <form action="/amigos/{{ person.username }}/convidar" method="post">
             <input type="hidden" name="next" value="/u/{{ person.username }}">
-            <button type="submit">Adicionar amigo</button>
+            <button class="btn btn-primary" type="submit">Adicionar amigo</button>
           </form>
         {% elif relation == 'outgoing' %}
           <p class="muted">Pedido enviado</p>
           <form action="/amigos/{{ person.username }}/recusar" method="post">
             <input type="hidden" name="next" value="/u/{{ person.username }}">
-            <button class="ghost" type="submit">Cancelar pedido</button>
+            <button class="btn btn-ghost" type="submit">Cancelar pedido</button>
           </form>
         {% elif relation == 'incoming' %}
           <form action="/amigos/{{ person.username }}/aceitar" method="post">
             <input type="hidden" name="next" value="/u/{{ person.username }}">
-            <button type="submit">Aceitar amizade</button>
+            <button class="btn btn-primary" type="submit">Aceitar amizade</button>
           </form>
           <form action="/amigos/{{ person.username }}/recusar" method="post">
             <input type="hidden" name="next" value="/u/{{ person.username }}">
-            <button class="ghost" type="submit">Recusar</button>
+            <button class="btn btn-ghost" type="submit">Recusar</button>
           </form>
         {% elif relation == 'friends' %}
-          <p><a class="btn" href="/mensagens/{{ person.username }}">Conversar</a></p>
+          <p class="muted">Vocês são amigos</p>
+          <p><a class="btn btn-primary" href="/mensagens/{{ person.username }}">Conversar</a></p>
           <form action="/amigos/{{ person.username }}/desfazer" method="post">
             <input type="hidden" name="next" value="/u/{{ person.username }}">
-            <button class="danger" type="submit">Desfazer amizade</button>
+            <button class="btn btn-danger" type="submit">Desfazer amizade</button>
           </form>
         {% endif %}
         {% if relation != 'friends' and has_history %}
-          <p><a href="/mensagens/{{ person.username }}">Ver conversa</a></p>
+          <p><a class="btn btn-ghost" href="/mensagens/{{ person.username }}">Ver conversa</a></p>
         {% endif %}
       </div>
     {% endif %}
@@ -81,14 +82,14 @@
       </div>
       {% if club.id not in mine and not club.is_closed %}
         <form action="/clubs/{{ club.id }}/entrar" method="post">
-          <button type="submit">Participar</button>
+          <button class="btn btn-primary" type="submit">Participar</button>
         </form>
       {% elif club.id not in mine and club.is_closed and club.id in requested_ids %}
         <span class="muted">Pedido enviado</span>
       {% elif club.id not in mine and club.is_closed %}
         <form action="/clubs/{{ club.id }}/solicitar" method="post">
           <input type="hidden" name="next" value="/u/{{ person.username }}">
-          <button type="submit">Pedir para entrar</button>
+          <button class="btn btn-primary" type="submit">Pedir para entrar</button>
         </form>
       {% elif club.id in mine %}
         <span class="muted">Você já participa</span>

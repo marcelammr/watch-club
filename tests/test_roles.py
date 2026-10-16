@@ -13,7 +13,7 @@ from app.club_tags import (
 from app.colors import parse_surface_colors, valid_hex
 from app.db import SessionLocal, engine
 from app.main import app
-from app.models import Club, ClubMember, User
+from app.models import Club, ClubJoinRequest, ClubMember, User
 from app.roles import (
     MAX_ADMINS,
     MAX_SUPPORT,
@@ -163,6 +163,26 @@ def _create_club(http: TestClient, name: str, closed: bool = False) -> tuple[int
     finally:
         db.close()
     return club_id, code
+
+
+def _user_id_by_key(key: str) -> int:
+    db = SessionLocal()
+    try:
+        return db.scalar(select(User.id).where(User.username_key == key))
+    finally:
+        db.close()
+
+
+def _request_and_accept(member: TestClient, owner: TestClient, club_id: int, code: str, username_key: str) -> None:
+    asked = member.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
+    assert asked.status_code == 303
+    accepted = owner.post(
+        f"/clubs/{club_id}/solicitacoes/{_user_id_by_key(username_key)}/aceitar",
+        follow_redirects=False,
+    )
+    assert accepted.status_code == 303
+    assert "lotado" not in accepted.headers["location"]
+    assert "error=" not in accepted.headers["location"]
 
 
 def test_admin_sets_support_perms_and_support_cannot_edit_roles():
@@ -319,10 +339,10 @@ def test_support_join_requests_and_member_cannot_manage_tag():
     club_id, code = _create_club(owner, "Tag Fechada", closed=True)
     helper = TestClient(app)
     register_active(helper, "tag_sup", "tag.sup@example.com")
-    helper.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
+    _request_and_accept(helper, owner, club_id, code, "tag_sup")
     member = TestClient(app)
     register_active(member, "tag_mem", "tag.mem@example.com")
-    member.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
+    _request_and_accept(member, owner, club_id, code, "tag_mem")
     db = SessionLocal()
     try:
         helper_id = db.scalar(select(User.id).where(User.username_key == "tag_sup"))
@@ -331,6 +351,14 @@ def test_support_join_requests_and_member_cannot_manage_tag():
     owner.post(
         f"/clubs/{club_id}/membros/{helper_id}/papel",
         data={"role": "support", "support_perm": [PERM_JOINS]},
+        follow_redirects=False,
+    )
+    no_perm = TestClient(app)
+    register_active(no_perm, "tag_noperm", "tag.noperm@example.com")
+    _request_and_accept(no_perm, owner, club_id, code, "tag_noperm")
+    owner.post(
+        f"/clubs/{club_id}/membros/{_user_id_by_key('tag_noperm')}/papel",
+        data={"role": "support", "support_perm": [PERM_TAG]},
         follow_redirects=False,
     )
     waiting = TestClient(app)
@@ -343,6 +371,8 @@ def test_support_join_requests_and_member_cannot_manage_tag():
         db.close()
     member_try = member.post(f"/clubs/{club_id}/solicitacoes/{wait_id}/aceitar", follow_redirects=False)
     assert member_try.status_code == 403
+    support_try = no_perm.post(f"/clubs/{club_id}/solicitacoes/{wait_id}/aceitar", follow_redirects=False)
+    assert support_try.status_code == 403
     accepted = helper.post(f"/clubs/{club_id}/solicitacoes/{wait_id}/aceitar", follow_redirects=False)
     assert accepted.status_code == 303
     joined = waiting.get(f"/clubs/{club_id}")
@@ -476,7 +506,8 @@ def test_member_limit_blocks_join_and_accept_without_kicking():
     register_active(guest, "lim_g", "lim.g@example.com")
     joined = guest.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
     assert joined.status_code == 303
-    assert "lotado" in joined.headers["location"]
+    assert joined.headers["location"].startswith(f"/clubs/{club_id}")
+    assert "lotado" not in joined.headers["location"]
     waiting = TestClient(app)
     register_active(waiting, "lim_w", "lim.w@example.com")
     waiting.post(f"/clubs/{club_id}/solicitar", data={"next": f"/clubs/{club_id}"}, follow_redirects=False)
@@ -489,11 +520,18 @@ def test_member_limit_blocks_join_and_accept_without_kicking():
         assert club.admin_name_color == "#FF5D8F"
         assert club.sub_name_color == "#3DDC84"
         assert db.scalar(select(func.count()).select_from(ClubMember).where(ClubMember.club_id == club_id)) == 1
+        assert db.scalar(select(ClubJoinRequest).where(ClubJoinRequest.club_id == club_id, ClubJoinRequest.user_id == helper_id))
+        assert db.scalar(select(ClubJoinRequest).where(ClubJoinRequest.club_id == club_id, ClubJoinRequest.user_id == wait_id))
     finally:
         db.close()
     accepted = owner.post(f"/clubs/{club_id}/solicitacoes/{wait_id}/aceitar", follow_redirects=False)
     assert accepted.status_code == 303
     assert "lotado" in accepted.headers["location"]
+    db = SessionLocal()
+    try:
+        assert db.scalar(select(ClubJoinRequest).where(ClubJoinRequest.club_id == club_id, ClubJoinRequest.user_id == wait_id))
+    finally:
+        db.close()
     owner.post(
         f"/clubs/{club_id}/config",
         data={
@@ -508,8 +546,8 @@ def test_member_limit_blocks_join_and_accept_without_kicking():
         },
         follow_redirects=False,
     )
-    guest.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
-    waiting.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
+    owner.post(f"/clubs/{club_id}/solicitacoes/{helper_id}/aceitar", follow_redirects=False)
+    owner.post(f"/clubs/{club_id}/solicitacoes/{wait_id}/aceitar", follow_redirects=False)
     owner.post(
         f"/clubs/{club_id}/config",
         data={
@@ -588,6 +626,8 @@ def test_club_settings_shell_sections_and_create_stays_linear():
     create_page = owner.get("/clubs/novo")
     assert "settings-overlay-root" not in create_page.text
     assert "Cargos e permissões" not in create_page.text
+    assert "novas entradas precisam de aprovação" in create_page.text
+    assert "só entra com código" not in create_page.text
     club_id, _code = _create_club(owner, "Shell Club")
     settings = owner.get(f"/clubs/{club_id}/config")
     assert settings.status_code == 200
@@ -612,6 +652,7 @@ def test_club_settings_shell_sections_and_create_stays_linear():
     assert "Tag do clube" in settings.text
     assert 'name="cover_color"' in settings.text
     assert 'name="is_closed"' in settings.text
+    assert "novas entradas precisam de aprovação" in settings.text
     assert 'name="member_limit"' in settings.text
     roles_open = settings.text.split('id="roles-dialog"', 1)[1].split(">", 1)[0]
     assert "open" not in roles_open

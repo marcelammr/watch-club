@@ -20,16 +20,16 @@
       <strong>{{ user.name }}</strong>
       {{ club_tag_chip(user.display_tag) }}
       <p class="status {{ presence_of(user) }}">{{ presence_mark(presence_of(user)) }}{{ presence_label(user) }}</p>
-      <p><a href="/u/{{ user.username }}">Ver perfil público</a></p>
+      <p><a class="btn btn-ghost" href="/u/{{ user.username }}">Ver perfil público</a></p>
     </div>
   </div>
   <h2>Imagem de perfil</h2>
   <div class="avatar-actions">
     <form class="js-photo-form" action="/conta/avatar/foto" method="post" enctype="multipart/form-data">
       <input class="js-photo-input" type="file" name="photo" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
-      <button type="button" class="js-photo-open">Enviar foto</button>
+      <button type="button" class="btn btn-secondary js-photo-open">Enviar foto</button>
     </form>
-    <button type="button" id="open-avatar" class="ghost" aria-haspopup="dialog" aria-controls="avatar-modal">Escolher avatar</button>
+    <button type="button" id="open-avatar" class="btn btn-secondary" aria-haspopup="dialog" aria-controls="avatar-modal">Escolher avatar</button>
   </div>
 </section>
 
@@ -37,7 +37,7 @@
   <div class="avatar-modal-card">
     <div class="avatar-modal-head">
       <h2>Escolha seu avatar</h2>
-      <button type="button" class="ghost" id="close-avatar" aria-label="Fechar">Fechar</button>
+      <button type="button" class="btn btn-ghost" id="close-avatar" aria-label="Fechar">Fechar</button>
     </div>
     <div class="avatar-preview">
       <img class="js-avatar-preview" src="{{ avatar_url(user) }}" alt="Prévia do avatar">
@@ -63,8 +63,8 @@
         </div>
       {% endfor %}
       <div class="leave-dialog-actions">
-        <button type="button" class="ghost" id="cancel-avatar">Cancelar</button>
-        <button type="submit">Salvar</button>
+        <button type="button" class="btn btn-ghost" id="cancel-avatar">Cancelar</button>
+        <button class="btn btn-primary" type="submit">Salvar</button>
       </div>
     </form>
   </div>
@@ -79,8 +79,8 @@
     <input class="js-crop-zoom" type="range" min="1" max="4" step="0.01" value="1" aria-label="Zoom">
   </label>
   <div class="leave-dialog-actions">
-    <button type="button" class="ghost js-crop-cancel">Cancelar</button>
-    <button type="button" class="js-crop-confirm">Usar esta foto</button>
+    <button type="button" class="btn btn-ghost js-crop-cancel">Cancelar</button>
+    <button type="button" class="btn btn-primary js-crop-confirm">Usar esta foto</button>
   </div>
 </dialog>
 
@@ -120,7 +120,7 @@
         <textarea id="bio" class="bio-box" name="bio" maxlength="{{ BIO_MAX }}" rows="4" placeholder="Conte um pouco sobre você">{{ user.bio or '' }}</textarea>
         <p class="muted bio-count"><span id="bio-count">0</span>/{{ BIO_MAX }}</p>
       </div>
-      <button type="submit">Salvar perfil</button>
+      <button class="btn btn-primary" type="submit">Salvar perfil</button>
     </form>
   </div>
   <div class="card">
@@ -131,7 +131,7 @@
       {% endif %}
       <label>Nova senha <input type="password" name="new_password" required minlength="4"></label>
       <label>Confirmar nova senha <input type="password" name="confirm_password" required minlength="4"></label>
-      <button type="submit">Alterar senha</button>
+      <button class="btn btn-primary" type="submit">Alterar senha</button>
     </form>
   </div>
 </section>
@@ -154,7 +154,7 @@
       <p class="muted">Nenhum dos seus clubes tem tag ainda.</p>
     {% endfor %}
     {% if tag_choices %}
-      <button type="submit">Salvar tag exibida</button>
+      <button class="btn btn-primary" type="submit">Salvar tag exibida</button>
     {% endif %}
   </form>
 </section>
@@ -164,7 +164,7 @@
   <form action="/clubs/join" method="post">
     <input type="hidden" name="next" value="/conta">
     <label>Código do clube <input name="join_code" required maxlength="8" placeholder="A1B2C3D4"></label>
-    <button type="submit">Entrar</button>
+    <button class="btn btn-primary" type="submit">Entrar</button>
   </form>
 </section>
 
@@ -181,7 +181,7 @@
           </div>
           <button
             type="button"
-            class="danger js-leave-open"
+            class="btn btn-danger js-leave-open"
             data-leave-action="/clubs/{{ club.id }}/leave"
             data-leave-name="{{ club.name }}"
           >Sair do clube</button>
@@ -193,16 +193,16 @@
   {% endif %}
 </section>
 <form class="logout-form account-logout" action="/logout" method="post">
-  <button type="submit">Sair da sessão</button>
+  <button class="btn btn-ghost" type="submit">Sair da sessão</button>
 </form>
 <dialog class="leave-dialog" id="leave-dialog" aria-labelledby="leave-dialog-title">
   <h2 id="leave-dialog-title">Sair do clube</h2>
   <p>Tem certeza de que deseja sair de <strong class="js-leave-name"></strong>?</p>
   <div class="leave-dialog-actions">
-    <button type="button" class="ghost js-leave-cancel">Cancelar</button>
+    <button type="button" class="btn btn-ghost js-leave-cancel">Cancelar</button>
     <form class="js-leave-form" action="/clubs/0/leave" method="post">
       <input type="hidden" name="next" value="/conta">
-      <button class="danger" type="submit">Sair do clube</button>
+      <button class="btn btn-danger" type="submit">Sair do clube</button>
     </form>
   </div>
 </dialog>
