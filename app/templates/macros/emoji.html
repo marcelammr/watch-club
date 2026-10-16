@@ -1,5 +1,5 @@
-{% macro emoji_picker(aria_label='Emoji', toggle_class='chat-tool') %}
-<div class="emoji-picker-wrap js-emoji-picker">
+{% macro emoji_picker(aria_label='Emoji', toggle_class='chat-tool', mode='insert') %}
+<div class="emoji-picker-wrap js-emoji-picker" data-emoji-mode="{{ mode }}">
   <button
     type="button"
     class="{{ toggle_class }} js-emoji-toggle"
@@ -14,10 +14,6 @@
       <path d="M9 9.5h.01M15 9.5h.01"/>
     </svg>
   </button>
-  <div class="emoji-popover js-emoji-popover" hidden>
-    {% for item in emoji_catalog %}
-      <button type="button" class="emoji-btn" data-emoji="{{ item }}">{{ item }}</button>
-    {% endfor %}
-  </div>
+  <div class="emoji-panel js-emoji-panel" hidden></div>
 </div>
 {% endmacro %}

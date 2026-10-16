@@ -9,25 +9,26 @@ from fastapi import UploadFile
 from app.config import BASE_DIR
 
 COVER_COLORS = [
-    "#3a2348",
-    "#2b6a8a",
-    "#6b3f1d",
-    "#7a3048",
-    "#246b45",
-    "#4d3a78",
-    "#8a5a2b",
-    "#1d1b33",
+    "#3A2348",
+    "#2B6A8A",
+    "#6B3F1D",
+    "#7A3048",
+    "#246B45",
+    "#4D3A78",
+    "#8A5A2B",
+    "#1D1B33",
 ]
+COVER_PRESETS = tuple({"hex": color, "label": color} for color in COVER_COLORS)
 DEFAULT_COVER = COVER_COLORS[0]
-HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
 UPLOAD_DIR = BASE_DIR / "app" / "static" / "uploads" / "clubs"
 ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 MAX_BYTES = 2 * 1024 * 1024
 
 
 def valid_cover_color(value: str | None) -> str:
-    if value and HEX.match(value.strip()):
-        return value.strip().lower()
+    if value and HEX.fullmatch(value.strip()):
+        return value.strip().upper()
     return DEFAULT_COVER
 
 

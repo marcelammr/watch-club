@@ -6,10 +6,12 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import NEWS_TTL_SECONDS
+from app.club_tags import clear_displayed_club, clear_tag_preferences
 from app.models import (
     Club,
     ClubJoinRequest,
@@ -20,6 +22,19 @@ from app.models import (
     NewsItem,
     Season,
     Show,
+)
+from app.db import close_exclusive_session, exclusive_write_session
+from app.roles import (
+    MAX_ADMINS,
+    MAX_SUPPORT,
+    ROLE_ADMIN,
+    ROLE_MEMBER,
+    ROLE_SUPPORT,
+    ROLES,
+    can,
+    dump_support_perms,
+    member_role,
+    set_member_role,
 )
 from app.services import news as news_service
 from app.services import tvmaze
@@ -70,7 +85,7 @@ def club_membership(db: Session, club_id: int, user_id: int) -> ClubMember | Non
 
 def is_club_admin(db: Session, club_id: int, user_id: int) -> bool:
     member = club_membership(db, club_id, user_id)
-    return bool(member and member.is_admin)
+    return member_role(member) == ROLE_ADMIN
 
 
 def require_club_admin(db: Session, club_id: int, user_id: int) -> Club:
@@ -80,8 +95,119 @@ def require_club_admin(db: Session, club_id: int, user_id: int) -> Club:
     return club
 
 
+def require_club_perm(db: Session, club_id: int, user_id: int, perm: str) -> Club:
+    club = require_club_member(db, club_id, user_id)
+    member = club_membership(db, club_id, user_id)
+    if not can(member, perm):
+        raise HTTPException(status_code=403, detail="Você não tem permissão para isso")
+    return club
+
+
+def _count_members(db: Session, club_id: int) -> int:
+    return db.scalar(select(func.count()).select_from(ClubMember).where(ClubMember.club_id == club_id)) or 0
+
+
+def _count_role(db: Session, club_id: int, role: str) -> int:
+    return (
+        db.scalar(
+            select(func.count())
+            .select_from(ClubMember)
+            .where(ClubMember.club_id == club_id, ClubMember.role == role)
+        )
+        or 0
+    )
+
+
 def admin_count(db: Session, club_id: int) -> int:
-    return len(list(db.scalars(select(ClubMember).where(ClubMember.club_id == club_id, ClubMember.is_admin.is_(True)))))
+    return _count_role(db, club_id, ROLE_ADMIN)
+
+
+def support_count(db: Session, club_id: int) -> int:
+    return _count_role(db, club_id, ROLE_SUPPORT)
+
+
+def parse_member_limit(raw: str | None) -> tuple[int | None, str | None]:
+    text = (raw or "").strip()
+    if not text:
+        return None, None
+    if not text.isdigit() or int(text) < 1:
+        return None, "O limite de membros precisa ser um número inteiro a partir de 1. Deixe vazio para ilimitado."
+    return int(text), None
+
+
+def _ensure_club_member(db: Session, club_id: int, user_id: int) -> ClubMember:
+    existing = club_membership(db, club_id, user_id)
+    if existing:
+        return existing
+    club = db.get(Club, club_id)
+    if not club:
+        raise HTTPException(status_code=404, detail="Clube não encontrado")
+    if club.member_limit is not None and _count_members(db, club_id) >= club.member_limit:
+        raise HTTPException(status_code=400, detail="Este clube está lotado")
+    member = ClubMember(club_id=club_id, user_id=user_id, role=ROLE_MEMBER, support_perms="")
+    db.add(member)
+    db.flush()
+    return member
+
+
+def add_club_member(source: Session, club_id: int, user_id: int, *, clear_request: bool = False) -> None:
+    write = exclusive_write_session(source)
+    try:
+        _ensure_club_member(write, club_id, user_id)
+        if clear_request:
+            clear_join_request(write, club_id, user_id)
+        write.commit()
+    except IntegrityError:
+        write.rollback()
+        if not club_membership(write, club_id, user_id):
+            raise HTTPException(status_code=400, detail="Não foi possível entrar no clube")
+        if clear_request:
+            clear_join_request(write, club_id, user_id)
+            write.commit()
+    except Exception:
+        write.rollback()
+        raise
+    finally:
+        close_exclusive_session(write)
+
+
+def apply_member_role(
+    source: Session,
+    club_id: int,
+    actor_id: int,
+    target_user_id: int,
+    wanted: str,
+    support_perm: list[str] | None = None,
+) -> None:
+    write = exclusive_write_session(source)
+    try:
+        require_club_admin(write, club_id, actor_id)
+        club = write.get(Club, club_id)
+        target = club_membership(write, club_id, target_user_id)
+        if not club or not target:
+            raise HTTPException(status_code=404, detail="Membro não encontrado")
+        wanted = (wanted or "").strip().lower()
+        if wanted not in ROLES:
+            raise HTTPException(status_code=400, detail="Cargo inválido")
+        current = member_role(target)
+        if club.owner_id == target_user_id and wanted != ROLE_ADMIN:
+            raise HTTPException(status_code=400, detail="O dono do clube não pode ser rebaixado")
+        if wanted != ROLE_ADMIN and current == ROLE_ADMIN and admin_count(write, club_id) <= 1:
+            raise HTTPException(status_code=400, detail="O clube precisa de pelo menos um administrador")
+        if wanted == ROLE_ADMIN and current != ROLE_ADMIN and admin_count(write, club_id) >= MAX_ADMINS:
+            raise HTTPException(status_code=400, detail="O clube já tem o máximo de 3 ADM")
+        if wanted == ROLE_SUPPORT and current != ROLE_SUPPORT and support_count(write, club_id) >= MAX_SUPPORT:
+            raise HTTPException(status_code=400, detail="O clube já tem o máximo de 7 SUB")
+        set_member_role(target, wanted)
+        if wanted == ROLE_SUPPORT:
+            perms = support_perm if isinstance(support_perm, list) else [support_perm] if support_perm else []
+            target.support_perms = dump_support_perms(perms)
+        write.commit()
+    except Exception:
+        write.rollback()
+        raise
+    finally:
+        close_exclusive_session(write)
 
 
 def pending_join_request(db: Session, club_id: int, user_id: int) -> ClubJoinRequest | None:
@@ -125,18 +251,38 @@ def create_join_request(db: Session, club: Club, user_id: int) -> ClubJoinReques
     return request
 
 
-def accept_join_request(db: Session, club_id: int, user_id: int, admin_id: int) -> None:
-    require_club_admin(db, club_id, admin_id)
-    request = pending_join_request(db, club_id, user_id)
-    if not request:
-        raise HTTPException(status_code=404, detail="Solicitação não encontrada")
-    if not club_membership(db, club_id, user_id):
-        db.add(ClubMember(club_id=club_id, user_id=user_id, is_admin=False))
-    db.delete(request)
+def accept_join_request(db: Session, club_id: int, user_id: int, actor_id: int) -> None:
+    from app.roles import PERM_JOINS
+
+    require_club_perm(db, club_id, actor_id, PERM_JOINS)
+    write = exclusive_write_session(db)
+    try:
+        require_club_perm(write, club_id, actor_id, PERM_JOINS)
+        request = pending_join_request(write, club_id, user_id)
+        if not request:
+            raise HTTPException(status_code=404, detail="Solicitação não encontrada")
+        _ensure_club_member(write, club_id, user_id)
+        write.delete(request)
+        write.commit()
+    except IntegrityError:
+        write.rollback()
+        request = pending_join_request(write, club_id, user_id)
+        if club_membership(write, club_id, user_id) and request:
+            write.delete(request)
+            write.commit()
+        elif not club_membership(write, club_id, user_id):
+            raise HTTPException(status_code=400, detail="Não foi possível aceitar a solicitação")
+    except Exception:
+        write.rollback()
+        raise
+    finally:
+        close_exclusive_session(write)
 
 
-def reject_join_request(db: Session, club_id: int, user_id: int, admin_id: int) -> None:
-    require_club_admin(db, club_id, admin_id)
+def reject_join_request(db: Session, club_id: int, user_id: int, actor_id: int) -> None:
+    from app.roles import PERM_JOINS
+
+    require_club_perm(db, club_id, actor_id, PERM_JOINS)
     request = pending_join_request(db, club_id, user_id)
     if not request:
         raise HTTPException(status_code=404, detail="Solicitação não encontrada")
@@ -150,19 +296,22 @@ def leave_club(db: Session, club_id: int, user_id: int) -> str:
         db.scalars(select(ClubMember).where(ClubMember.club_id == club_id, ClubMember.user_id != user_id))
     )
     club_name = club.name
-    was_admin = bool(member.is_admin)
+    was_admin = member_role(member) == ROLE_ADMIN
+    clear_displayed_club(db, user_id, club_id)
     db.delete(member)
     if not others:
         db.execute(delete(ClubShowRating).where(ClubShowRating.club_id == club_id))
         db.execute(delete(ClubMessage).where(ClubMessage.club_id == club_id))
         db.execute(delete(ClubShow).where(ClubShow.club_id == club_id))
         db.execute(delete(ClubJoinRequest).where(ClubJoinRequest.club_id == club_id))
+        clear_tag_preferences(db, club_id)
         db.delete(club)
         db.commit()
         return f"Você saiu e o clube “{club_name}” foi encerrado."
-    remaining_admins = [item for item in others if item.is_admin]
+    remaining_admins = [item for item in others if member_role(item) == ROLE_ADMIN]
     if was_admin and not remaining_admins:
-        others[0].is_admin = True
+        others[0].role = ROLE_ADMIN
+        others[0].support_perms = ""
         remaining_admins = [others[0]]
     if club.owner_id == user_id:
         club.owner_id = remaining_admins[0].user_id if remaining_admins else others[0].user_id

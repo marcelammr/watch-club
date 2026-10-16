@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "macros/avatar.html" import user_avatar %}
 {% from "macros/presence.html" import presence_mark %}
+{% from "macros/club_tag.html" import club_tag_chip %}
 {% block title %}{{ person.name }} · Watch Club{% endblock %}
 {% block page_heading %}{{ person.name }}{% endblock %}
 {% block content %}
@@ -8,8 +9,14 @@
 <section class="card profile-head">
   {{ user_avatar(person, 'lg') }}
   <div>
-    <h1 class="profile-name">{{ person.name }}</h1>
+    <h1 class="profile-name">{{ person.name }} {{ club_tag_chip(person.display_tag) }}</h1>
     <p class="profile-nick">@{{ person.username }}</p>
+    {% if context_club %}
+      <p class="profile-club-context">
+        <span class="profile-club-context-name">{{ context_club.name }} {{ club_tag_chip(context_club_tag) }}</span>
+        <span class="profile-club-context-role">{{ context_role_label }}</span>
+      </p>
+    {% endif %}
     <p class="status {{ status }}">{{ presence_mark(status) }}{{ status_label }}</p>
     <p class="bio-label">Bio</p>
     {% if person.bio %}

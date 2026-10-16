@@ -33,11 +33,12 @@ from app.avatars import (
 )
 from app.catalog import (
     CONTENT_KINDS,
+    add_club_member,
     add_manual_title,
     add_show_to_club,
     accept_join_request,
     admin_count,
-    clear_join_request,
+    apply_member_role,
     club_membership,
     club_messages,
     create_join_request,
@@ -47,6 +48,7 @@ from app.catalog import (
     leave_club as remove_club_membership,
     load_show,
     parse_genres,
+    parse_member_limit,
     list_join_requests,
     pending_join_request,
     post_club_message,
@@ -55,15 +57,33 @@ from app.catalog import (
     requested_club_ids,
     remove_show_from_club,
     require_club_admin,
+    require_club_perm,
     require_club_member,
     set_club_show_rating,
     set_watch_status,
+    support_count,
     upsert_show_from_tvmaze,
     valid_kind,
     valid_stars,
 )
-from app.covers import COVER_COLORS, cover_image_url, save_cover_image, valid_cover_color
-from app.emojis import EMOJI_CATALOG
+from app.club_tags import (
+    TAG_BG_DEFAULT,
+    TAG_BG_MAX,
+    TAG_BG_MIN,
+    TAG_BORDER_DEFAULT,
+    TAG_BORDER_MAX,
+    TAG_BORDER_MIN,
+    TAG_POSITION_DEFAULT,
+    apply_club_tag,
+    clear_tag_preferences,
+    club_has_tag,
+    selectable_tags,
+    set_displayed_club,
+    stamp_display_tags,
+    tag_payload,
+)
+from app.colors import COLOR_PRESETS, DEFAULT_HEX, GRADIENT_DIRECTIONS, valid_hex
+from app.covers import COVER_COLORS, COVER_PRESETS, cover_image_url, save_cover_image, valid_cover_color
 from app.markup import format_chat
 from app.config import BASE_DIR, BIO_MAX, EMAIL_DEV_SHOW_LINK, SECRET_KEY
 from app.db import Base, engine, get_db
@@ -95,6 +115,22 @@ from app.oauth import (
 )
 from app.presence import LABELS as PRESENCE_LABELS
 from app.presence import mark_logout, presence_of, touch_presence
+from app.roles import (
+    MAX_ADMINS,
+    MAX_SUPPORT,
+    PERM_JOINS,
+    PERM_TAG,
+    PERM_TITLES,
+    ROLE_ADMIN,
+    ROLE_LABELS,
+    ROLE_MEMBER,
+    ROLE_SUPPORT,
+    SUPPORT_PERM_LABELS,
+    SUPPORT_PERMS,
+    can,
+    member_role,
+    parse_support_perms,
+)
 from app.schema import migrate_schema
 from app.security import hash_password, make_join_code, verify_password
 from app.services import tvmaze
@@ -124,14 +160,31 @@ templates.env.globals["presence_of"] = presence_of
 templates.env.globals["presence_label"] = lambda user: PRESENCE_LABELS[presence_of(user)]
 templates.env.globals["avatar_initials"] = avatar_initials
 templates.env.globals["avatar_url"] = avatar_url
-templates.env.globals["emoji_catalog"] = EMOJI_CATALOG
 templates.env.globals["google_enabled"] = google_enabled
 templates.env.globals["facebook_enabled"] = facebook_enabled
 templates.env.globals["BIO_MAX"] = BIO_MAX
 templates.env.globals["COVER_COLORS"] = COVER_COLORS
+templates.env.globals["COVER_PRESETS"] = COVER_PRESETS
 templates.env.globals["cover_image_url"] = cover_image_url
 templates.env.globals["CONTENT_KINDS"] = CONTENT_KINDS
 templates.env.globals["person_href"] = person_href
+templates.env.globals["COLOR_PRESETS"] = COLOR_PRESETS
+templates.env.globals["DEFAULT_HEX"] = DEFAULT_HEX
+templates.env.globals["GRADIENT_DIRECTIONS"] = GRADIENT_DIRECTIONS
+templates.env.globals["TAG_BG_MIN"] = TAG_BG_MIN
+templates.env.globals["TAG_BG_MAX"] = TAG_BG_MAX
+templates.env.globals["TAG_BG_DEFAULT"] = TAG_BG_DEFAULT
+templates.env.globals["TAG_BORDER_MIN"] = TAG_BORDER_MIN
+templates.env.globals["TAG_BORDER_MAX"] = TAG_BORDER_MAX
+templates.env.globals["TAG_BORDER_DEFAULT"] = TAG_BORDER_DEFAULT
+templates.env.globals["TAG_POSITION_DEFAULT"] = TAG_POSITION_DEFAULT
+templates.env.globals["SUPPORT_PERMS"] = SUPPORT_PERMS
+templates.env.globals["SUPPORT_PERM_LABELS"] = SUPPORT_PERM_LABELS
+templates.env.globals["ROLE_LABELS"] = ROLE_LABELS
+templates.env.globals["MAX_ADMINS"] = MAX_ADMINS
+templates.env.globals["MAX_SUPPORT"] = MAX_SUPPORT
+templates.env.globals["member_role"] = member_role
+templates.env.globals["parse_support_perms"] = parse_support_perms
 templates.env.filters["when"] = lambda value: value.strftime("%d/%m/%Y %H:%M") if value else ""
 templates.env.filters["genres"] = parse_genres
 templates.env.filters["avg_pt"] = lambda value: f"{value:.1f}".replace(".", ",") if value is not None else ""
@@ -146,6 +199,8 @@ def current_user(request: Request, db: Session) -> User | None:
     if user and not user.is_active:
         request.session.clear()
         return None
+    if user:
+        stamp_display_tags(db, [user])
     return user
 
 
@@ -173,6 +228,49 @@ def _is_member(db: Session, club_id: int, user_id: int) -> bool:
     )
 
 
+MEMBER_GROUP_LABELS = (
+    (ROLE_ADMIN, "ADMINISTRADORES"),
+    (ROLE_SUPPORT, "SUBADMINISTRADORES"),
+    (ROLE_MEMBER, "MEMBROS"),
+)
+PROFILE_ROLE_LABELS = {
+    ROLE_ADMIN: "Administrador",
+    ROLE_SUPPORT: "Subadministrador",
+    ROLE_MEMBER: "Membro",
+}
+
+
+def grouped_club_members(members) -> list[dict]:
+    buckets = {ROLE_ADMIN: [], ROLE_SUPPORT: [], ROLE_MEMBER: []}
+    for item in members:
+        buckets[member_role(item)].append(item)
+    for items in buckets.values():
+        items.sort(key=lambda item: (item.user.name or "").lower())
+    return [
+        {"role": role, "label": label, "members": buckets[role]}
+        for role, label in MEMBER_GROUP_LABELS
+        if buckets[role]
+    ]
+
+
+def _club_profile_context(db: Session, viewer: User, person: User, raw_club_id: str | None):
+    if not raw_club_id:
+        return None, None, None
+    try:
+        club_id = int(raw_club_id)
+    except (TypeError, ValueError):
+        return None, None, None
+    club = db.get(Club, club_id)
+    if not club:
+        return None, None, None
+    viewer_member = club_membership(db, club_id, viewer.id)
+    person_member = club_membership(db, club_id, person.id)
+    if not viewer_member or not person_member:
+        return None, None, None
+    role = member_role(person_member)
+    return club, role, PROFILE_ROLE_LABELS[role]
+
+
 def _load_club(db: Session, club_id: int) -> Club | None:
     return db.scalar(
         select(Club)
@@ -193,6 +291,97 @@ def _account_extras(user: User) -> dict:
         "nickname_unlock": unlock.strftime("%d/%m/%Y") if locked and unlock else None,
         "nickname_days": NICKNAME_DAYS,
     }
+
+
+SETTINGS_SECTIONS = ("geral", "aparencia", "tag", "cargos", "membros")
+
+
+def _settings_section(raw: str | None) -> str:
+    text = (raw or "").strip().lstrip("#").lower()
+    return text if text in SETTINGS_SECTIONS else "geral"
+
+
+def _config_href(club_id: int, section: str = "geral", *, ok: str | None = None, error: str | None = None) -> str:
+    chosen = _settings_section(section)
+    query = []
+    if ok:
+        query.append(f"ok={quote(ok)}")
+    if error:
+        query.append(f"error={quote(error)}")
+    path = f"/clubs/{club_id}/config"
+    if query:
+        path += "?" + "&".join(query)
+    return f"{path}#{chosen}"
+
+
+def _club_settings_context(db: Session, request: Request, user: User, club: Club, **extra):
+    loaded = _load_club(db, club.id) or club
+    members = sorted(loaded.members, key=lambda item: item.user.name.lower())
+    stamp_display_tags(db, [item.user for item in members])
+    payload = {
+        "user": user,
+        "club": loaded,
+        "members": members,
+        "member_total": len(loaded.members),
+        "admin_total": admin_count(db, loaded.id),
+        "support_total": support_count(db, loaded.id),
+        "friend_ids": friend_id_set(db, user.id),
+        "error": extra.get("error", request.query_params.get("error")),
+        "ok": extra.get("ok", request.query_params.get("ok")),
+        "mode": extra.get("mode", "edit"),
+        "can_tag": extra.get("can_tag", True),
+        "tag": extra.get("tag", tag_payload(loaded)),
+        "settings_section": extra.get("settings_section"),
+    }
+    payload.update(extra)
+    payload["club"] = loaded
+    payload["members"] = members
+    payload["tag"] = extra.get("tag", tag_payload(loaded))
+    return payload
+
+
+def _club_caps(db: Session, club_id: int, user_id: int) -> dict:
+    member = club_membership(db, club_id, user_id)
+    return {
+        "club_member": member,
+        "is_admin": member_role(member) == ROLE_ADMIN,
+        "can_tag": can(member, PERM_TAG),
+        "can_joins": can(member, PERM_JOINS),
+        "can_titles": can(member, PERM_TITLES),
+    }
+
+
+def _save_club_tag(
+    db: Session,
+    club: Club,
+    slug: str,
+    emoji: str,
+    bg_intensity: str | int | None = None,
+    border_intensity: str | int | None = None,
+    emoji_position: str | None = None,
+    color_mode: str | None = None,
+    color_1: str | None = None,
+    color_2: str | None = None,
+    gradient_direction: str | None = None,
+) -> str | None:
+    had_tag = club_has_tag(club)
+    error = apply_club_tag(
+        club,
+        slug,
+        emoji,
+        bg_intensity,
+        border_intensity,
+        emoji_position,
+        color_mode,
+        color_1,
+        color_2,
+        gradient_direction,
+    )
+    if error:
+        return error
+    if had_tag and not club_has_tag(club):
+        clear_tag_preferences(db, club.id)
+    return None
 
 
 def _user_clubs(db: Session, user_id: int) -> list[Club]:
@@ -602,7 +791,7 @@ async def create_club(
         )
         db.add(club)
         db.flush()
-        db.add(ClubMember(club_id=club.id, user_id=user.id, is_admin=True))
+        db.add(ClubMember(club_id=club.id, user_id=user.id, role=ROLE_ADMIN, support_perms=""))
         db.commit()
         return RedirectResponse(f"/clubs/{club.id}", status_code=303)
     except HTTPException:
@@ -622,6 +811,7 @@ def account(request: Request):
             {
                 "user": user,
                 "clubs": _user_clubs(db, user.id),
+                "tag_choices": selectable_tags(db, user.id),
                 "error": request.query_params.get("error"),
                 "ok": request.query_params.get("ok"),
                 "suggestions": [],
@@ -659,6 +849,7 @@ def update_profile(
                 {
                     "user": user,
                     "clubs": clubs,
+                    "tag_choices": selectable_tags(db, user.id),
                     "error": message,
                     "ok": None,
                     "suggestions": suggestions or [],
@@ -791,21 +982,18 @@ def join_club(request: Request, join_code: str = Form(...), next: str = Form("/"
         if not club:
             sep = "&" if "?" in next_url else "?"
             return RedirectResponse(f"{next_url}{sep}error=Código+inválido", status_code=303)
-        existing = db.scalar(
-            select(ClubMember).where(ClubMember.club_id == club.id, ClubMember.user_id == user.id)
-        )
-        if not existing:
-            db.add(ClubMember(club_id=club.id, user_id=user.id, is_admin=False))
-        clear_join_request(db, club.id, user.id)
-        db.commit()
+        add_club_member(db, club.id, user.id, clear_request=True)
         if next_url.startswith("/conta"):
             return RedirectResponse(
                 f"/conta?ok={quote('Você entrou no clube ' + club.name)}",
                 status_code=303,
             )
         return RedirectResponse(f"/clubs/{club.id}", status_code=303)
-    except HTTPException:
-        return RedirectResponse("/login", status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        sep = "&" if "?" in next_url else "?"
+        return RedirectResponse(f"{next_url}{sep}error={quote(str(exc.detail))}", status_code=303)
     finally:
         db.close()
 
@@ -838,12 +1026,13 @@ def join_open_club(request: Request, club_id: int):
         if club.is_closed:
             return RedirectResponse(f"/clubs/{club_id}", status_code=303)
         if not _is_member(db, club.id, user.id):
-            db.add(ClubMember(club_id=club.id, user_id=user.id, is_admin=False))
-            db.commit()
+            add_club_member(db, club.id, user.id)
         return RedirectResponse(f"/clubs/{club.id}", status_code=303)
     except HTTPException as exc:
         if exc.status_code == 401:
             return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 400:
+            return RedirectResponse(f"/clubs/{club_id}?error={quote(str(exc.detail))}", status_code=303)
         raise
     finally:
         db.close()
@@ -891,10 +1080,12 @@ async def club_detail(
             await fill_missing_genres(db, [link.show for link in club.shows])
             db.commit()
         ratings = club_rating_stats(db, club.id, user.id)
-        admin = is_club_admin(db, club.id, user.id)
+        caps = _club_caps(db, club.id, user.id)
         members = list(club.members)
+        messages = club_messages(db, club.id) if tab == "chat" else []
+        stamp_display_tags(db, [item.user for item in members] + [item.user for item in messages])
         online_count = sum(1 for item in members if presence_of(item.user) == "online")
-        join_requests = list_join_requests(db, club.id) if admin and club.is_closed else []
+        join_requests = list_join_requests(db, club.id) if caps["can_joins"] and club.is_closed else []
         return templates.TemplateResponse(
             request,
             "club.html",
@@ -904,17 +1095,19 @@ async def club_detail(
                 "query": q or "",
                 "results": results,
                 "is_member": True,
-                "is_admin": admin,
                 "tab": tab,
                 "watch_list": "finalizados" if lista == "finalizados" else "assistindo",
-                "messages": club_messages(db, club.id) if tab == "chat" else [],
+                "messages": messages,
                 "watching": watching,
                 "watched": watched,
                 "ratings": ratings,
                 "friend_ids": friend_id_set(db, user.id),
                 "online_count": online_count,
                 "join_requests": join_requests,
+                "members_by_user": {item.user_id: item for item in members},
+                "member_groups": grouped_club_members(members),
                 "error": request.query_params.get("error"),
+                **caps,
             },
         )
     except HTTPException as exc:
@@ -933,6 +1126,7 @@ def club_members(request: Request, club_id: int):
         club = require_club_member(db, club_id, user.id)
         club = _load_club(db, club_id)
         members = sorted(club.members, key=lambda item: item.user.name.lower())
+        stamp_display_tags(db, [item.user for item in members])
         return templates.TemplateResponse(
             request,
             "members.html",
@@ -940,10 +1134,11 @@ def club_members(request: Request, club_id: int):
                 "user": user,
                 "club": club,
                 "members": members,
-                "is_admin": is_club_admin(db, club.id, user.id),
+                "member_groups": grouped_club_members(members),
                 "admin_total": admin_count(db, club.id),
                 "friend_ids": friend_id_set(db, user.id),
                 "error": request.query_params.get("error"),
+                **_club_caps(db, club.id, user.id),
             },
         )
     except HTTPException as exc:
@@ -965,7 +1160,7 @@ def club_settings(request: Request, club_id: int):
         return templates.TemplateResponse(
             request,
             "club_form.html",
-            {"user": user, "club": club, "error": None, "mode": "edit"},
+            _club_settings_context(db, request, user, club, mode="edit", can_tag=True),
         )
     except HTTPException as exc:
         if exc.status_code == 401:
@@ -988,23 +1183,58 @@ async def update_club_settings(
     cover_color: str = Form("#3a2348"),
     cover_file: UploadFile | None = File(None),
     clear_cover: str | None = Form(None),
+    admin_name_color: str = Form("#B892FF"),
+    sub_name_color: str = Form("#6C63FF"),
+    member_limit: str = Form(""),
+    settings_section: str = Form("geral"),
 ):
     db = db_session()
     try:
         user = login_required(request, db)
         club = require_club_admin(db, club_id, user.id)
+        admin_hex = valid_hex(admin_name_color)
+        sub_hex = valid_hex(sub_name_color)
+        limit_value, limit_error = parse_member_limit(member_limit)
+        error = None
+        if not admin_hex or not sub_hex:
+            error = "Escolha cores válidas para ADM e SUB."
+        elif limit_error:
+            error = limit_error
+        if error:
+            return templates.TemplateResponse(
+                request,
+                "club_form.html",
+                _club_settings_context(
+                    db,
+                    request,
+                    user,
+                    club,
+                    mode="edit",
+                    can_tag=True,
+                    error=error,
+                    ok=None,
+                    settings_section=_settings_section(settings_section),
+                ),
+                status_code=400,
+            )
         image_name = await save_cover_image(cover_file)
         club.name = name.strip()
         club.is_closed = bool(is_closed)
         club.description = description.strip()
         club.rules = rules.strip()
         club.cover_color = valid_cover_color(cover_color)
+        club.admin_name_color = admin_hex
+        club.sub_name_color = sub_hex
+        club.member_limit = limit_value
         if image_name:
             club.cover_image = image_name
         elif clear_cover:
             club.cover_image = None
         db.commit()
-        return RedirectResponse(f"/clubs/{club_id}", status_code=303)
+        return RedirectResponse(
+            _config_href(club_id, settings_section, ok="Configurações salvas"),
+            status_code=303,
+        )
     except HTTPException as exc:
         if exc.status_code == 401:
             return RedirectResponse("/login", status_code=303)
@@ -1015,31 +1245,184 @@ async def update_club_settings(
         db.close()
 
 
-@app.post("/clubs/{club_id}/membros/{member_user_id}/admin")
-def set_club_admin(request: Request, club_id: int, member_user_id: int, action: str = Form(...)):
+@app.get("/clubs/{club_id}/tag", response_class=HTMLResponse)
+def club_tag_page(request: Request, club_id: int):
     db = db_session()
     try:
         user = login_required(request, db)
-        require_club_admin(db, club_id, user.id)
-        target = club_membership(db, club_id, member_user_id)
-        if not target:
-            raise HTTPException(status_code=404, detail="Membro não encontrado")
-        if action == "grant":
-            target.is_admin = True
-        elif action == "revoke":
-            if target.is_admin and admin_count(db, club_id) <= 1:
-                return RedirectResponse(
-                    f"/clubs/{club_id}/membros?error=O+clube+precisa+de+pelo+menos+um+administrador",
-                    status_code=303,
-                )
-            target.is_admin = False
-        db.commit()
-        return RedirectResponse(f"/clubs/{club_id}/membros", status_code=303)
+        club = require_club_perm(db, club_id, user.id, PERM_TAG)
+        return templates.TemplateResponse(
+            request,
+            "club_form.html",
+            {
+                "user": user,
+                "club": club,
+                "error": request.query_params.get("error"),
+                "ok": request.query_params.get("ok"),
+                "mode": "tag",
+                "can_tag": True,
+                "tag": tag_payload(club),
+            },
+        )
     except HTTPException as exc:
         if exc.status_code == 401:
             return RedirectResponse("/login", status_code=303)
         if exc.status_code == 403:
             return RedirectResponse(f"/clubs/{club_id}", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/clubs/{club_id}/tag")
+def update_club_tag(
+    request: Request,
+    club_id: int,
+    tag_slug: str = Form(""),
+    tag_emoji: str = Form(""),
+    tag_color_mode: str = Form("solid"),
+    tag_color_1: str = Form("#B892FF"),
+    tag_color_2: str = Form(""),
+    tag_gradient_direction: str = Form(""),
+    tag_bg_intensity: str = Form(""),
+    tag_border_intensity: str = Form(""),
+    tag_emoji_position: str = Form("start"),
+    clear_tag: str | None = Form(None),
+):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        club = require_club_perm(db, club_id, user.id, PERM_TAG)
+        if clear_tag:
+            error = _save_club_tag(db, club, "", "")
+        else:
+            error = _save_club_tag(
+                db,
+                club,
+                tag_slug,
+                tag_emoji,
+                tag_bg_intensity,
+                tag_border_intensity,
+                tag_emoji_position,
+                tag_color_mode,
+                tag_color_1,
+                tag_color_2,
+                tag_gradient_direction,
+            )
+        if error:
+            tag_state = tag_payload(club) or {
+                "slug": (tag_slug or "").strip().upper(),
+                "emoji": tag_emoji,
+                "color_mode": tag_color_mode,
+                "color_1": tag_color_1,
+                "color_2": tag_color_2,
+                "gradient_direction": tag_gradient_direction,
+                "bg_intensity": tag_bg_intensity or TAG_BG_DEFAULT,
+                "border_intensity": tag_border_intensity or TAG_BORDER_DEFAULT,
+                "position": tag_emoji_position or TAG_POSITION_DEFAULT,
+            }
+            if is_club_admin(db, club_id, user.id):
+                return templates.TemplateResponse(
+                    request,
+                    "club_form.html",
+                    _club_settings_context(
+                        db,
+                        request,
+                        user,
+                        club,
+                        mode="edit",
+                        can_tag=True,
+                        error=error,
+                        ok=None,
+                        tag=tag_state,
+                        settings_section="tag",
+                    ),
+                    status_code=400,
+                )
+            return templates.TemplateResponse(
+                request,
+                "club_form.html",
+                {
+                    "user": user,
+                    "club": club,
+                    "error": error,
+                    "ok": None,
+                    "mode": "tag",
+                    "can_tag": True,
+                    "tag": tag_state,
+                },
+                status_code=400,
+            )
+        db.commit()
+        if is_club_admin(db, club_id, user.id):
+            dest = _config_href(club_id, "tag", ok="Tag atualizada")
+        else:
+            dest = f"/clubs/{club_id}/tag?ok={quote('Tag atualizada')}"
+        return RedirectResponse(dest, status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 403:
+            return RedirectResponse(f"/clubs/{club_id}", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/conta/tag")
+def update_displayed_tag(request: Request, displayed_club_id: str = Form("0")):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        set_displayed_club(db, user, displayed_club_id)
+        db.commit()
+        return RedirectResponse("/conta?ok=Tag+exibida+atualizada", status_code=303)
+    except HTTPException:
+        return RedirectResponse("/login", status_code=303)
+    finally:
+        db.close()
+
+
+@app.post("/clubs/{club_id}/membros/{member_user_id}/papel")
+def set_club_member_role(
+    request: Request,
+    club_id: int,
+    member_user_id: int,
+    role: str = Form(...),
+    support_perm: list[str] = Form(default=[]),
+):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        apply_member_role(db, club_id, user.id, member_user_id, role, support_perm)
+        return RedirectResponse(_config_href(club_id, "cargos", ok="Cargo atualizado"), status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 403:
+            return RedirectResponse(f"/clubs/{club_id}", status_code=303)
+        if exc.status_code == 400:
+            return RedirectResponse(_config_href(club_id, "cargos", error=str(exc.detail)), status_code=303)
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/clubs/{club_id}/membros/{member_user_id}/admin")
+def set_club_admin(request: Request, club_id: int, member_user_id: int, action: str = Form(...)):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        wanted = ROLE_ADMIN if action == "grant" else ROLE_MEMBER
+        apply_member_role(db, club_id, user.id, member_user_id, wanted)
+        return RedirectResponse(_config_href(club_id, "cargos", ok="Cargo atualizado"), status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 403:
+            return RedirectResponse(f"/clubs/{club_id}", status_code=303)
+        if exc.status_code == 400:
+            return RedirectResponse(_config_href(club_id, "cargos", error=str(exc.detail)), status_code=303)
         raise
     finally:
         db.close()
@@ -1162,7 +1545,7 @@ def remove_club_title(request: Request, club_id: int, show_id: int):
     db = db_session()
     try:
         user = login_required(request, db)
-        require_club_admin(db, club_id, user.id)
+        require_club_perm(db, club_id, user.id, PERM_TITLES)
         remove_show_from_club(db, club_id, show_id)
         return RedirectResponse(f"/clubs/{club_id}?aba=assistindo", status_code=303)
     except HTTPException as exc:
@@ -1298,13 +1681,16 @@ def friends_page(request: Request):
     db = db_session()
     try:
         user = login_required(request, db)
+        friends = list_friends(db, user.id)
+        incoming = incoming_invites(db, user.id)
+        stamp_display_tags(db, friends + incoming)
         return templates.TemplateResponse(
             request,
             "friends.html",
             {
                 "user": user,
-                "friends": list_friends(db, user.id),
-                "incoming": incoming_invites(db, user.id),
+                "friends": friends,
+                "incoming": incoming,
                 "error": request.query_params.get("error"),
                 "ok": request.query_params.get("ok"),
             },
@@ -1394,13 +1780,15 @@ def direct_chat(request: Request, username: str):
         if not can_view_thread(db, user.id, person.id):
             return RedirectResponse(f"/u/{person.username}", status_code=303)
         are_friends = relation_status(db, user.id, person.id) == "friends"
+        messages = dm_thread(db, user.id, person.id)
+        stamp_display_tags(db, [person] + [item.sender for item in messages])
         return templates.TemplateResponse(
             request,
             "direct_chat.html",
             {
                 "user": user,
                 "person": person,
-                "messages": dm_thread(db, user.id, person.id),
+                "messages": messages,
                 "are_friends": are_friends,
                 "error": request.query_params.get("error"),
             },
@@ -1454,6 +1842,10 @@ def public_profile(request: Request, username: str):
         clubs = _user_clubs(db, person.id)
         mine = {club.id for club in _user_clubs(db, viewer.id)}
         relation = relation_status(db, viewer.id, person.id)
+        stamp_display_tags(db, [person])
+        context_club, context_role, context_role_label = _club_profile_context(
+            db, viewer, person, request.query_params.get("clube")
+        )
         return templates.TemplateResponse(
             request,
             "profile.html",
@@ -1467,6 +1859,10 @@ def public_profile(request: Request, username: str):
                 "status_label": PRESENCE_LABELS[presence_of(person)],
                 "relation": relation,
                 "has_history": has_dm_history(db, viewer.id, person.id),
+                "context_club": context_club,
+                "context_club_tag": tag_payload(context_club) if context_club else None,
+                "context_role": context_role,
+                "context_role_label": context_role_label,
                 "error": request.query_params.get("error"),
                 "ok": request.query_params.get("ok"),
             },
@@ -1509,11 +1905,12 @@ def accept_club_join(request: Request, club_id: int, user_id: int):
     try:
         user = login_required(request, db)
         accept_join_request(db, club_id, user_id, user.id)
-        db.commit()
         return RedirectResponse(f"/clubs/{club_id}", status_code=303)
     except HTTPException as exc:
         if exc.status_code == 401:
             return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 400:
+            return RedirectResponse(f"/clubs/{club_id}?error={quote(str(exc.detail))}", status_code=303)
         raise
     finally:
         db.close()
