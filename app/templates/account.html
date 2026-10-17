@@ -20,7 +20,7 @@
       <strong>{{ user.name }}</strong>
       {{ club_tag_chip(user.display_tag) }}
       <p class="status {{ presence_of(user) }}">{{ presence_mark(presence_of(user)) }}{{ presence_label(user) }}</p>
-      <p><a class="btn btn-ghost" href="/u/{{ user.username }}">Ver perfil público</a></p>
+      <p class="mt-4"><a class="btn btn-ghost" href="/u/{{ user.username }}">Ver perfil público</a></p>
     </div>
   </div>
   <h2>Imagem de perfil</h2>

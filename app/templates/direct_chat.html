@@ -2,6 +2,7 @@
 {% from "macros/avatar.html" import user_avatar %}
 {% from "macros/presence.html" import presence_mark %}
 {% from "macros/club_tag.html" import club_tag_chip %}
+{% from "macros/emoji.html" import emoji_picker %}
 {% block title %}{{ person.name }} · Mensagens{% endblock %}
 {% block page_heading %}{{ person.name }}{% endblock %}
 {% block body_class %}dm-page{% endblock %}
@@ -44,11 +45,19 @@
   </div>
   {% if are_friends %}
     <form class="chat-form" action="/mensagens/{{ person.username }}" method="post">
-      <label class="chat-compose">
-        <span class="visually-hidden">Mensagem</span>
-        <textarea name="body" rows="1" maxlength="2000" required placeholder="Escreva para {{ person.name }}"></textarea>
-      </label>
-      <button class="btn btn-primary" type="submit">Enviar</button>
+      <div class="dm-composer">
+        {{ emoji_picker('Emoji') }}
+        <label class="chat-compose">
+          <span class="visually-hidden">Mensagem</span>
+          <textarea name="body" class="js-dm-input" rows="1" maxlength="2000" required placeholder="Escreva para {{ person.name }}"></textarea>
+        </label>
+        <button class="dm-send" type="submit" aria-label="Enviar">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M22 2 11 13"/>
+            <path d="M22 2 15 22l-4-9-9-4 20-7z"/>
+          </svg>
+        </button>
+      </div>
       <a class="muted dm-refresh" href="/mensagens/{{ person.username }}">Atualizar</a>
     </form>
   {% else %}
@@ -58,5 +67,33 @@
 <script>
   const log = document.querySelector(".chat-log");
   if (log) log.scrollTop = log.scrollHeight;
+
+  (function () {
+    const input = document.querySelector(".js-dm-input");
+    if (!input) return;
+
+    function insertAtCursor(chunk) {
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? input.value.length;
+      const next = input.value.slice(0, start) + chunk + input.value.slice(end);
+      if (next.length > 2000) return;
+      input.value = next;
+      const cursor = start + chunk.length;
+      input.focus();
+      input.setSelectionRange(cursor, cursor);
+      resizeInput();
+    }
+
+    function resizeInput() {
+      input.style.height = "auto";
+      input.style.height = Math.min(input.scrollHeight, 128) + "px";
+    }
+
+    document.querySelector(".chat-form .js-emoji-picker")?.addEventListener("emoji-select", (event) => {
+      insertAtCursor(event.detail.emoji || "");
+    });
+    input.addEventListener("input", resizeInput);
+    resizeInput();
+  })();
 </script>
 {% endblock %}

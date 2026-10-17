@@ -635,13 +635,13 @@
     @apply inline-flex items-center gap-1.5 text-[0.9rem] text-muted-foreground;
   }
   .status .dot {
-    @apply h-2 w-2 rounded-full bg-muted-foreground;
+    @apply h-2 w-2 shrink-0 rounded-full bg-muted-foreground;
   }
   .status.online .dot {
     @apply bg-[#3ddc84];
   }
   .status.offline .dot {
-    @apply bg-chart-2;
+    @apply bg-destructive;
   }
   .presence-moon {
     @apply block h-2.5 w-2.5 shrink-0 text-chart-1;
@@ -765,7 +765,7 @@
     @apply block h-full w-full object-cover object-center;
   }
   .club-cover-banner {
-    @apply mb-5 h-40;
+    @apply mb-5 aspect-[16/10] h-auto w-full;
   }
   .club-actions {
     @apply flex flex-wrap items-start gap-3;
@@ -1075,6 +1075,14 @@
   .photo-crop-zoom input {
     @apply mt-1.5 w-full;
   }
+  .cover-crop-stage {
+    @apply mx-auto my-4 w-full overflow-hidden rounded-2xl bg-muted;
+    aspect-ratio: 16 / 10;
+    touch-action: none;
+  }
+  .cover-crop-stage canvas {
+    @apply block h-full w-full cursor-grab;
+  }
   .leave-dialog-actions form,
   .leave-dialog-actions button {
     @apply m-0;
@@ -1196,9 +1204,14 @@
     --color-border: rgb(247 240 255 / 10%);
     --border-radius: 16px;
     --font-family: "Work Sans", sans-serif;
-    display: block;
+    display: flex;
     width: 100%;
+    max-width: 100%;
     height: 22rem;
+    max-height: min(22rem, calc(100dvh - 8rem));
+    overflow: hidden;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
   }
   .club-member-list {
     @apply mb-4 ml-0 mr-0 mt-0 list-none px-2.5 pb-4;
@@ -1298,8 +1311,30 @@
   .dm-locked {
     @apply border-t border-sidebar-border bg-sidebar px-5 py-4;
   }
+  .dm-composer {
+    @apply relative flex min-w-0 w-full max-w-full items-end gap-0.5 overflow-visible rounded-[12px] border border-border bg-background px-1 py-1;
+  }
+  .dm-composer .chat-compose {
+    @apply m-0 min-w-0 flex-1;
+  }
+  main .dm-composer textarea.js-dm-input {
+    @apply mt-0 max-h-32 min-h-[2.4rem] w-full resize-none overflow-y-auto rounded-none border-0 bg-transparent px-1 py-2 leading-snug shadow-none;
+  }
+  main .dm-composer .chat-tool,
+  main .chat-form .dm-composer button.dm-send[type="submit"] {
+    @apply m-0 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border-0 bg-transparent p-0 font-normal text-muted-foreground shadow-none;
+  }
+  main .dm-composer .chat-tool:hover,
+  main .chat-form .dm-composer button.dm-send[type="submit"]:hover {
+    @apply bg-accent text-foreground;
+  }
+  main .dm-composer .chat-tool:focus-visible,
+  main .chat-form .dm-composer button.dm-send[type="submit"]:focus-visible {
+    outline: 2px solid var(--btn-focus);
+    outline-offset: 2px;
+  }
   .dm-refresh {
-    @apply ml-3 inline-flex items-center align-middle text-[0.88rem] no-underline;
+    @apply mt-2 ml-0 inline-flex items-center text-[0.88rem] no-underline;
   }
   .dm-refresh:hover {
     @apply text-foreground;

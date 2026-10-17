@@ -57,7 +57,10 @@ def test_logged_in_shell_and_clubes_page():
     assert 'aria-label="Notificações"' in home.text
     assert 'href="/amigos"' in home.text
     assert 'id="open-clubs"' in home.text
-    assert "Sair da sessão" not in home.text
+    assert 'id="account-popover"' in home.text
+    assert "Editar perfil" in home.text
+    assert 'action="/logout"' in home.text
+    assert "Sair da sessão" in home.text.split('id="account-popover"', 1)[-1]
     clubs = member.get("/clubes")
     assert clubs.status_code == 200
     assert "Clube Nav" in clubs.text
@@ -478,6 +481,72 @@ def test_home_is_a_simple_club_hub():
     form = person.get("/clubs/novo")
     assert form.status_code == 200
     assert "Informações e regras" in form.text
+    assert 'id="cover-crop-dialog"' in form.text
+    assert "/static/js/cover-crop.js" in form.text
+    assert 'class="js-cover-file"' in form.text
+
+
+TINY_PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+    "0000000a49444154789c63000100000500010d0a2db40000000049454e44ae426082"
+)
+
+
+def test_club_cover_image_upload_and_type_limit():
+    owner = TestClient(app)
+    register_active(owner, "cover_img", "cover.img@example.com")
+    created = owner.post(
+        "/clubs",
+        data={"name": "Capa Foto", "description": "", "rules": "", "cover_color": "#3A2348"},
+        files={"cover_file": ("cover.png", TINY_PNG, "image/png")},
+        follow_redirects=False,
+    )
+    assert created.status_code == 303
+    club_id = int(created.headers["location"].rsplit("/", 1)[-1])
+    db = SessionLocal()
+    try:
+        club = db.get(Club, club_id)
+        assert club.cover_image
+        assert club.cover_image.endswith(".png")
+        image_name = club.cover_image
+    finally:
+        db.close()
+    room = owner.get(f"/clubs/{club_id}")
+    assert f"/static/uploads/clubs/{image_name}" in room.text
+    settings = owner.get(f"/clubs/{club_id}/config")
+    assert 'id="cover-crop-dialog"' in settings.text
+    assert "/static/js/cover-crop.js" in settings.text
+    assert 'id="photo-crop-dialog"' not in settings.text
+
+    rejected = owner.post(
+        "/clubs",
+        data={"name": "Capa Ruim", "description": "", "rules": "", "cover_color": "#3A2348"},
+        files={"cover_file": ("notes.txt", b"hello", "text/plain")},
+        follow_redirects=False,
+    )
+    assert rejected.status_code == 303
+    bad_id = int(rejected.headers["location"].rsplit("/", 1)[-1])
+    oversized = owner.post(
+        f"/clubs/{club_id}/config",
+        data={
+            "name": "Capa Foto",
+            "description": "",
+            "rules": "",
+            "cover_color": "#3A2348",
+            "admin_name_color": "#B892FF",
+            "sub_name_color": "#6C63FF",
+            "settings_section": "aparencia",
+        },
+        files={"cover_file": ("cover.png", b"x" * (2 * 1024 * 1024 + 8), "image/png")},
+        follow_redirects=False,
+    )
+    assert oversized.status_code == 303
+    db = SessionLocal()
+    try:
+        assert db.get(Club, bad_id).cover_image is None
+        assert db.get(Club, club_id).cover_image == image_name
+    finally:
+        db.close()
 
 
 def test_club_creator_is_admin_and_member_cannot_change_settings():
