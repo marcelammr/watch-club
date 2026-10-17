@@ -649,6 +649,8 @@ def test_club_settings_shell_sections_and_create_stays_linear():
     assert "Sem limite" in settings.text
     assert "Limitar a" in settings.text
     assert "Fundo do clube" in settings.text
+    assert 'id="cover-crop-dialog"' in settings.text
+    assert "/static/js/cover-crop.js" in settings.text
     assert "Tag do clube" in settings.text
     assert 'name="cover_color"' in settings.text
     assert 'name="is_closed"' in settings.text

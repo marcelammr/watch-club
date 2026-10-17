@@ -18,13 +18,13 @@ const badgeSizes = {
 const presenceVariant: Record<string, NonNullable<BadgeProps["variant"]>> = {
   online: "accessory",
   away: "secondary",
-  offline: "outline",
+  offline: "accessory",
 };
 
 const presenceClass: Record<string, string> = {
   online: "bg-[#3ddc84] hover:bg-[#3ddc84]",
   away: "overflow-hidden bg-background p-0 text-chart-1 hover:bg-background",
-  offline: "bg-muted-foreground",
+  offline: "bg-destructive hover:bg-destructive",
 };
 
 function CrescentMoon() {

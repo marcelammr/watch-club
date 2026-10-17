@@ -14,7 +14,7 @@
     {% if show.official_site %}<p><a href="{{ show.official_site }}" rel="noopener" target="_blank">Site oficial</a></p>{% endif %}
     {% if show.tvmaze_id > 0 %}
     <form action="/clubs/{{ club_id }}/shows/{{ show.id }}/refresh" method="post">
-      <button type="submit">Atualizar fotos, temporadas e notícias</button>
+      <button class="btn btn-primary" type="submit">Atualizar fotos, temporadas e notícias</button>
     </form>
     {% endif %}
   </div>

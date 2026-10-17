@@ -40,7 +40,7 @@
           <img id="cover-preview-img" alt="" hidden>
         </div>
         <label>Imagem
-          <input type="file" name="cover_file" id="cover-file" accept="image/jpeg,image/png,image/webp,image/gif">
+          <input type="file" name="cover_file" id="cover-file" class="js-cover-file" accept="image/jpeg,image/png,image/webp,image/gif">
         </label>
       </div>
     </div>
@@ -72,16 +72,6 @@
         colorPreview.style.background = event.detail.hex;
       }
     });
-    const previewImg = document.getElementById("cover-preview-img");
-    const coverFile = document.getElementById("cover-file");
-    if (coverFile && previewImg) {
-      coverFile.addEventListener("change", (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-        previewImg.src = URL.createObjectURL(file);
-        previewImg.hidden = false;
-      });
-    }
   })();
 </script>
 {% else %}
@@ -176,7 +166,7 @@
               {% endif %}
             </div>
             <label>Imagem
-              <input type="file" name="cover_file" id="cover-file" accept="image/jpeg,image/png,image/webp,image/gif">
+              <input type="file" name="cover_file" id="cover-file" class="js-cover-file" accept="image/jpeg,image/png,image/webp,image/gif">
             </label>
             {% if club.cover_image %}
               <label class="check"><input type="checkbox" name="clear_cover" value="1"> Remover imagem e usar só a cor</label>
@@ -245,8 +235,10 @@
           <input name="member_limit" class="js-member-limit" type="number" min="1" step="1" value="{{ club.member_limit if club.member_limit else '' }}" {% if not club.member_limit %}disabled{% endif %} placeholder="N">
         </fieldset>
         <p class="muted">Reduzir o número não remove quem já está no clube. ADM, SUB e Membro entram na conta.</p>
-        <p><a class="btn btn-ghost" href="/clubs/{{ club.id }}/membros">Ver participantes</a></p>
-        <button class="btn btn-primary" type="submit">Salvar</button>
+        <div class="friend-actions">
+          <a class="btn btn-secondary" href="/clubs/{{ club.id }}/membros">Ver participantes</a>
+          <button class="btn btn-primary" type="submit">Salvar</button>
+        </div>
       </section>
     </form>
     {% endif %}
@@ -607,16 +599,6 @@
         colorPreview.style.background = event.detail.hex;
       }
     });
-    const previewImg = document.getElementById("cover-preview-img");
-    const coverFile = document.getElementById("cover-file");
-    if (coverFile && previewImg) {
-      coverFile.addEventListener("change", (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-        previewImg.src = URL.createObjectURL(file);
-        previewImg.hidden = false;
-      });
-    }
   })();
   (function () {
     const root = document.querySelector(".js-club-settings");
@@ -806,4 +788,20 @@
   })();
 </script>
 {% endif %}
+<dialog id="cover-crop-dialog" class="leave-dialog cover-crop-dialog" aria-labelledby="cover-crop-title">
+  <h2 id="cover-crop-title">Enquadrar capa</h2>
+  <p class="error js-cover-crop-error" hidden></p>
+  <p class="muted js-cover-crop-gif" hidden>GIFs animados viram um único quadro. A animação não é mantida.</p>
+  <div class="cover-crop-stage">
+    <canvas class="js-cover-crop-canvas" width="320" height="200" aria-label="Prévia 16 por 10 da capa"></canvas>
+  </div>
+  <label class="photo-crop-zoom">Zoom
+    <input class="js-cover-crop-zoom" type="range" min="1" max="4" step="0.01" value="1" aria-label="Zoom da capa">
+  </label>
+  <div class="leave-dialog-actions">
+    <button type="button" class="btn btn-ghost js-cover-crop-cancel">Cancelar</button>
+    <button type="button" class="btn btn-primary js-cover-crop-confirm">Usar este enquadramento</button>
+  </div>
+</dialog>
+<script src="/static/js/cover-crop.js"></script>
 {% endblock %}
