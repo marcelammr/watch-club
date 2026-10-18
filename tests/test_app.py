@@ -2,9 +2,11 @@ from sqlalchemy import func, select
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 
+from app.club_icons import stored_icon_path
 from app.db import SessionLocal
 from app.main import app
 from app.models import Club, ClubJoinRequest, ClubMember, ClubShow, EmailToken, User
+from app.roles import PERM_TAG, ROLE_SUPPORT
 
 client = TestClient(app)
 
@@ -482,8 +484,15 @@ def test_home_is_a_simple_club_hub():
     assert form.status_code == 200
     assert "Informações e regras" in form.text
     assert 'id="cover-crop-dialog"' in form.text
+    assert 'id="icon-crop-dialog"' in form.text
     assert "/static/js/cover-crop.js" in form.text
+    assert "/static/js/icon-crop.js" in form.text
     assert 'class="js-cover-file"' in form.text
+    assert 'class="js-icon-file"' in form.text
+    assert "Ícone do clube" in form.text
+    assert "Capa do clube" in form.text
+    assert 'id="icon-remove-dialog"' not in form.text
+    assert "js-icon-remove-open" not in form.text
 
 
 TINY_PNG = bytes.fromhex(
@@ -545,6 +554,252 @@ def test_club_cover_image_upload_and_type_limit():
     try:
         assert db.get(Club, bad_id).cover_image is None
         assert db.get(Club, club_id).cover_image == image_name
+    finally:
+        db.close()
+
+
+TINY_GIF = (
+    b"GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00"
+    b"!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
+)
+
+
+def test_club_icon_image_optional_upload_and_independence():
+    from app.club_icons import club_icon_initials
+
+    assert club_icon_initials("") == "?"
+    assert club_icon_initials("Watch") == "WA"
+    assert club_icon_initials("Watch Club") == "WC"
+
+    owner = TestClient(app)
+    register_active(owner, "icon_img", "icon.img@example.com")
+    created = owner.post(
+        "/clubs",
+        data={"name": "Icone Vazio", "description": "", "rules": "", "cover_color": "#3A2348"},
+        follow_redirects=False,
+    )
+    assert created.status_code == 303
+    empty_id = int(created.headers["location"].rsplit("/", 1)[-1])
+    db = SessionLocal()
+    try:
+        empty = db.get(Club, empty_id)
+        assert empty.icon_image is None
+        assert empty.cover_image is None
+    finally:
+        db.close()
+
+    both = owner.post(
+        "/clubs",
+        data={"name": "Icone Foto", "description": "", "rules": "", "cover_color": "#246B45"},
+        files={
+            "icon_file": ("icon.png", TINY_PNG, "image/png"),
+            "cover_file": ("cover.png", TINY_PNG, "image/png"),
+        },
+        follow_redirects=False,
+    )
+    assert both.status_code == 303
+    club_id = int(both.headers["location"].rsplit("/", 1)[-1])
+    db = SessionLocal()
+    try:
+        club = db.get(Club, club_id)
+        assert club.icon_image and club.icon_image.endswith(".png")
+        assert club.cover_image and club.cover_image.endswith(".png")
+        assert club.icon_image != club.cover_image
+        icon_name = club.icon_image
+        cover_name = club.cover_image
+        code = club.join_code
+    finally:
+        db.close()
+    room = owner.get(f"/clubs/{club_id}")
+    assert f"/static/uploads/clubs/{cover_name}" in room.text
+    assert f"/static/uploads/club-icons/{icon_name}" in room.text
+    assert "club-mark" in room.text
+    empty_room = owner.get(f"/clubs/{empty_id}")
+    assert "club-icon-fallback" in empty_room.text
+    assert "IV" in empty_room.text
+    settings = owner.get(f"/clubs/{club_id}/config")
+    assert f"/static/uploads/club-icons/{icon_name}" in settings.text
+    assert 'name="icon_file"' in settings.text
+    assert 'name="clear_icon"' not in settings.text
+    assert "js-icon-remove-open" in settings.text
+    assert 'id="icon-remove-dialog"' in settings.text
+    assert "btn-danger js-icon-remove-confirm" in settings.text
+
+    swapped = owner.post(
+        f"/clubs/{club_id}/config",
+        data={
+            "name": "Icone Foto",
+            "description": "",
+            "rules": "",
+            "cover_color": "#246B45",
+            "admin_name_color": "#B892FF",
+            "sub_name_color": "#6C63FF",
+            "settings_section": "aparencia",
+        },
+        files={"icon_file": ("icon2.png", TINY_PNG, "image/png")},
+        follow_redirects=False,
+    )
+    assert swapped.status_code == 303
+    db = SessionLocal()
+    try:
+        club = db.get(Club, club_id)
+        assert club.icon_image != icon_name
+        assert club.cover_image == cover_name
+        icon_name = club.icon_image
+    finally:
+        db.close()
+
+    gif = owner.post(
+        "/clubs",
+        data={"name": "Icone Gif", "description": "", "rules": "", "cover_color": "#3A2348"},
+        files={"icon_file": ("icon.gif", TINY_GIF, "image/gif")},
+        follow_redirects=False,
+    )
+    assert gif.status_code == 303
+    gif_id = int(gif.headers["location"].rsplit("/", 1)[-1])
+    bad_type = owner.post(
+        "/clubs",
+        data={"name": "Icone Txt", "description": "", "rules": "", "cover_color": "#3A2348"},
+        files={"icon_file": ("notes.txt", b"hello", "text/plain")},
+        follow_redirects=False,
+    )
+    assert bad_type.status_code == 303
+    bad_id = int(bad_type.headers["location"].rsplit("/", 1)[-1])
+    oversized = owner.post(
+        f"/clubs/{club_id}/config",
+        data={
+            "name": "Icone Foto",
+            "description": "",
+            "rules": "",
+            "cover_color": "#246B45",
+            "admin_name_color": "#B892FF",
+            "sub_name_color": "#6C63FF",
+            "settings_section": "aparencia",
+        },
+        files={"icon_file": ("icon.png", b"x" * (2 * 1024 * 1024 + 8), "image/png")},
+        follow_redirects=False,
+    )
+    assert oversized.status_code == 303
+    db = SessionLocal()
+    try:
+        club = db.get(Club, club_id)
+        kept_name = club.name
+        kept_description = club.description
+        kept_rules = club.rules
+        kept_cover_color = club.cover_color
+        icon_name = club.icon_image
+        cover_name = club.cover_image
+    finally:
+        db.close()
+    assert stored_icon_path(icon_name) is not None
+    ignored_clear = owner.post(
+        f"/clubs/{club_id}/config",
+        data={
+            "name": "Icone Foto",
+            "description": "",
+            "rules": "",
+            "cover_color": "#246B45",
+            "admin_name_color": "#B892FF",
+            "sub_name_color": "#6C63FF",
+            "clear_icon": "1",
+            "settings_section": "aparencia",
+        },
+        follow_redirects=False,
+    )
+    assert ignored_clear.status_code == 303
+    db = SessionLocal()
+    try:
+        assert db.get(Club, club_id).icon_image == icon_name
+    finally:
+        db.close()
+    cleared = owner.post(f"/clubs/{club_id}/icon/remover", follow_redirects=False)
+    assert cleared.status_code == 204
+    empty_clear = owner.post(f"/clubs/{empty_id}/icon/remover", follow_redirects=False)
+    assert empty_clear.status_code == 204
+    db = SessionLocal()
+    try:
+        club = db.get(Club, club_id)
+        assert db.get(Club, gif_id).icon_image is None
+        assert db.get(Club, bad_id).icon_image is None
+        assert club.icon_image is None
+        assert club.cover_image == cover_name
+        assert club.name == kept_name
+        assert club.description == kept_description
+        assert club.rules == kept_rules
+        assert club.cover_color == kept_cover_color
+        assert db.get(Club, empty_id).icon_image is None
+    finally:
+        db.close()
+    assert stored_icon_path(icon_name) is None
+    after_clear = owner.get(f"/clubs/{club_id}/config")
+    remove_open = after_clear.text.split("js-icon-remove-open", 1)[1].split(">", 1)[0]
+    assert "hidden" in remove_open
+
+    restored = owner.post(
+        f"/clubs/{club_id}/config",
+        data={
+            "name": "Icone Foto",
+            "description": "",
+            "rules": "",
+            "cover_color": "#246B45",
+            "admin_name_color": "#B892FF",
+            "sub_name_color": "#6C63FF",
+            "settings_section": "aparencia",
+        },
+        files={"icon_file": ("icon3.png", TINY_PNG, "image/png")},
+        follow_redirects=False,
+    )
+    assert restored.status_code == 303
+    db = SessionLocal()
+    try:
+        club = db.get(Club, club_id)
+        icon_name = club.icon_image
+        cover_name = club.cover_image
+        assert icon_name
+    finally:
+        db.close()
+
+    guest = TestClient(app)
+    register_active(guest, "icon_membro", "icon.membro@example.com")
+    guest.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
+    blocked = guest.post(
+        f"/clubs/{club_id}/config",
+        data={
+            "name": "Hackeado",
+            "description": "",
+            "rules": "",
+            "cover_color": "#7A3048",
+            "settings_section": "aparencia",
+        },
+        files={"icon_file": ("icon.png", TINY_PNG, "image/png")},
+        follow_redirects=False,
+    )
+    assert blocked.status_code == 303
+    assert blocked.headers["location"] == f"/clubs/{club_id}"
+    member_remove = guest.post(f"/clubs/{club_id}/icon/remover", follow_redirects=False)
+    assert member_remove.status_code == 403
+
+    helper = TestClient(app)
+    register_active(helper, "icon_sub", "icon.sub@example.com")
+    helper.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
+    db = SessionLocal()
+    try:
+        helper_id = db.scalar(select(User.id).where(User.username_key == "icon_sub"))
+    finally:
+        db.close()
+    owner.post(
+        f"/clubs/{club_id}/membros/{helper_id}/papel",
+        data={"role": ROLE_SUPPORT, "support_perm": [PERM_TAG]},
+        follow_redirects=False,
+    )
+    sub_remove = helper.post(f"/clubs/{club_id}/icon/remover", follow_redirects=False)
+    assert sub_remove.status_code == 403
+    db = SessionLocal()
+    try:
+        club = db.get(Club, club_id)
+        assert club.icon_image == icon_name
+        assert club.cover_image == cover_name
+        assert club.name == "Icone Foto"
     finally:
         db.close()
 
@@ -1195,4 +1450,78 @@ def test_avatar_registry_upload_and_fallback():
     restored = person.get("/conta")
     assert 'src="/static/avatars/popcorn.svg"' in restored.text
     assert "/static/uploads/avatars/" not in restored.text.split("avatar-modal")[0]
+
+
+def test_club_switcher_lists_membership_only():
+    owner = TestClient(app)
+    register_active(owner, "switch_own", "switch.own@example.com")
+    first = owner.post("/clubs", data={"name": "Clube Alfa"}, follow_redirects=False)
+    alfa_id = int(first.headers["location"].rsplit("/", 1)[-1])
+    second = owner.post("/clubs", data={"name": "Clube Beta"}, follow_redirects=False)
+    beta_id = int(second.headers["location"].rsplit("/", 1)[-1])
+
+    stranger = TestClient(app)
+    register_active(stranger, "switch_out", "switch.out@example.com")
+    secret = stranger.post("/clubs", data={"name": "Clube Secreto"}, follow_redirects=False)
+    secret_id = int(secret.headers["location"].rsplit("/", 1)[-1])
+
+    db = SessionLocal()
+    try:
+        owner_id = db.scalar(select(User.id).where(User.username_key == "switch_own"))
+        before = db.scalar(select(func.count()).select_from(ClubMember).where(ClubMember.user_id == owner_id))
+    finally:
+        db.close()
+
+    page = owner.get(f"/clubs/{alfa_id}")
+    assert page.status_code == 200
+    assert "Trocar clube" in page.text
+    assert "js-club-switch-toggle" in page.text
+    assert "Seus clubes" in page.text
+    assert "Ver todos os clubes" in page.text
+    assert 'href="/clubes"' in page.text
+    assert "js-leave-open" in page.text
+    popover = page.text.split('id="club-switch-popover"', 1)[1].split("</div>", 2)[0]
+    assert "Clube Alfa" in popover
+    assert "Clube Beta" in popover
+    assert "Clube Secreto" not in popover
+    assert f'href="/clubs/{beta_id}"' in popover
+    assert f'href="/clubs/{alfa_id}"' not in popover
+    assert f'href="/clubs/{secret_id}"' not in popover
+    assert 'aria-current="page"' in popover
+    assert "club-mark" in popover
+    assert "CA" in popover
+    assert "CB" in popover
+
+    other = owner.get(f"/clubs/{beta_id}")
+    other_popover = other.text.split('id="club-switch-popover"', 1)[1].split("</div>", 2)[0]
+    assert f'href="/clubs/{alfa_id}"' in other_popover
+    assert f'href="/clubs/{beta_id}"' not in other_popover
+
+    db = SessionLocal()
+    try:
+        after = db.scalar(select(func.count()).select_from(ClubMember).where(ClubMember.user_id == owner_id))
+        assert after == before == 2
+        member_ids = set(
+            db.scalars(select(ClubMember.club_id).where(ClubMember.user_id == owner_id))
+        )
+        assert member_ids == {alfa_id, beta_id}
+    finally:
+        db.close()
+
+    lonely = TestClient(app)
+    register_active(lonely, "switch_one", "switch.one@example.com")
+    only = lonely.post("/clubs", data={"name": "Clube Unico"}, follow_redirects=False)
+    only_id = int(only.headers["location"].rsplit("/", 1)[-1])
+    solo = lonely.get(f"/clubs/{only_id}")
+    assert "Trocar clube" in solo.text
+    solo_popover = solo.text.split('id="club-switch-popover"', 1)[1].split("</div>", 2)[0]
+    assert "Clube Unico" in solo_popover
+    assert 'aria-current="page"' in solo_popover
+    assert f'href="/clubs/{only_id}"' not in solo_popover
+    assert "Ver todos os clubes" in solo.text
+
+    preview = lonely.get(f"/clubs/{alfa_id}")
+    assert preview.status_code == 200
+    assert "Trocar clube" not in preview.text
+    assert "Participar" in preview.text
 

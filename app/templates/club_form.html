@@ -24,8 +24,18 @@
     <label>Informações e regras
       <textarea name="rules" rows="5" maxlength="2000" placeholder="Combinados do grupo"></textarea>
     </label>
-    <p class="bio-label">Fundo do clube</p>
     {% set cover_hex = '#3A2348' %}
+    <p class="bio-label">Ícone do clube</p>
+    <p class="muted">Identidade compacta da comunidade. Opcional.</p>
+    <div class="club-icon-preview js-club-icon-preview" style="--icon-fallback: {{ cover_hex }}">
+      <img class="js-icon-preview-img" alt="" hidden>
+      <span class="club-icon-fallback js-icon-fallback">?</span>
+    </div>
+    <label>Foto do ícone
+      <input type="file" name="icon_file" class="js-icon-file" accept="image/jpeg,image/png,image/webp">
+    </label>
+    <p class="bio-label">Capa do clube</p>
+    <p class="muted">Imagem horizontal usada dentro do clube.</p>
     <div class="js-cover-editor" data-initial-tab="color">
       <div class="cover-tabs" role="tablist" aria-label="Fundo do clube">
         <button type="button" class="cover-tab js-cover-tab" data-tab="color" aria-selected="true">Cor</button>
@@ -86,11 +96,11 @@
 <div class="settings-overlay-root">
 <div
   class="club-settings js-club-settings{% if mode == 'tag' %} is-tag-only is-section{% endif %}"
-  data-sections="{% if mode == 'edit' %}geral aparencia tag cargos membros{% else %}tag{% endif %}"
+  data-sections="{% if mode == 'edit' %}geral aparencia descoberta tag cargos membros{% else %}tag{% endif %}"
   data-initial="{{ settings_section if settings_section else '' }}"
   style="--club-admin-color: {{ admin_hex }}; --club-sub-color: {{ sub_hex }}"
 >
-  <a class="btn btn-icon settings-close" href="/clubs/{{ club.id }}" aria-label="Fechar configurações" title="Fechar">&times;</a>
+  <a class="btn btn-icon settings-close js-settings-leave" href="/clubs/{{ club.id }}" aria-label="Fechar configurações" title="Fechar">&times;</a>
   <aside class="club-settings-nav" aria-label="Categorias de configuração">
     <p class="club-settings-kicker">Configurações do clube</p>
     <p class="club-settings-club">{{ club.name }}</p>
@@ -99,6 +109,7 @@
     <div class="club-settings-tabs" role="tablist" aria-orientation="vertical">
       <button type="button" class="club-settings-link js-settings-link" role="tab" data-section="geral" aria-selected="false" aria-controls="panel-geral" id="tab-geral">Geral <span class="club-settings-chevron" aria-hidden="true">›</span></button>
       <button type="button" class="club-settings-link js-settings-link" role="tab" data-section="aparencia" aria-selected="false" aria-controls="panel-aparencia" id="tab-aparencia">Aparência <span class="club-settings-chevron" aria-hidden="true">›</span></button>
+      <button type="button" class="club-settings-link js-settings-link" role="tab" data-section="descoberta" aria-selected="false" aria-controls="panel-descoberta" id="tab-descoberta">Descoberta <span class="club-settings-chevron" aria-hidden="true">›</span></button>
     </div>
     <p class="club-settings-kicker">Personalização</p>
     <div class="club-settings-tabs" role="tablist" aria-orientation="vertical">
@@ -115,7 +126,7 @@
       <button type="button" class="club-settings-link js-settings-link is-on" role="tab" data-section="tag" aria-selected="true" aria-controls="panel-tag" id="tab-tag" aria-current="page">Tag do clube <span class="club-settings-chevron" aria-hidden="true">›</span></button>
     </div>
     {% endif %}
-    <a class="club-settings-back-club" href="/clubs/{{ club.id }}">Voltar ao clube</a>
+    <a class="club-settings-back-club js-settings-leave" href="/clubs/{{ club.id }}">Voltar ao clube</a>
   </aside>
   <div class="club-settings-main">
     {% if mode == 'edit' %}
@@ -125,7 +136,7 @@
     {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
 
     {% if mode == 'edit' %}
-    <form id="club-config-form" class="club-settings-form" action="/clubs/{{ club.id }}/config" method="post" enctype="multipart/form-data">
+    <form id="club-config-form" class="club-settings-form js-unsaved-form" action="/clubs/{{ club.id }}/config" method="post" enctype="multipart/form-data">
       <input type="hidden" name="settings_section" class="js-settings-section" value="{{ settings_section if settings_section else 'geral' }}">
 
       <section class="club-settings-panel" data-panel="geral" id="panel-geral" role="tabpanel" aria-labelledby="tab-geral" hidden>
@@ -146,8 +157,29 @@
 
       <section class="club-settings-panel" data-panel="aparencia" id="panel-aparencia" role="tabpanel" aria-labelledby="tab-aparencia" hidden>
         <h1>Aparência</h1>
-        <p class="club-settings-lead">Fundo visual da sala do clube. A tag tem uma seção própria.</p>
-        <h2>Fundo do clube</h2>
+        <p class="club-settings-lead">Ícone compacto da comunidade e capa horizontal da sala. A tag tem uma seção própria.</p>
+        <h2>Ícone do clube</h2>
+        <p class="muted">Identidade compacta da comunidade.</p>
+        <div class="club-icon-preview js-club-icon-preview" style="--icon-fallback: {{ cover_hex }}">
+          {% if club.icon_image %}
+            <img class="js-icon-preview-img" src="{{ club_icon_url(club.icon_image) }}" alt="">
+            <span class="club-icon-fallback js-icon-fallback" hidden>{{ club_icon_initials(club.name) }}</span>
+          {% else %}
+            <img class="js-icon-preview-img" alt="" hidden>
+            <span class="club-icon-fallback js-icon-fallback">{{ club_icon_initials(club.name) }}</span>
+          {% endif %}
+        </div>
+        <label>Foto do ícone
+          <input type="file" name="icon_file" class="js-icon-file" accept="image/jpeg,image/png,image/webp">
+        </label>
+        <button
+          type="button"
+          class="btn btn-ghost js-icon-remove-open"
+          data-remove-url="/clubs/{{ club.id }}/icon/remover"
+          {% if not club.icon_image %}hidden{% endif %}
+        >Remover ícone</button>
+        <h2>Capa do clube</h2>
+        <p class="muted">Imagem horizontal usada dentro do clube.</p>
         <div class="js-cover-editor" data-initial-tab="{{ cover_tab }}">
           <div class="cover-tabs" role="tablist" aria-label="Fundo do clube">
             <button type="button" class="cover-tab js-cover-tab" data-tab="color" aria-selected="{{ 'true' if cover_tab == 'color' else 'false' }}">Cor</button>
@@ -243,6 +275,61 @@
     </form>
     {% endif %}
 
+    {% if mode == 'edit' %}
+    <section class="club-settings-panel" data-panel="descoberta" id="panel-descoberta" role="tabpanel" aria-labelledby="tab-descoberta" hidden>
+      <h1>Descoberta</h1>
+      <p class="club-settings-lead">Ajude outras pessoas a encontrar seu clube.</p>
+      <form class="js-discovery-form js-unsaved-form" action="/clubs/{{ club.id }}/descoberta" method="post">
+        <h2>Categorias</h2>
+        <p class="muted">Escolha até {{ MAX_CATEGORIES }} categorias oficiais. Nenhum grupo é obrigatório.</p>
+        <p class="club-settings-counts js-category-count">0/{{ MAX_CATEGORIES }} categorias</p>
+        {% for group in discovery_groups or [] %}
+          <p class="discovery-group-label">{{ group.label }}</p>
+          <div class="discovery-chips" role="group" aria-label="{{ group.label }}">
+            {% for item in group.categories %}
+              <label class="discovery-chip">
+                <input type="checkbox" name="category_slug" value="{{ item.slug }}" class="js-discovery-category" {% if item.slug in discovery_selected %}checked{% endif %}>
+                <span>{{ item.name }}</span>
+              </label>
+            {% endfor %}
+          </div>
+        {% endfor %}
+        <h2>Tags de conteúdo</h2>
+        <p class="muted">Termos mais específicos do clube, como survival horror, Marvel ou cinema nacional. Até {{ MAX_TAGS }} tags.</p>
+        <p class="club-settings-counts js-tag-count">0/{{ MAX_TAGS }} tags</p>
+        <div class="discovery-tag-field">
+          <label for="discovery-tag-input">Nova tag</label>
+          <div class="discovery-tag-compose">
+            <div class="discovery-tag-control js-discovery-tag-control">
+              <input
+                id="discovery-tag-input"
+                type="text"
+                class="js-discovery-tag-input"
+                maxlength="{{ TAG_LABEL_MAX }}"
+                placeholder="survival horror"
+                autocomplete="off"
+                aria-invalid="false"
+              >
+              <button type="button" class="discovery-tag-clear js-discovery-tag-clear" hidden aria-label="Limpar tag">&times;</button>
+            </div>
+            <button type="button" class="btn btn-secondary discovery-tag-add js-discovery-tag-add">Adicionar</button>
+          </div>
+          <p id="discovery-tag-error" class="error js-discovery-tag-error" hidden role="alert"></p>
+        </div>
+        <div class="discovery-tag-list js-discovery-tag-list" aria-live="polite">
+          {% for item in discovery_tags or [] %}
+            <span class="discovery-tag-chip">
+              <input type="hidden" name="content_tag" value="{{ item.label }}">
+              {{ item.label }}
+              <button type="button" class="discovery-tag-remove js-discovery-tag-remove" aria-label="Remover {{ item.label }}">&times;</button>
+            </span>
+          {% endfor %}
+        </div>
+        <button class="btn btn-primary" type="submit">Salvar descoberta</button>
+      </form>
+    </section>
+    {% endif %}
+
     {% if can_tag %}
     <section class="club-settings-panel" data-panel="tag" id="panel-tag" role="tabpanel" aria-labelledby="tab-tag" {% if mode == 'edit' %}hidden{% endif %}>
       <h1>Tag do clube</h1>
@@ -256,7 +343,7 @@
           aria-controls="tag-guide-dialog"
         >Ver orientações</button>
       </div>
-      <form action="/clubs/{{ club.id }}/tag" method="post">
+      <form class="js-unsaved-form" action="/clubs/{{ club.id }}/tag" method="post">
         {{ club_tag_fields(club, tag, user.name) }}
         <label class="check"><input type="checkbox" name="clear_tag" value="1"> Remover tag</label>
         <button class="btn btn-primary" type="submit">Salvar tag</button>
@@ -266,46 +353,67 @@
   </div>
 </div>
 </div>
+<dialog class="leave-dialog" id="unsaved-dialog" aria-labelledby="unsaved-title">
+  <h2 id="unsaved-title">Você tem alterações não salvas</h2>
+  <p>Deseja salvar antes de sair?</p>
+  <p class="muted js-unsaved-multi" hidden>Há alterações em mais de uma seção. Salve cada uma pelo botão da própria seção.</p>
+  <div class="leave-dialog-actions">
+    <button type="button" class="btn btn-ghost js-unsaved-stay">Continuar editando</button>
+    <button type="button" class="btn btn-danger js-unsaved-leave">Sair sem salvar</button>
+    <button type="button" class="btn btn-primary js-unsaved-save">Salvar alterações</button>
+  </div>
+</dialog>
 
 {% if mode == 'edit' %}
-<dialog class="members-dialog" id="roles-dialog" aria-labelledby="roles-dialog-title" style="--club-admin-color: {{ admin_hex }}; --club-sub-color: {{ sub_hex }}">
+<dialog class="members-dialog roles-dialog" id="roles-dialog" aria-labelledby="roles-dialog-title" style="--club-admin-color: {{ admin_hex }}; --club-sub-color: {{ sub_hex }}">
   <div class="members-dialog-head">
     <h2 id="roles-dialog-title">Cargos do clube</h2>
     <button type="button" class="btn btn-icon members-close js-close-roles" aria-label="Fechar" title="Fechar">&times;</button>
   </div>
-  <p class="muted">Máximo: {{ MAX_ADMINS }} ADM e {{ MAX_SUPPORT }} SUB. O dono conta como ADM e não pode ser rebaixado.</p>
-  <p class="muted">{{ admin_total }} ADM · {{ support_total }} SUB</p>
-  <ul class="people">
+  <div class="roles-dialog-copy">
+    <p class="muted">Máximo: {{ MAX_ADMINS }} ADM e {{ MAX_SUPPORT }} SUB. O dono conta como ADM e não pode ser rebaixado.</p>
+    <p class="muted">{{ admin_total }} ADM · {{ support_total }} SUB</p>
+  </div>
+  <ul class="people roles-dialog-body">
     {% for member in members %}
       {% set role = member_role(member) %}
-      <li class="person-row person-row-manage">
-        <div class="person-row">
-          {{ user_avatar(member.user, 'md') }}
-          {{ club_person_name(member.user, member) }}
-          {{ club_tag_chip(member.user.display_tag) }}
-          {{ club_role_badge(member) }}
-          {% if member.user_id == club.owner_id %}<span class="muted">Dono</span>{% endif %}
+      <li class="role-member js-role-member">
+        <div class="role-member-head">
+          <div class="person-row">
+            {{ user_avatar(member.user, 'md') }}
+            {{ club_person_name(member.user, member) }}
+            {{ club_tag_chip(member.user.display_tag) }}
+            {{ club_role_badge(member) }}
+            {% if member.user_id == club.owner_id %}<span class="muted">Dono</span>{% endif %}
+          </div>
+          {% if member.user_id != club.owner_id %}
+            <button type="button" class="btn btn-ghost js-role-edit" aria-expanded="false" aria-controls="role-form-{{ member.user_id }}">Editar cargo</button>
+          {% endif %}
         </div>
         {% if member.user_id == club.owner_id %}
-          <p class="muted">O dono permanece ADM enquanto for dono do clube.</p>
+          <p class="muted role-member-note">O dono permanece ADM enquanto for dono do clube.</p>
         {% else %}
-          <form class="role-form js-role-form" action="/clubs/{{ club.id }}/membros/{{ member.user_id }}/papel" method="post">
-            <label class="visually-hidden" for="role-{{ member.user_id }}">Cargo</label>
-            <select id="role-{{ member.user_id }}" name="role" class="js-role-select">
-              <option value="member" {% if role == 'member' %}selected{% endif %}>Membro</option>
-              <option value="support" {% if role == 'support' %}selected{% endif %} {% if role != 'support' and support_total >= MAX_SUPPORT %}disabled{% endif %}>SUB</option>
-              <option value="admin" {% if role == 'admin' %}selected{% endif %} {% if role != 'admin' and admin_total >= MAX_ADMINS %}disabled{% endif %}>ADM</option>
-            </select>
+          <form id="role-form-{{ member.user_id }}" class="role-form js-role-form" action="/clubs/{{ club.id }}/membros/{{ member.user_id }}/papel" method="post" hidden>
+            <label class="role-field" for="role-{{ member.user_id }}">Cargo
+              <select id="role-{{ member.user_id }}" name="role" class="js-role-select" data-initial-role="{{ role }}">
+                <option value="member" {% if role == 'member' %}selected{% endif %}>Membro</option>
+                <option value="support" {% if role == 'support' %}selected{% endif %} {% if role != 'support' and support_total >= MAX_SUPPORT %}disabled{% endif %}>SUB</option>
+                <option value="admin" {% if role == 'admin' %}selected{% endif %} {% if role != 'admin' and admin_total >= MAX_ADMINS %}disabled{% endif %}>ADM</option>
+              </select>
+            </label>
             <fieldset class="role-perms js-role-perms" {% if role != 'support' %}hidden{% endif %}>
               <legend>Permissões de SUB</legend>
               {% for perm in SUPPORT_PERMS %}
                 <label class="check">
-                  <input type="checkbox" name="support_perm" value="{{ perm }}" {% if perm in parse_support_perms(member.support_perms) %}checked{% endif %}>
+                  <input type="checkbox" name="support_perm" value="{{ perm }}" {% if perm in parse_support_perms(member.support_perms) %}checked data-initial-checked="1"{% endif %}>
                   {{ SUPPORT_PERM_LABELS.get(perm, perm) }}
                 </label>
               {% endfor %}
             </fieldset>
-            <button class="btn btn-primary" type="submit">Salvar cargo</button>
+            <div class="leave-dialog-actions">
+              <button type="button" class="btn btn-ghost js-role-cancel">Cancelar</button>
+              <button class="btn btn-primary" type="submit">Salvar cargo</button>
+            </div>
           </form>
         {% endif %}
       </li>
@@ -672,6 +780,93 @@
     fromLocation();
   })();
   (function () {
+    const forms = [...document.querySelectorAll(".js-unsaved-form")];
+    const dialog = document.getElementById("unsaved-dialog");
+    const stayBtn = dialog && dialog.querySelector(".js-unsaved-stay");
+    const leaveBtn = dialog && dialog.querySelector(".js-unsaved-leave");
+    const saveBtn = dialog && dialog.querySelector(".js-unsaved-save");
+    const multiNote = dialog && dialog.querySelector(".js-unsaved-multi");
+    const leaves = [...document.querySelectorAll(".js-settings-leave")];
+    if (!forms.length || !dialog || !leaves.length) return;
+
+    const skip = { settings_section: true };
+    const baselines = new Map();
+    let leaveUrl = leaves[0].getAttribute("href") || "/";
+    let opener = null;
+
+    function formSnapshot(form) {
+      const groups = {};
+      [...form.elements].forEach((field) => {
+        if (!field.name || field.disabled || skip[field.name]) return;
+        if (field.type === "file") {
+          const file = field.files && field.files[0];
+          const token = file && file.size ? "file:" + file.name + ":" + file.size + ":" + file.lastModified : "";
+          (groups[field.name] || (groups[field.name] = [])).push(token);
+          return;
+        }
+        if (field.type === "checkbox" || field.type === "radio") {
+          if (!field.checked) return;
+        }
+        (groups[field.name] || (groups[field.name] = [])).push(String(field.value || ""));
+      });
+      return Object.keys(groups).sort().map((key) => key + "=" + groups[key].join("\t")).join("\n");
+    }
+
+    function captureBaselines() {
+      forms.forEach((form) => baselines.set(form, formSnapshot(form)));
+    }
+
+    function dirtyForms() {
+      return forms.filter((form) => formSnapshot(form) !== baselines.get(form));
+    }
+
+    function stay() {
+      dialog.close();
+      if (opener && typeof opener.focus === "function") opener.focus();
+    }
+
+    function leave() {
+      window.location.assign(leaveUrl);
+    }
+
+    function openConfirm(url, trigger) {
+      leaveUrl = url;
+      opener = trigger;
+      const dirty = dirtyForms();
+      if (multiNote) multiNote.hidden = dirty.length <= 1;
+      if (saveBtn) saveBtn.hidden = dirty.length !== 1;
+      dialog.showModal();
+      const focusBtn = dirty.length === 1 ? saveBtn : stayBtn;
+      if (focusBtn) focusBtn.focus();
+    }
+
+    function saveDirty() {
+      const dirty = dirtyForms();
+      if (dirty.length !== 1) {
+        stay();
+        return;
+      }
+      dialog.close();
+      dirty[0].requestSubmit();
+    }
+
+    captureBaselines();
+    leaves.forEach((link) => {
+      link.addEventListener("click", (event) => {
+        if (!dirtyForms().length) return;
+        event.preventDefault();
+        openConfirm(link.getAttribute("href") || "/", link);
+      });
+    });
+    if (stayBtn) stayBtn.addEventListener("click", stay);
+    if (leaveBtn) leaveBtn.addEventListener("click", leave);
+    if (saveBtn) saveBtn.addEventListener("click", saveDirty);
+    dialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      stay();
+    });
+  })();
+  (function () {
     const form = document.getElementById("club-config-form");
     const limitField = document.querySelector(".js-member-limit");
     const modes = [...document.querySelectorAll(".js-limit-mode")];
@@ -702,15 +897,64 @@
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) dialog.close();
     });
-    document.querySelectorAll(".js-role-form").forEach((form) => {
+    function syncPerms(form) {
       const select = form.querySelector(".js-role-select");
       const perms = form.querySelector(".js-role-perms");
-      const sync = () => {
-        if (!perms) return;
-        perms.hidden = select.value !== "support";
-      };
-      select.addEventListener("change", sync);
-      sync();
+      if (!select || !perms) return;
+      perms.hidden = select.value !== "support";
+    }
+
+    function closeEditor(member, reset) {
+      const form = member.querySelector(".js-role-form");
+      const edit = member.querySelector(".js-role-edit");
+      if (!form) return;
+      if (reset) {
+        const select = form.querySelector(".js-role-select");
+        if (select) select.value = select.getAttribute("data-initial-role") || "member";
+        form.querySelectorAll('input[name="support_perm"]').forEach((box) => {
+          box.checked = box.getAttribute("data-initial-checked") === "1";
+        });
+        syncPerms(form);
+      }
+      form.hidden = true;
+      member.classList.remove("is-editing");
+      if (edit) {
+        edit.hidden = false;
+        edit.setAttribute("aria-expanded", "false");
+      }
+    }
+
+    function openEditor(member) {
+      dialog.querySelectorAll(".js-role-member.is-editing").forEach((other) => {
+        if (other !== member) closeEditor(other, true);
+      });
+      const form = member.querySelector(".js-role-form");
+      const edit = member.querySelector(".js-role-edit");
+      if (!form) return;
+      form.hidden = false;
+      member.classList.add("is-editing");
+      if (edit) {
+        edit.hidden = true;
+        edit.setAttribute("aria-expanded", "true");
+      }
+      const select = form.querySelector(".js-role-select");
+      if (select) select.focus();
+    }
+
+    dialog.querySelectorAll(".js-role-member").forEach((member) => {
+      const form = member.querySelector(".js-role-form");
+      const edit = member.querySelector(".js-role-edit");
+      const cancel = member.querySelector(".js-role-cancel");
+      if (form) {
+        const select = form.querySelector(".js-role-select");
+        if (select) select.addEventListener("change", () => syncPerms(form));
+        syncPerms(form);
+      }
+      if (edit) edit.addEventListener("click", () => openEditor(member));
+      if (cancel) cancel.addEventListener("click", () => closeEditor(member, true));
+    });
+    dialog.addEventListener("close", () => {
+      dialog.querySelectorAll(".js-role-member").forEach((member) => closeEditor(member, true));
     });
   })();
   (function () {
@@ -787,7 +1031,187 @@
     });
   })();
 </script>
+<script>
+  (function () {
+    const form = document.querySelector(".js-discovery-form");
+    if (!form) return;
+    const maxCats = {{ MAX_CATEGORIES }};
+    const maxTags = {{ MAX_TAGS }};
+    const minLen = 2;
+    const maxLen = {{ TAG_LABEL_MAX }};
+    const boxes = [...form.querySelectorAll(".js-discovery-category")];
+    const catCount = form.querySelector(".js-category-count");
+    const tagCount = form.querySelector(".js-tag-count");
+    const list = form.querySelector(".js-discovery-tag-list");
+    const input = form.querySelector(".js-discovery-tag-input");
+    const addBtn = form.querySelector(".js-discovery-tag-add");
+    const errorEl = form.querySelector(".js-discovery-tag-error");
+    const control = form.querySelector(".js-discovery-tag-control");
+    const clearBtn = form.querySelector(".js-discovery-tag-clear");
+    const allowedChars = /[^\p{L}\p{N} \-+/&]/u;
+
+    function showError(message) {
+      const text = message || "";
+      if (errorEl) {
+        errorEl.textContent = text;
+        errorEl.hidden = !text;
+      }
+      if (control) control.classList.toggle("is-invalid", Boolean(text));
+      if (clearBtn) {
+        if (text) clearBtn.removeAttribute("hidden");
+        else clearBtn.setAttribute("hidden", "");
+      }
+      if (input) {
+        input.setAttribute("aria-invalid", text ? "true" : "false");
+        if (text) input.setAttribute("aria-describedby", "discovery-tag-error");
+        else input.removeAttribute("aria-describedby");
+      }
+    }
+
+    function clearError() {
+      showError("");
+    }
+
+    function clearAttempt() {
+      if (input) input.value = "";
+      clearError();
+      if (input) input.focus();
+    }
+
+    function syncCategories() {
+      const n = boxes.filter((box) => box.checked).length;
+      if (catCount) catCount.textContent = n + "/" + maxCats + " categorias";
+      boxes.forEach((box) => {
+        box.disabled = !box.checked && n >= maxCats;
+      });
+    }
+
+    function tagValues() {
+      return [...list.querySelectorAll('input[name="content_tag"]')].map((node) => node.value);
+    }
+
+    function slugKey(value) {
+      return (value || "")
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/&/g, " e ")
+        .replace(/\+/g, " plus ")
+        .replace(/\//g, " ")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "");
+    }
+
+    function syncTags() {
+      const n = tagValues().length;
+      if (tagCount) tagCount.textContent = n + "/" + maxTags + " tags";
+    }
+
+    function addTag(raw) {
+      const label = (raw || "").trim().replace(/\s+/g, " ");
+      if (!label) {
+        clearError();
+        return;
+      }
+      if (label.length < minLen) {
+        showError("A tag deve ter pelo menos 2 caracteres.");
+        return;
+      }
+      if (label.length > maxLen) {
+        showError("A tag pode ter no máximo 32 caracteres.");
+        return;
+      }
+      if (/https?:\/\//i.test(label) || /www\./i.test(label) || label.includes("://")) {
+        showError("Links não podem ser usados como tags.");
+        return;
+      }
+      if (allowedChars.test(label)) {
+        showError("Esta tag contém caracteres não permitidos.");
+        return;
+      }
+      const key = slugKey(label);
+      if (!key) {
+        showError("Esta tag contém caracteres não permitidos.");
+        return;
+      }
+      if (tagValues().some((item) => slugKey(item) === key)) {
+        showError("Esta tag já foi adicionada ao clube.");
+        return;
+      }
+      if (tagValues().length >= maxTags) {
+        showError("Você pode adicionar até 10 tags.");
+        return;
+      }
+      const chip = document.createElement("span");
+      chip.className = "discovery-tag-chip";
+      chip.innerHTML = '<input type="hidden" name="content_tag"><button type="button" class="discovery-tag-remove js-discovery-tag-remove">&times;</button>';
+      chip.querySelector("input").value = label;
+      chip.querySelector("button").setAttribute("aria-label", "Remover " + label);
+      chip.insertBefore(document.createTextNode(label + " "), chip.querySelector("button"));
+      list.appendChild(chip);
+      if (input) input.value = "";
+      clearError();
+      syncTags();
+    }
+
+    boxes.forEach((box) => box.addEventListener("change", syncCategories));
+    form.addEventListener("click", (event) => {
+      const btn = event.target.closest(".js-discovery-tag-remove");
+      if (!btn || !form.contains(btn)) return;
+      btn.closest(".discovery-tag-chip").remove();
+      syncTags();
+    });
+    if (addBtn) addBtn.addEventListener("click", () => addTag(input && input.value));
+    if (clearBtn) {
+      clearBtn.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+      });
+      clearBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        clearAttempt();
+      });
+    }
+    if (input) {
+      input.addEventListener("input", clearError);
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          addTag(input.value);
+        }
+      });
+    }
+    syncCategories();
+    syncTags();
+  })();
+</script>
 {% endif %}
+{% if mode == 'edit' %}
+<dialog id="icon-remove-dialog" class="leave-dialog" aria-labelledby="icon-remove-title">
+  <h2 id="icon-remove-title">Remover ícone do clube?</h2>
+  <p>O clube voltará a usar a identidade padrão até que um novo ícone seja enviado.</p>
+  <p class="error js-icon-remove-error" hidden></p>
+  <div class="leave-dialog-actions">
+    <button type="button" class="btn btn-ghost js-icon-remove-cancel">Cancelar</button>
+    <button type="button" class="btn btn-danger js-icon-remove-confirm">Remover</button>
+  </div>
+</dialog>
+{% endif %}
+<dialog id="icon-crop-dialog" class="leave-dialog icon-crop-dialog" aria-labelledby="icon-crop-title">
+  <h2 id="icon-crop-title">Enquadrar ícone</h2>
+  <p class="error js-icon-crop-error" hidden></p>
+  <div class="icon-crop-stage">
+    <canvas class="js-icon-crop-canvas" width="280" height="280" aria-label="Prévia quadrada do ícone"></canvas>
+  </div>
+  <label class="photo-crop-zoom">Zoom
+    <input class="js-icon-crop-zoom" type="range" min="1" max="4" step="0.01" value="1" aria-label="Zoom do ícone">
+  </label>
+  <div class="leave-dialog-actions">
+    <button type="button" class="btn btn-ghost js-icon-crop-cancel">Cancelar</button>
+    <button type="button" class="btn btn-primary js-icon-crop-confirm">Usar este enquadramento</button>
+  </div>
+</dialog>
 <dialog id="cover-crop-dialog" class="leave-dialog cover-crop-dialog" aria-labelledby="cover-crop-title">
   <h2 id="cover-crop-title">Enquadrar capa</h2>
   <p class="error js-cover-crop-error" hidden></p>
@@ -804,4 +1228,75 @@
   </div>
 </dialog>
 <script src="/static/js/cover-crop.js"></script>
+<script src="/static/js/icon-crop.js"></script>
+<script>
+  (function () {
+    const wrap = document.querySelector(".js-club-icon-preview");
+    const fallback = document.querySelector(".js-icon-fallback");
+    document.querySelectorAll(".js-cover-editor").forEach((editor) => {
+      editor.addEventListener("color-change", (event) => {
+        if (wrap && event.detail && event.detail.hex) {
+          wrap.style.setProperty("--icon-fallback", event.detail.hex);
+        }
+      });
+    });
+    const nameInput = document.querySelector('input[name="name"]');
+    function initials(name) {
+      const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) return "?";
+      if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    if (nameInput && fallback) {
+      nameInput.addEventListener("input", () => {
+        fallback.textContent = initials(nameInput.value);
+      });
+    }
+  })();
+</script>
+{% if mode == 'edit' %}
+<script>
+  (function () {
+    const openBtn = document.querySelector(".js-icon-remove-open");
+    const dialog = document.getElementById("icon-remove-dialog");
+    if (!openBtn || !dialog) return;
+    const confirmBtn = dialog.querySelector(".js-icon-remove-confirm");
+    const errorEl = dialog.querySelector(".js-icon-remove-error");
+    const url = openBtn.getAttribute("data-remove-url");
+    if (!confirmBtn || !url) return;
+
+    function showRemoveError(message) {
+      if (!errorEl) return;
+      errorEl.textContent = message || "";
+      errorEl.hidden = !message;
+    }
+
+    openBtn.addEventListener("click", () => {
+      showRemoveError("");
+      dialog.showModal();
+    });
+    dialog.querySelectorAll(".js-icon-remove-cancel").forEach((btn) => {
+      btn.addEventListener("click", () => dialog.close());
+    });
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+    confirmBtn.addEventListener("click", async () => {
+      confirmBtn.disabled = true;
+      showRemoveError("");
+      try {
+        const res = await fetch(url, { method: "POST", credentials: "same-origin" });
+        if (!res.ok) throw new Error("fail");
+        dialog.close();
+        openBtn.hidden = true;
+        window.dispatchEvent(new Event("club-icon-cleared"));
+      } catch (_) {
+        showRemoveError("Não foi possível remover o ícone.");
+      } finally {
+        confirmBtn.disabled = false;
+      }
+    });
+  })();
+</script>
+{% endif %}
 {% endblock %}

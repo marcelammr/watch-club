@@ -2,6 +2,7 @@ from sqlalchemy import inspect, text
 
 from app.avatars import DEFAULT_AVATAR
 from app.db import engine
+from app.discovery import CATALOG
 from app.usernames import normalize_username
 
 
@@ -117,6 +118,8 @@ def migrate_schema() -> None:
             club_alters.append("ALTER TABLE clubs ADD COLUMN cover_color VARCHAR(7) DEFAULT '#3a2348'")
         if "cover_image" not in club_cols:
             club_alters.append("ALTER TABLE clubs ADD COLUMN cover_image VARCHAR(120)")
+        if "icon_image" not in club_cols:
+            club_alters.append("ALTER TABLE clubs ADD COLUMN icon_image VARCHAR(120)")
         if "tag_slug" not in club_cols:
             club_alters.append("ALTER TABLE clubs ADD COLUMN tag_slug VARCHAR(4) DEFAULT ''")
         if "tag_emoji" not in club_cols:
@@ -251,3 +254,22 @@ def migrate_schema() -> None:
         if "watch_status" not in link_cols:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE club_shows ADD COLUMN watch_status VARCHAR(20) DEFAULT 'watching'"))
+    _seed_catalog_categories()
+
+
+def _seed_catalog_categories() -> None:
+    inspector = inspect(engine)
+    if "catalog_categories" not in inspector.get_table_names():
+        return
+    with engine.begin() as connection:
+        for slug, name, kind, sort_order in CATALOG:
+            connection.execute(
+                text(
+                    "INSERT INTO catalog_categories (slug, name, kind, sort_order, is_active) "
+                    "VALUES (:slug, :name, :kind, :sort_order, 1) "
+                    "ON CONFLICT(slug) DO UPDATE SET "
+                    "name = excluded.name, kind = excluded.kind, sort_order = excluded.sort_order"
+                ),
+                {"slug": slug, "name": name, "kind": kind, "sort_order": sort_order},
+            )
+

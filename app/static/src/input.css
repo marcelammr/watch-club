@@ -1083,6 +1083,27 @@
   .cover-crop-stage canvas {
     @apply block h-full w-full cursor-grab;
   }
+  .club-icon-preview {
+    @apply relative mb-3 grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-2xl;
+    aspect-ratio: 1 / 1;
+    min-width: 6rem;
+    min-height: 6rem;
+    max-width: 6rem;
+    background: var(--icon-fallback, var(--primary));
+  }
+  .club-icon-preview img {
+    @apply block h-full w-full object-cover object-center;
+  }
+  .club-icon-fallback {
+    @apply text-2xl font-bold text-primary-foreground;
+  }
+  .icon-crop-stage {
+    @apply mx-auto my-4 h-[280px] w-[280px] overflow-hidden rounded-2xl bg-muted;
+    touch-action: none;
+  }
+  .icon-crop-stage canvas {
+    @apply block h-[280px] w-[280px] cursor-grab;
+  }
   .leave-dialog-actions form,
   .leave-dialog-actions button {
     @apply m-0;
@@ -1523,6 +1544,134 @@
   .club-settings-counts {
     @apply mb-3 font-medium;
   }
+  .discovery-group-label {
+    @apply mb-2 mt-4 text-sm font-semibold text-foreground;
+  }
+  .discovery-chips {
+    @apply mb-2 flex flex-wrap gap-2;
+  }
+  .discovery-chip {
+    @apply relative m-0 cursor-pointer;
+  }
+  .discovery-chip input {
+    @apply absolute h-0 w-0 opacity-0;
+  }
+  .discovery-chip span {
+    @apply inline-flex rounded-full border border-border bg-secondary px-3 py-1.5 text-sm text-muted-foreground;
+  }
+  .discovery-chip:has(input:checked) span {
+    @apply border-primary bg-accent font-medium text-foreground;
+  }
+  .discovery-chip:has(input:disabled:not(:checked)) {
+    @apply cursor-default opacity-50;
+  }
+  .discovery-tag-field {
+    @apply mb-3 min-w-0;
+  }
+  .discovery-tag-field > label {
+    @apply m-0;
+  }
+  .discovery-tag-compose {
+    @apply mt-1.5 flex min-w-0 flex-wrap items-center gap-2;
+  }
+  .discovery-tag-control {
+    @apply relative min-w-0 flex-1;
+  }
+  .discovery-tag-control .js-discovery-tag-input {
+    @apply mt-0 pr-10;
+  }
+  .discovery-tag-control.is-invalid .js-discovery-tag-input {
+    @apply border-destructive;
+  }
+  .discovery-tag-clear {
+    @apply absolute right-1.5 top-1/2 m-0 inline-flex h-7 w-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-destructive p-0 text-sm font-normal leading-none text-destructive;
+    background: color-mix(in srgb, var(--destructive) 16%, transparent);
+  }
+  .discovery-tag-clear:hover {
+    background: color-mix(in srgb, var(--destructive) 28%, transparent);
+    color: var(--destructive);
+  }
+  .discovery-tag-clear:focus-visible {
+    outline: 2px solid var(--destructive);
+    outline-offset: 2px;
+  }
+  .discovery-tag-clear[hidden] {
+    display: none !important;
+  }
+  .discovery-tag-add {
+    @apply m-0 shrink-0 self-center;
+  }
+  .discovery-tag-field .error {
+    @apply mt-1 text-sm;
+  }
+  .club-switcher {
+    @apply relative min-w-0 flex-1;
+  }
+  .club-switch-head {
+    @apply flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0;
+  }
+  .club-switcher .page-heading {
+    @apply min-w-0 truncate;
+  }
+  .club-switch-btn {
+    @apply m-0 shrink-0 cursor-pointer rounded-md border-0 bg-transparent p-0 text-sm font-medium text-muted-foreground;
+  }
+  .club-switch-btn:hover,
+  .club-switch-btn[aria-expanded="true"] {
+    @apply text-foreground;
+  }
+  .club-switch-popover {
+    @apply absolute left-0 top-[calc(100%+0.5rem)] z-30 w-72 max-w-[min(18rem,calc(100vw-1.5rem))] rounded-2xl border border-border bg-card p-3 text-card-foreground shadow-lg;
+  }
+  .club-switch-kicker {
+    @apply m-0 px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground;
+  }
+  .club-switch-list {
+    @apply max-h-64 overflow-x-hidden overflow-y-auto;
+  }
+  .club-switch-item {
+    @apply mt-0 flex w-full items-center gap-2 rounded-[10px] px-2 py-2 text-left font-medium text-foreground no-underline;
+  }
+  a.club-switch-item:hover {
+    @apply bg-accent;
+  }
+  .club-switch-item.is-current {
+    @apply bg-accent;
+  }
+  .club-mark {
+    @apply relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full;
+    background: var(--icon-fallback, var(--primary));
+  }
+  .club-mark img {
+    @apply block h-full w-full object-cover object-center;
+  }
+  .club-mark .club-icon-fallback {
+    @apply text-[0.7rem] font-bold leading-none text-primary-foreground;
+  }
+  .club-switch-name {
+    @apply min-w-0 flex-1 truncate;
+  }
+  .club-switch-check {
+    @apply inline-flex shrink-0 text-primary;
+  }
+  .club-switch-all {
+    @apply mt-2 block rounded-[10px] px-2 py-2 text-sm font-medium text-foreground no-underline;
+  }
+  .club-switch-all:hover {
+    @apply bg-accent;
+  }
+  .discovery-tag-list {
+    @apply mb-4 flex flex-wrap gap-2;
+  }
+  .discovery-tag-chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-3 py-1.5 text-sm;
+  }
+  .discovery-tag-remove {
+    @apply m-0 inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-lg leading-none text-muted-foreground;
+  }
+  .discovery-tag-remove:hover {
+    @apply text-foreground;
+  }
   .club-settings-color {
     @apply mb-2 mt-0 flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl border border-border bg-transparent px-3 py-3 text-left font-normal text-foreground;
   }
@@ -1541,13 +1690,61 @@
     }
   }
   .role-form {
-    @apply mt-2 flex w-full flex-col gap-2;
+    @apply mt-0 flex w-full flex-col items-start gap-3 border-t border-border pt-3;
   }
   .person-row-manage {
     @apply flex-col items-stretch;
   }
   .role-perms {
-    @apply m-0 flex flex-col gap-1 border-0 p-0;
+    @apply m-0 flex w-full flex-col gap-1 border-0 p-0;
+  }
+  .role-perms legend {
+    @apply mb-1 px-0 text-sm font-semibold text-foreground;
+  }
+  .roles-dialog.members-dialog {
+    @apply w-[min(40rem,calc(100vw-1.5rem))] max-h-[min(42rem,calc(100dvh-2.5rem))];
+  }
+  .roles-dialog-copy {
+    @apply shrink-0 px-4 pb-2;
+  }
+  .roles-dialog-copy p {
+    @apply m-0 text-sm;
+  }
+  .roles-dialog-copy p + p {
+    @apply mt-1;
+  }
+  .roles-dialog-body {
+    @apply min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-4;
+  }
+  .roles-dialog .role-member {
+    @apply flex flex-col items-stretch gap-2 border-b border-border py-3;
+  }
+  .roles-dialog .role-member:last-child {
+    @apply border-b-0;
+  }
+  .roles-dialog .role-member-head {
+    @apply flex flex-wrap items-center justify-between gap-2;
+  }
+  .roles-dialog .role-member-head .person-row {
+    @apply min-w-0 flex-1 items-center border-0 p-0;
+  }
+  .roles-dialog .js-role-edit {
+    @apply shrink-0;
+  }
+  .roles-dialog .role-member-note {
+    @apply m-0 text-sm;
+  }
+  .roles-dialog .role-field {
+    @apply m-0;
+  }
+  .roles-dialog .js-role-select {
+    @apply mt-1.5 w-auto min-w-[10rem] max-w-full;
+  }
+  .roles-dialog .role-form .leave-dialog-actions {
+    @apply mt-1 w-full justify-end;
+  }
+  .roles-dialog .role-form .btn {
+    @apply w-auto shrink-0;
   }
 }
 
