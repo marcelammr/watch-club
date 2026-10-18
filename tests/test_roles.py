@@ -56,6 +56,7 @@ def test_schema_dropped_is_admin_and_added_role():
         "admin_name_color",
         "sub_name_color",
         "member_limit",
+        "icon_image",
     } <= club_cols
 
 
@@ -198,6 +199,13 @@ def test_admin_sets_support_perms_and_support_cannot_edit_roles():
     finally:
         db.close()
 
+    settings = owner.get(f"/clubs/{club_id}/config")
+    assert "Editar cargo" in settings.text
+    assert "js-role-cancel" in settings.text
+    assert "Salvar cargo" in settings.text
+    assert 'class="role-form js-role-form"' in settings.text
+    form_open = settings.text.split('class="role-form js-role-form"', 1)[1].split(">", 1)[0]
+    assert "hidden" in form_open
     granted = owner.post(
         f"/clubs/{club_id}/membros/{helper_id}/papel",
         data={"role": "support", "support_perm": [PERM_TAG, PERM_JOINS, "hack_perm"]},
@@ -245,6 +253,8 @@ def test_admin_sets_support_perms_and_support_cannot_edit_roles():
     assert tag_page.status_code == 200
     assert "js-club-settings" in tag_page.text
     assert "is-tag-only" in tag_page.text
+    assert 'id="unsaved-dialog"' in tag_page.text
+    assert "js-settings-leave" in tag_page.text
     assert "settings-overlay" in tag_page.text
     assert "Fundo do clube" not in tag_page.text
     assert "Cargos e permissões" not in tag_page.text
@@ -625,6 +635,7 @@ def test_club_settings_shell_sections_and_create_stays_linear():
     register_active(owner, "shell_own", "shell.own@example.com")
     create_page = owner.get("/clubs/novo")
     assert "settings-overlay-root" not in create_page.text
+    assert 'id="unsaved-dialog"' not in create_page.text
     assert "Cargos e permissões" not in create_page.text
     assert "novas entradas precisam de aprovação" in create_page.text
     assert "só entra com código" not in create_page.text
@@ -634,12 +645,21 @@ def test_club_settings_shell_sections_and_create_stays_linear():
     assert "settings-overlay" in settings.text
     assert "settings-overlay-root" in settings.text
     assert "settings-close" in settings.text
+    assert "js-settings-leave" in settings.text
+    assert 'id="unsaved-dialog"' in settings.text
+    assert "Você tem alterações não salvas" in settings.text
+    assert "Deseja salvar antes de sair?" in settings.text
+    assert "Continuar editando" in settings.text
+    assert "Sair sem salvar" in settings.text
+    assert "Salvar alterações" in settings.text
+    assert "js-unsaved-form" in settings.text
+    assert "formSnapshot" in settings.text
     assert "js-club-settings" in settings.text
     assert "js-settings-link" in settings.text
     assert "Personalização" in settings.text
     assert "Gerenciamento" in settings.text
     assert "Voltar ao clube" in settings.text
-    assert settings.text.count('class="club-settings-link js-settings-link"') == 5
+    assert settings.text.count('class="club-settings-link js-settings-link"') == 6
     assert "Cargos e permissões" in settings.text
     assert 'data-section="tag"' in settings.text
     assert "Cor dos administradores" in settings.text
@@ -648,9 +668,19 @@ def test_club_settings_shell_sections_and_create_stays_linear():
     assert "js-role-color-draft" in settings.text
     assert "Sem limite" in settings.text
     assert "Limitar a" in settings.text
-    assert "Fundo do clube" in settings.text
+    assert "Ícone do clube" in settings.text
+    assert "Capa do clube" in settings.text
+    assert "Descoberta" in settings.text
+    assert 'data-section="descoberta"' in settings.text
+    assert "Ajude outras pessoas a encontrar seu clube." in settings.text
+    assert 'action="/clubs/' in settings.text and "/descoberta" in settings.text
+    assert "Tags de conteúdo" in settings.text
     assert 'id="cover-crop-dialog"' in settings.text
+    assert 'id="icon-crop-dialog"' in settings.text
+    assert 'id="icon-remove-dialog"' in settings.text
+    assert 'name="clear_icon"' not in settings.text
     assert "/static/js/cover-crop.js" in settings.text
+    assert "/static/js/icon-crop.js" in settings.text
     assert "Tag do clube" in settings.text
     assert 'name="cover_color"' in settings.text
     assert 'name="is_closed"' in settings.text
@@ -658,6 +688,9 @@ def test_club_settings_shell_sections_and_create_stays_linear():
     assert 'name="member_limit"' in settings.text
     roles_open = settings.text.split('id="roles-dialog"', 1)[1].split(">", 1)[0]
     assert "open" not in roles_open
+    assert "roles-dialog" in settings.text
+    assert "roles-dialog-body" in settings.text
+    assert "O dono permanece ADM enquanto for dono do clube." in settings.text
     saved_members = owner.post(
         f"/clubs/{club_id}/config",
         data={

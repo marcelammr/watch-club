@@ -62,6 +62,7 @@ class Club(Base):
     rules: Mapped[str] = mapped_column(Text, default="", nullable=False)
     cover_color: Mapped[str] = mapped_column(String(7), default="#3a2348", nullable=False)
     cover_image: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    icon_image: Mapped[str | None] = mapped_column(String(120), nullable=True)
     tag_slug: Mapped[str] = mapped_column(String(4), default="", nullable=False)
     tag_emoji: Mapped[str] = mapped_column(String(64), default="", nullable=False)
     # legado: token antigo (lavender, …). Não é lido nem escrito pelo código novo; remover depois.
@@ -81,6 +82,8 @@ class Club(Base):
     members: Mapped[list["ClubMember"]] = relationship(back_populates="club")
     shows: Mapped[list["ClubShow"]] = relationship(back_populates="club")
     messages: Mapped[list["ClubMessage"]] = relationship(back_populates="club")
+    catalog_categories: Mapped[list["ClubCatalogCategory"]] = relationship(back_populates="club")
+    content_tags: Mapped[list["ClubContentTag"]] = relationship(back_populates="club")
 
 
 class ClubMember(Base):
@@ -221,3 +224,51 @@ class NewsItem(Base):
     published_at: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
     show: Mapped[Show] = relationship(back_populates="news")
+
+
+class CatalogCategory(Base):
+    __tablename__ = "catalog_categories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    slug: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
+
+    clubs: Mapped[list["ClubCatalogCategory"]] = relationship(back_populates="category")
+
+
+class ClubCatalogCategory(Base):
+    __tablename__ = "club_catalog_categories"
+    __table_args__ = (UniqueConstraint("club_id", "category_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), nullable=False, index=True)
+    category_id: Mapped[int] = mapped_column(ForeignKey("catalog_categories.id"), nullable=False, index=True)
+
+    club: Mapped[Club] = relationship(back_populates="catalog_categories")
+    category: Mapped[CatalogCategory] = relationship(back_populates="clubs")
+
+
+class ContentTag(Base):
+    __tablename__ = "content_tags"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    slug: Mapped[str] = mapped_column(String(180), unique=True, nullable=False)
+    label: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    clubs: Mapped[list["ClubContentTag"]] = relationship(back_populates="tag")
+
+
+class ClubContentTag(Base):
+    __tablename__ = "club_content_tags"
+    __table_args__ = (UniqueConstraint("club_id", "tag_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), nullable=False, index=True)
+    tag_id: Mapped[int] = mapped_column(ForeignKey("content_tags.id"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    club: Mapped[Club] = relationship(back_populates="content_tags")
+    tag: Mapped[ContentTag] = relationship(back_populates="clubs")

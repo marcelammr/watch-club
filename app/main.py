@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from urllib.parse import quote
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
@@ -83,6 +83,17 @@ from app.club_tags import (
     tag_payload,
 )
 from app.colors import COLOR_PRESETS, DEFAULT_HEX, GRADIENT_DIRECTIONS, valid_hex
+from app.club_icons import club_icon_initials, club_icon_url, delete_club_icon, save_club_icon
+from app.discovery import (
+    KIND_LABELS,
+    MAX_CATEGORIES,
+    MAX_TAGS,
+    TAG_LABEL_MAX,
+    apply_club_discovery,
+    club_discovery_state,
+    grouped_catalog,
+    load_catalog,
+)
 from app.covers import COVER_COLORS, COVER_PRESETS, cover_image_url, save_cover_image, valid_cover_color
 from app.markup import format_chat
 from app.config import BASE_DIR, BIO_MAX, EMAIL_DEV_SHOW_LINK, SECRET_KEY
@@ -166,6 +177,12 @@ templates.env.globals["BIO_MAX"] = BIO_MAX
 templates.env.globals["COVER_COLORS"] = COVER_COLORS
 templates.env.globals["COVER_PRESETS"] = COVER_PRESETS
 templates.env.globals["cover_image_url"] = cover_image_url
+templates.env.globals["club_icon_url"] = club_icon_url
+templates.env.globals["club_icon_initials"] = club_icon_initials
+templates.env.globals["MAX_CATEGORIES"] = MAX_CATEGORIES
+templates.env.globals["MAX_TAGS"] = MAX_TAGS
+templates.env.globals["TAG_LABEL_MAX"] = TAG_LABEL_MAX
+templates.env.globals["KIND_LABELS"] = KIND_LABELS
 templates.env.globals["CONTENT_KINDS"] = CONTENT_KINDS
 templates.env.globals["person_href"] = person_href
 templates.env.globals["COLOR_PRESETS"] = COLOR_PRESETS
@@ -293,7 +310,7 @@ def _account_extras(user: User) -> dict:
     }
 
 
-SETTINGS_SECTIONS = ("geral", "aparencia", "tag", "cargos", "membros")
+SETTINGS_SECTIONS = ("geral", "aparencia", "descoberta", "tag", "cargos", "membros")
 
 
 def _settings_section(raw: str | None) -> str:
@@ -332,7 +349,15 @@ def _club_settings_context(db: Session, request: Request, user: User, club: Club
         "can_tag": extra.get("can_tag", True),
         "tag": extra.get("tag", tag_payload(loaded)),
         "settings_section": extra.get("settings_section"),
+        "discovery_groups": extra.get("discovery_groups"),
+        "discovery_selected": extra.get("discovery_selected"),
+        "discovery_tags": extra.get("discovery_tags"),
     }
+    if payload["discovery_groups"] is None and extra.get("mode", "edit") == "edit":
+        state = club_discovery_state(db, loaded.id)
+        payload["discovery_groups"] = grouped_catalog(load_catalog(db))
+        payload["discovery_selected"] = extra.get("discovery_selected", state["selected_slugs"])
+        payload["discovery_tags"] = extra.get("discovery_tags", state["tags"])
     payload.update(extra)
     payload["club"] = loaded
     payload["members"] = members
@@ -774,11 +799,13 @@ async def create_club(
     rules: str = Form(""),
     cover_color: str = Form("#3a2348"),
     cover_file: UploadFile | None = File(None),
+    icon_file: UploadFile | None = File(None),
 ):
     db = db_session()
     try:
         user = login_required(request, db)
         image_name = await save_cover_image(cover_file)
+        icon_name = await save_club_icon(icon_file)
         club = Club(
             name=name.strip(),
             join_code=make_join_code(),
@@ -788,6 +815,7 @@ async def create_club(
             rules=rules.strip(),
             cover_color=valid_cover_color(cover_color),
             cover_image=image_name,
+            icon_image=icon_name,
         )
         db.add(club)
         db.flush()
@@ -1120,6 +1148,7 @@ async def club_detail(
                 "join_requests": join_requests,
                 "members_by_user": {item.user_id: item for item in members},
                 "member_groups": grouped_club_members(members),
+                "user_clubs": sorted(_user_clubs(db, user.id), key=lambda item: (item.name or "").casefold()),
                 "error": request.query_params.get("error"),
                 **caps,
             },
@@ -1197,6 +1226,7 @@ async def update_club_settings(
     cover_color: str = Form("#3a2348"),
     cover_file: UploadFile | None = File(None),
     clear_cover: str | None = Form(None),
+    icon_file: UploadFile | None = File(None),
     admin_name_color: str = Form("#B892FF"),
     sub_name_color: str = Form("#6C63FF"),
     member_limit: str = Form(""),
@@ -1232,6 +1262,7 @@ async def update_club_settings(
                 status_code=400,
             )
         image_name = await save_cover_image(cover_file)
+        icon_name = await save_club_icon(icon_file)
         club.name = name.strip()
         club.is_closed = bool(is_closed)
         club.description = description.strip()
@@ -1244,9 +1275,75 @@ async def update_club_settings(
             club.cover_image = image_name
         elif clear_cover:
             club.cover_image = None
+        if icon_name:
+            club.icon_image = icon_name
         db.commit()
         return RedirectResponse(
             _config_href(club_id, settings_section, ok="Configurações salvas"),
+            status_code=303,
+        )
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 403:
+            return RedirectResponse(f"/clubs/{club_id}", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/clubs/{club_id}/icon/remover")
+def remove_club_icon_image(request: Request, club_id: int):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        club = require_club_admin(db, club_id, user.id)
+        old_name = club.icon_image
+        club.icon_image = None
+        db.commit()
+        delete_club_icon(old_name)
+        return Response(status_code=204)
+    except HTTPException:
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/clubs/{club_id}/descoberta")
+async def update_club_discovery(request: Request, club_id: int):
+    form = await request.form()
+    category_slug = [str(value) for value in form.getlist("category_slug")]
+    content_tag = [str(value) for value in form.getlist("content_tag")]
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        club = require_club_admin(db, club_id, user.id)
+        error = apply_club_discovery(db, club.id, category_slug, content_tag)
+        if error:
+            state = club_discovery_state(db, club.id)
+            selected = {slug.strip().lower() for slug in category_slug if slug and slug.strip()}
+            tags = [{"label": item, "slug": ""} for item in content_tag if (item or "").strip()]
+            return templates.TemplateResponse(
+                request,
+                "club_form.html",
+                _club_settings_context(
+                    db,
+                    request,
+                    user,
+                    club,
+                    mode="edit",
+                    can_tag=True,
+                    error=error,
+                    ok=None,
+                    settings_section="descoberta",
+                    discovery_selected=selected or state["selected_slugs"],
+                    discovery_tags=tags or state["tags"],
+                ),
+                status_code=400,
+            )
+        db.commit()
+        return RedirectResponse(
+            _config_href(club_id, "descoberta", ok="Descoberta atualizada"),
             status_code=303,
         )
     except HTTPException as exc:

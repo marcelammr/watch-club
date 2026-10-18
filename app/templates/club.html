@@ -9,7 +9,52 @@
 {% block top_start %}
   <a class="home-btn" href="/" aria-label="Início" title="Início">{{ nav_icon('home') }}</a>
   {{ club_menu_toggle() }}
-  <p class="page-heading">{{ club.name }}</p>
+  <div class="club-switcher">
+    <div class="club-switch-head">
+      <p class="page-heading">{{ club.name }}</p>
+      <button
+        type="button"
+        class="club-switch-btn js-club-switch-toggle"
+        aria-expanded="false"
+        aria-haspopup="dialog"
+        aria-controls="club-switch-popover"
+      >Trocar clube</button>
+    </div>
+    <div id="club-switch-popover" class="club-switch-popover" hidden role="dialog" aria-label="Seus clubes">
+      <p class="club-switch-kicker">Seus clubes</p>
+      <div class="club-switch-list">
+        {% for item in user_clubs or [] %}
+          {% set is_current = item.id == club.id %}
+          {% if is_current %}
+            <span class="club-switch-item is-current" aria-current="page">
+          {% else %}
+            <a class="club-switch-item" href="/clubs/{{ item.id }}">
+          {% endif %}
+              <span class="club-mark" style="--icon-fallback: {{ item.cover_color or '#3A2348' }}">
+                {% if item.icon_image %}
+                  <img src="{{ club_icon_url(item.icon_image) }}" alt="">
+                {% else %}
+                  <span class="club-icon-fallback">{{ club_icon_initials(item.name) }}</span>
+                {% endif %}
+              </span>
+              <span class="club-switch-name">{{ item.name }}</span>
+              {% if is_current %}
+                <span class="club-switch-check" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 12l5 5L20 7"/>
+                  </svg>
+                </span>
+              {% endif %}
+          {% if is_current %}
+            </span>
+          {% else %}
+            </a>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <a class="club-switch-all" href="/clubes">Ver todos os clubes</a>
+    </div>
+  </div>
 {% endblock %}
 {% block content %}
 {% macro catalog_row(link, flag_label, flag_class, next_status, next_label, next_class) %}
@@ -381,10 +426,46 @@
       if (event.key !== "Escape" || !isOpen()) return;
       const account = document.getElementById("account-popover");
       if (account && !account.hidden) return;
+      const clubSwitch = document.getElementById("club-switch-popover");
+      if (clubSwitch && !clubSwitch.hidden) return;
       if (document.querySelector(".js-emoji-picker.is-open")) return;
       setOpen(false);
     });
     sync();
+  })();
+  (function () {
+    const toggle = document.querySelector(".js-club-switch-toggle");
+    const popover = document.getElementById("club-switch-popover");
+    if (!toggle || !popover) return;
+
+    function isOpen() {
+      return !popover.hidden;
+    }
+
+    function setOpen(open) {
+      popover.hidden = !open;
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open) {
+        const first = popover.querySelector("a.club-switch-item, .club-switch-all");
+        if (first && typeof first.focus === "function") first.focus();
+      }
+    }
+
+    toggle.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setOpen(!isOpen());
+    });
+    document.addEventListener("click", (event) => {
+      if (!isOpen()) return;
+      if (popover.contains(event.target) || toggle.contains(event.target)) return;
+      setOpen(false);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || !isOpen()) return;
+      setOpen(false);
+      toggle.focus();
+      event.preventDefault();
+    });
   })();
   (function () {
     const dialog = document.getElementById("members-dialog");
