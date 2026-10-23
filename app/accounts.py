@@ -159,6 +159,11 @@ def login_or_create_oauth(db: Session, profile: dict) -> User:
     if not user:
         user = find_user_by_email(db, email)
     if not user:
+        from app import config
+        from app.invites import InviteSignupBlocked
+
+        if config.REGISTRATION_INVITE_REQUIRED:
+            raise InviteSignupBlocked()
         if email_taken(db, email):
             raise ValueError("Este e-mail já está cadastrado")
         username = unique_username(db, profile.get("name") or email.split("@")[0])

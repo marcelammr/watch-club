@@ -77,8 +77,10 @@ type AuthProps = {
     name?: string;
     username?: string;
     email?: string;
+    invite_code?: string;
   };
   dev_code?: string | null;
+  invite_required?: boolean;
 };
 
 function UsernameSuggestions({
@@ -109,7 +111,7 @@ function UsernameSuggestions({
   );
 }
 
-export function LoginForm({ mode, error, ok, suggestions, form, dev_code }: AuthProps) {
+export function LoginForm({ mode, error, ok, suggestions, form, dev_code, invite_required = false }: AuthProps) {
   const isLogin = mode === "login";
   const isRegister = mode === "register";
   const isForgot = mode === "forgot";
@@ -195,6 +197,22 @@ export function LoginForm({ mode, error, ok, suggestions, form, dev_code }: Auth
                       {liveMessage ? <p className="text-sm text-chart-2">{liveMessage}</p> : null}
                       <UsernameSuggestions items={liveSuggestions} onPick={setUsername} />
                     </div>
+                    {invite_required ? (
+                      <div className="grid gap-2">
+                        <Label htmlFor="invite_code">Convite</Label>
+                        <Input
+                          id="invite_code"
+                          name="invite_code"
+                          required
+                          maxLength={32}
+                          defaultValue={form.invite_code || ""}
+                          autoComplete="off"
+                          spellCheck={false}
+                          placeholder="WC-XXXX-XXXX-XXXX-X"
+                        />
+                        <p className="text-sm text-muted-foreground">Informe o código que você recebeu para criar a conta.</p>
+                      </div>
+                    ) : null}
                   </>
                 ) : null}
                 {isLogin || isRegister || isForgot ? (
@@ -261,7 +279,7 @@ export function LoginForm({ mode, error, ok, suggestions, form, dev_code }: Auth
                     <a href="/recuperar-senha">Enviar outro código</a>
                   </Button>
                 ) : null}
-                {isLogin || isRegister ? (
+                {isLogin || (isRegister && !invite_required) ? (
                   <>
                     <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t after:border-border">
                       <span className="relative z-10 bg-card px-2 text-muted-foreground">ou continue com</span>
