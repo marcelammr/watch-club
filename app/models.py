@@ -50,6 +50,18 @@ class EmailToken(Base):
     user: Mapped[User] = relationship(back_populates="email_tokens")
 
 
+class AccountInvite(Base):
+    __tablename__ = "account_invites"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="available", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    used_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class Club(Base):
     __tablename__ = "clubs"
 

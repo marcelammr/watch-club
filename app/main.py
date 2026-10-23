@@ -96,8 +96,17 @@ from app.discovery import (
 )
 from app.covers import COVER_COLORS, COVER_PRESETS, cover_image_url, save_cover_image, valid_cover_color
 from app.markup import format_chat
+from app import config as app_config
 from app.config import BASE_DIR, BIO_MAX, EMAIL_DEV_SHOW_LINK, SECRET_KEY
-from app.db import Base, engine, get_db
+from app.db import Base, close_exclusive_session, engine, exclusive_write_session, get_db
+from app.invites import (
+    MSG_OAUTH_CLOSED,
+    MSG_USED,
+    InviteSignupBlocked,
+    lookup_invite,
+    mark_invite_used,
+)
+from app.mail import MAIL_ERROR_MESSAGE, MailDeliveryError
 from app.friends import (
     accept_invite,
     can_view_thread,
@@ -114,7 +123,7 @@ from app.friends import (
     send_invite,
     unfriend,
 )
-from app.models import Club, ClubMember, ClubShow, EmailToken, User
+from app.models import AccountInvite, Club, ClubMember, ClubShow, EmailToken, User
 from app.oauth import (
     facebook_authorize_url,
     facebook_enabled,
@@ -455,18 +464,22 @@ def clubs_index(request: Request):
 
 @app.get("/register", response_class=HTMLResponse)
 def register_form(request: Request):
-    return templates.TemplateResponse(
-        request,
-        "auth.html",
-        {"mode": "register", "error": None, "ok": "", "suggestions": [], "form": {}, "dev_code": None},
-    )
+    return _auth_page(request, "register", request.query_params.get("error") or "", status_code=200)
 
 
 def _auth_page(request: Request, mode: str, error: str, status_code: int = 400, suggestions=None, form=None):
     return templates.TemplateResponse(
         request,
         "auth.html",
-        {"mode": mode, "error": error, "ok": "", "suggestions": suggestions or [], "form": form or {}, "dev_code": None},
+        {
+            "mode": mode,
+            "error": error,
+            "ok": "",
+            "suggestions": suggestions or [],
+            "form": form or {},
+            "dev_code": None,
+            "invite_required": app_config.REGISTRATION_INVITE_REQUIRED,
+        },
         status_code=status_code,
     )
 
@@ -478,12 +491,13 @@ def register(
     email: str = Form(...),
     password: str = Form(...),
     name: str = Form(""),
+    invite_code: str = Form(""),
 ):
     db = db_session()
     try:
         email = normalize_email(email)
         display = name.strip()[:80]
-        form = {"name": display, "username": username, "email": email}
+        form = {"name": display, "username": username, "email": email, "invite_code": invite_code}
         key = normalize_username(username)
         if not display:
             return _auth_page(request, "register", "Informe um nome.", form=form)
@@ -504,9 +518,37 @@ def register(
             )
         if email_taken(db, email):
             return _auth_page(request, "register", "Este e-mail já está cadastrado", form=form)
-        user = create_user(db, username, email, password, name=display)
-        verify_url = send_activation(db, user)
-        db.commit()
+        if not app_config.REGISTRATION_INVITE_REQUIRED:
+            try:
+                user = create_user(db, username, email, password, name=display)
+                verify_url = send_activation(db, user)
+                db.commit()
+            except MailDeliveryError:
+                db.rollback()
+                return _auth_page(request, "register", MAIL_ERROR_MESSAGE, form=form)
+            if EMAIL_DEV_SHOW_LINK:
+                request.session["verify_link"] = verify_url
+            return RedirectResponse("/verificar-email", status_code=303)
+
+        write = exclusive_write_session(db)
+        try:
+            _invite, invite_error = lookup_invite(write, invite_code)
+            if invite_error:
+                return _auth_page(request, "register", invite_error, form=form)
+            user = create_user(write, username, email, password, name=display)
+            if not mark_invite_used(write, _invite, user.id):
+                write.rollback()
+                return _auth_page(request, "register", MSG_USED, form=form)
+            verify_url = send_activation(write, user)
+            write.commit()
+        except MailDeliveryError:
+            write.rollback()
+            return _auth_page(request, "register", MAIL_ERROR_MESSAGE, form=form)
+        except Exception:
+            write.rollback()
+            raise
+        finally:
+            close_exclusive_session(write)
         if EMAIL_DEV_SHOW_LINK:
             request.session["verify_link"] = verify_url
         return RedirectResponse("/verificar-email", status_code=303)
@@ -567,8 +609,12 @@ def resend_verification(request: Request, email: str = Form(...)):
     try:
         user = find_user_by_email(db, email)
         if user and not user.is_active:
-            verify_url = send_activation(db, user)
-            db.commit()
+            try:
+                verify_url = send_activation(db, user)
+                db.commit()
+            except MailDeliveryError:
+                db.rollback()
+                return RedirectResponse("/verificar-email?error=" + quote(MAIL_ERROR_MESSAGE), status_code=303)
             if EMAIL_DEV_SHOW_LINK:
                 request.session["verify_link"] = verify_url
         return RedirectResponse("/verificar-email?ok=Se+o+e-mail+existir,+enviamos+um+novo+link", status_code=303)
@@ -612,8 +658,18 @@ def forgot_password(request: Request, email: str = Form(...)):
         request.session["reset_email"] = address
         request.session.pop("reset_code", None)
         if user:
-            code = send_password_reset(db, user)
-            db.commit()
+            try:
+                code = send_password_reset(db, user)
+                db.commit()
+            except MailDeliveryError:
+                db.rollback()
+                return _reset_page(
+                    request,
+                    "forgot",
+                    error=MAIL_ERROR_MESSAGE,
+                    form={"email": address},
+                    status_code=400,
+                )
             if EMAIL_DEV_SHOW_LINK:
                 request.session["reset_code"] = code
         return RedirectResponse("/recuperar-senha/codigo", status_code=303)
@@ -707,8 +763,12 @@ def login(request: Request, email: str = Form(...), password: str = Form(...)):
         if not user or not user.password_hash or not verify_password(password, user.password_hash):
             return _auth_page(request, "login", "E-mail ou senha inválidos", form={"email": email})
         if not user.is_active:
-            verify_url = send_activation(db, user)
-            db.commit()
+            try:
+                verify_url = send_activation(db, user)
+                db.commit()
+            except MailDeliveryError:
+                db.rollback()
+                return _auth_page(request, "login", MAIL_ERROR_MESSAGE, form={"email": email})
             if EMAIL_DEV_SHOW_LINK:
                 request.session["verify_link"] = verify_url
             return RedirectResponse("/verificar-email?error=Ative+sua+conta+pelo+e-mail", status_code=303)
@@ -764,6 +824,8 @@ def oauth_callback(request: Request, provider: str, code: str | None = None, sta
             user = login_or_create_oauth(db, profile)
             touch_presence(user, "online")
             db.commit()
+        except InviteSignupBlocked:
+            return RedirectResponse("/register?error=" + quote(MSG_OAUTH_CLOSED), status_code=303)
         except Exception:
             return RedirectResponse("/login?error=Não+foi+possível+entrar+com+essa+conta", status_code=303)
         request.session.pop("oauth_state", None)
@@ -912,8 +974,12 @@ def update_profile(
         user.bio = (bio or "")[:BIO_MAX]
         if email != user.email:
             user.pending_email = email
-            verify_url = send_activation(db, user, new_email=email)
-            db.commit()
+            try:
+                verify_url = send_activation(db, user, new_email=email)
+                db.commit()
+            except MailDeliveryError:
+                db.rollback()
+                return account_error(MAIL_ERROR_MESSAGE)
             if EMAIL_DEV_SHOW_LINK:
                 request.session["verify_link"] = verify_url
             return RedirectResponse(

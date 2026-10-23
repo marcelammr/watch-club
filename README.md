@@ -24,6 +24,16 @@ Abra http://127.0.0.1:8000
 
 Sem SMTP configurado, o link de ativação aparece na página de verificação (modo local). Com `SMTP_HOST` no `.env`, o link vai por e-mail. Gmail e Facebook precisam de `GOOGLE_CLIENT_ID`/`SECRET` e `FACEBOOK_CLIENT_ID`/`SECRET`, com redirect `http://127.0.0.1:8000/auth/google/callback` e `.../auth/facebook/callback`.
 
+Para testes fechados, `REGISTRATION_INVITE_REQUIRED=true` no `.env` exige um convite de uso único no cadastro. Contas OAuth novas também ficam bloqueadas; quem já tem conta continua entrando. Gere, liste e revogue convites no servidor:
+
+```bash
+python -m app.invites generate
+python -m app.invites list
+python -m app.invites revoke WC-XXXX-XXXX-XXXX-X
+```
+
+Com a variável em `false` (padrão), o cadastro volta a ser público sem remover os convites já emitidos.
+
 - Criar conta, confirmar o e-mail e montar um clube
 - Abrir **Minha conta** para nome de usuário, e-mail, senha e avatar
 - Entrar em um clube aberto com o código (fechado: o código envia um pedido) e sair quando quiser
