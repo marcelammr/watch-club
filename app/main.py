@@ -139,6 +139,8 @@ from app.roles import (
     MAX_ADMINS,
     MAX_SUPPORT,
     PERM_JOINS,
+    PERM_PROGRESS,
+    PERM_SCHEDULES,
     PERM_TAG,
     PERM_TITLES,
     ROLE_ADMIN,
@@ -150,6 +152,16 @@ from app.roles import (
     can,
     member_role,
     parse_support_perms,
+)
+from app.progress import mark_episode_watched, pick_season, progress_snapshot, unmark_episode
+from app.schedules import (
+    cancel_schedule,
+    create_schedule,
+    format_episode_line,
+    format_schedule_when,
+    format_week_line,
+    list_upcoming_schedules,
+    list_week_schedules,
 )
 from app.schema import migrate_schema
 from app.security import hash_password, make_join_code, verify_password
@@ -212,6 +224,11 @@ templates.env.globals["MAX_SUPPORT"] = MAX_SUPPORT
 templates.env.globals["member_role"] = member_role
 templates.env.globals["parse_support_perms"] = parse_support_perms
 templates.env.filters["when"] = lambda value: value.strftime("%d/%m/%Y %H:%M") if value else ""
+templates.env.filters["schedule_when"] = format_schedule_when
+templates.env.globals["schedule_episode_line"] = lambda item: format_episode_line(
+    item.season_number, item.episode_number
+)
+templates.env.globals["schedule_week_line"] = format_week_line
 templates.env.filters["genres"] = parse_genres
 templates.env.filters["avg_pt"] = lambda value: f"{value:.1f}".replace(".", ",") if value is not None else ""
 templates.env.filters["chat_format"] = format_chat
@@ -382,7 +399,17 @@ def _club_caps(db: Session, club_id: int, user_id: int) -> dict:
         "can_tag": can(member, PERM_TAG),
         "can_joins": can(member, PERM_JOINS),
         "can_titles": can(member, PERM_TITLES),
+        "can_schedules": can(member, PERM_SCHEDULES),
+        "can_progress": can(member, PERM_PROGRESS),
     }
+
+
+def _club_tab(aba: str | None) -> str:
+    if aba == "chat":
+        return "chat"
+    if aba == "agendamentos":
+        return "agendamentos"
+    return "assistindo"
 
 
 def _save_club_tag(
@@ -1180,15 +1207,22 @@ async def club_detail(
                 "club_preview.html",
                 {"user": user, "club": club},
             )
-        results = await tvmaze.search_shows(q) if q else []
-        tab = "chat" if aba == "chat" else "assistindo"
+        tab = _club_tab(aba)
+        results = await tvmaze.search_shows(q) if tab == "assistindo" and q else []
         watching = [link for link in club.shows if (link.watch_status or "watching") != "watched"]
         watched = [link for link in club.shows if link.watch_status == "watched"]
+        schedules = list_upcoming_schedules(db, club.id) if tab == "agendamentos" else []
+        week_schedules = list_week_schedules(db, club.id) if tab == "assistindo" else []
         if tab == "assistindo":
             await fill_missing_genres(db, [link.show for link in club.shows])
             db.commit()
         ratings = club_rating_stats(db, club.id, user.id)
         caps = _club_caps(db, club.id, user.id)
+        progress_by_show = {}
+        if tab == "assistindo":
+            progress_by_show = {
+                link.show_id: progress_snapshot(db, club.id, link.show_id) for link in club.shows
+            }
         members = list(club.members)
         messages = club_messages(db, club.id) if tab == "chat" else []
         stamp_display_tags(db, [item.user for item in members] + [item.user for item in messages])
@@ -1208,6 +1242,9 @@ async def club_detail(
                 "messages": messages,
                 "watching": watching,
                 "watched": watched,
+                "schedules": schedules,
+                "week_schedules": week_schedules,
+                "progress_by_show": progress_by_show,
                 "ratings": ratings,
                 "friend_ids": friend_id_set(db, user.id),
                 "online_count": online_count,
@@ -1651,6 +1688,71 @@ async def add_show(
         db.close()
 
 
+@app.post("/clubs/{club_id}/agendamentos")
+def add_club_schedule(
+    request: Request,
+    club_id: int,
+    show_id: int = Form(...),
+    date: str = Form(...),
+    time: str = Form(...),
+    season_number: str = Form(""),
+    episode_number: str = Form(""),
+    notes: str = Form(""),
+):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        require_club_perm(db, club_id, user.id, PERM_SCHEDULES)
+        create_schedule(
+            db,
+            club_id,
+            user.id,
+            show_id,
+            date,
+            time,
+            season_number,
+            episode_number,
+            notes,
+        )
+        return RedirectResponse(f"/clubs/{club_id}?aba=agendamentos", status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 403:
+            return RedirectResponse(f"/clubs/{club_id}?aba=agendamentos", status_code=303)
+        if exc.status_code == 400:
+            return RedirectResponse(
+                f"/clubs/{club_id}?aba=agendamentos&error={quote(str(exc.detail))}",
+                status_code=303,
+            )
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/clubs/{club_id}/agendamentos/{schedule_id}/cancelar")
+def cancel_club_schedule(request: Request, club_id: int, schedule_id: int):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        require_club_perm(db, club_id, user.id, PERM_SCHEDULES)
+        cancel_schedule(db, club_id, schedule_id)
+        return RedirectResponse(f"/clubs/{club_id}?aba=agendamentos", status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 403:
+            return RedirectResponse(f"/clubs/{club_id}?aba=agendamentos", status_code=303)
+        if exc.status_code in {400, 404}:
+            return RedirectResponse(
+                f"/clubs/{club_id}?aba=agendamentos&error={quote(str(exc.detail))}",
+                status_code=303,
+            )
+        raise
+    finally:
+        db.close()
+
+
 @app.post("/clubs/{club_id}/titulos")
 def add_title(
     request: Request,
@@ -1743,14 +1845,97 @@ def show_detail(request: Request, club_id: int, show_id: int):
         require_club_member(db, club_id, user.id)
         show = load_show(db, show_id)
         seasons = sorted(show.seasons, key=lambda s: s.number)
+        caps = _club_caps(db, club_id, user.id)
+        snapshot = progress_snapshot(db, club_id, show.id)
+        selected_season, season_episodes = pick_season(snapshot["groups"], request.query_params.get("t"))
+        ratings = club_rating_stats(db, club_id, user.id)
         return templates.TemplateResponse(
             request,
             "show.html",
-            {"user": user, "club_id": club_id, "show": show, "seasons": seasons},
+            {
+                "user": user,
+                "club_id": club_id,
+                "show": show,
+                "seasons": seasons,
+                "progress": snapshot,
+                "selected_season": selected_season,
+                "season_episodes": season_episodes,
+                "rating": ratings.get(show.id, {"average": None, "count": 0, "mine": None, "filled": 0}),
+                "error": request.query_params.get("error"),
+                **caps,
+            },
         )
     except HTTPException as exc:
         if exc.status_code == 401:
             return RedirectResponse("/login", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
+def _episode_progress_redirect(
+    club_id: int,
+    show_id: int,
+    temporada: str | None = None,
+    error: str | None = None,
+) -> RedirectResponse:
+    params = []
+    text = (temporada or "").strip()
+    if text.isdigit():
+        params.append(f"t={text}")
+    if error:
+        params.append(f"error={quote(error)}")
+    query = f"?{'&'.join(params)}" if params else ""
+    return RedirectResponse(f"/clubs/{club_id}/shows/{show_id}{query}#episodios", status_code=303)
+
+
+@app.post("/clubs/{club_id}/shows/{show_id}/episodios/{episode_id}/visto")
+def mark_show_episode(
+    request: Request,
+    club_id: int,
+    show_id: int,
+    episode_id: int,
+    t: str = Form(""),
+):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        require_club_perm(db, club_id, user.id, PERM_PROGRESS)
+        mark_episode_watched(db, club_id, show_id, episode_id, marked_by_id=user.id)
+        return _episode_progress_redirect(club_id, show_id, t)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 403:
+            return RedirectResponse(f"/clubs/{club_id}", status_code=303)
+        if exc.status_code == 400:
+            return _episode_progress_redirect(club_id, show_id, t, str(exc.detail))
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/clubs/{club_id}/shows/{show_id}/episodios/{episode_id}/desmarcar")
+def unmark_show_episode(
+    request: Request,
+    club_id: int,
+    show_id: int,
+    episode_id: int,
+    t: str = Form(""),
+):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        require_club_perm(db, club_id, user.id, PERM_PROGRESS)
+        unmark_episode(db, club_id, show_id, episode_id)
+        return _episode_progress_redirect(club_id, show_id, t)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 403:
+            return RedirectResponse(f"/clubs/{club_id}", status_code=303)
+        if exc.status_code == 400:
+            return _episode_progress_redirect(club_id, show_id, t, str(exc.detail))
         raise
     finally:
         db.close()

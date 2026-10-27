@@ -19,6 +19,7 @@ from app.models import (
     ClubMessage,
     ClubShow,
     ClubShowRating,
+    Episode,
     NewsItem,
     Season,
     Show,
@@ -320,9 +321,11 @@ def leave_club(db: Session, club_id: int, user_id: int) -> str:
 
 
 async def upsert_show_from_tvmaze(db: Session, tvmaze_id: int) -> Show:
-    show_data, seasons_data = await tvmaze.fetch_show_and_seasons(tvmaze_id)
+    show_data, seasons_data, episodes_data = await tvmaze.fetch_show_and_seasons(tvmaze_id)
     show = db.scalar(
-        select(Show).options(selectinload(Show.seasons)).where(Show.tvmaze_id == tvmaze_id)
+        select(Show)
+        .options(selectinload(Show.seasons), selectinload(Show.episodes))
+        .where(Show.tvmaze_id == tvmaze_id)
     )
     if not show:
         show = Show(tvmaze_id=tvmaze_id)
@@ -340,11 +343,27 @@ async def upsert_show_from_tvmaze(db: Session, tvmaze_id: int) -> Show:
         if not season:
             season = Season(show_id=show.id, number=payload["number"])
             db.add(season)
+            existing[payload["number"]] = season
         season.name = payload["name"]
         season.episode_count = payload["episode_count"]
         season.premiere_date = payload["premiere_date"]
         season.end_date = payload["end_date"]
         season.image_url = payload["image_url"]
+    db.flush()
+
+    existing_episodes = {episode.tvmaze_id: episode for episode in show.episodes}
+    for payload in episodes_data:
+        episode = existing_episodes.get(payload["tvmaze_id"])
+        if not episode:
+            episode = Episode(show_id=show.id, tvmaze_id=payload["tvmaze_id"])
+            db.add(episode)
+            existing_episodes[payload["tvmaze_id"]] = episode
+        season = existing.get(payload["season_number"])
+        episode.season_id = season.id if season is not None else None
+        episode.season_number = payload["season_number"]
+        episode.number = payload["number"]
+        episode.name = payload["name"]
+        episode.airdate = payload["airdate"]
     db.flush()
     return show
 
@@ -541,7 +560,7 @@ async def fill_missing_genres(db: Session, shows: list[Show]) -> None:
 def load_show(db: Session, show_id: int) -> Show:
     show = db.scalar(
         select(Show)
-        .options(selectinload(Show.seasons), selectinload(Show.news))
+        .options(selectinload(Show.seasons), selectinload(Show.episodes), selectinload(Show.news))
         .where(Show.id == show_id)
     )
     if not show:

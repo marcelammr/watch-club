@@ -2,56 +2,151 @@
 {% block title %}{{ show.name }} · Watch Club{% endblock %}
 {% block page_heading %}{{ show.name }}{% endblock %}
 {% block content %}
-<p class="crumb"><a href="/clubs/{{ club_id }}?aba=assistindo">Voltar ao clube</a></p>
-<section class="show-hero">
-  {% if show.image_url %}
-    <img src="{{ show.image_url }}" alt="{{ show.name }}">
-  {% endif %}
-  <div>
-    <h1>{{ show.name }}</h1>
-    <p class="muted">{{ CONTENT_KINDS.get(show.kind, 'Série') }}{% if show.status %} · {{ show.status }}{% endif %}{% if show.premiered %} · estreia {{ show.premiered }}{% endif %}</p>
-    {% if show.summary %}<p>{{ show.summary }}</p>{% endif %}
-    {% if show.official_site %}<p><a href="{{ show.official_site }}" rel="noopener" target="_blank">Site oficial</a></p>{% endif %}
-    {% if show.tvmaze_id > 0 %}
-    <form action="/clubs/{{ club_id }}/shows/{{ show.id }}/refresh" method="post">
-      <button class="btn btn-primary" type="submit">Atualizar fotos, temporadas e notícias</button>
-    </form>
-    {% endif %}
-  </div>
-</section>
-
-<section>
-  <h2>Temporadas</h2>
-  <ul class="seasons">
-    {% for season in seasons %}
-      <li>
-        {% if season.image_url %}<img src="{{ season.image_url }}" alt="">{% endif %}
-        <div>
-          <strong>Temporada {{ season.number }}{% if season.name %} — {{ season.name }}{% endif %}</strong>
-          <span class="muted">
-            {{ season.episode_count or "?" }} episódios
-            {% if season.premiere_date %} · {{ season.premiere_date }}{% endif %}
-            {% if season.end_date %} → {{ season.end_date }}{% endif %}
-          </span>
+{% set tags = show.genres|genres %}
+{% macro watched_icon() %}
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+    <rect x="3.5" y="3.5" width="17" height="17" rx="5" fill="currentColor"/>
+    <path d="M8 12.2l2.6 2.6L16.4 9" fill="none" stroke="#1F1B24" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+{% endmacro %}
+{% macro idle_icon() %}
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+    <rect x="4" y="4" width="16" height="16" rx="5"/>
+  </svg>
+{% endmacro %}
+<div class="show-layout">
+  <section class="show-info">
+    <div class="show-info-head">
+      {% if show.image_url %}
+        <img class="show-poster" src="{{ show.image_url }}" alt="{{ show.name }}">
+      {% endif %}
+      <div class="show-info-copy">
+        <div class="show-title-row">
+          <h1>{{ show.name }}</h1>
+          {% if show.tvmaze_id > 0 %}
+            <div class="action-menu js-action-menu">
+              <button
+                type="button"
+                class="btn btn-icon action-menu-toggle js-action-menu-toggle"
+                aria-expanded="false"
+                aria-haspopup="menu"
+                aria-controls="show-menu-{{ show.id }}"
+                aria-label="Ações de {{ show.name }}"
+                title="Ações"
+              >⋯</button>
+              <div id="show-menu-{{ show.id }}" class="action-menu-panel js-action-menu-panel" hidden role="menu">
+                <form action="/clubs/{{ club_id }}/shows/{{ show.id }}/refresh" method="post" role="none">
+                  <button class="action-menu-item" role="menuitem" type="submit">Atualizar informações</button>
+                </form>
+              </div>
+            </div>
+          {% endif %}
         </div>
-      </li>
-    {% else %}
-      <li class="muted">Nenhuma temporada encontrada.</li>
-    {% endfor %}
-  </ul>
-</section>
+        <p class="muted show-meta">{{ CONTENT_KINDS.get(show.kind, 'Série') }}{% if show.status %} · {{ show.status }}{% endif %}{% if show.premiered %} · estreia {{ show.premiered }}{% endif %}</p>
+        {% if tags %}
+          <p class="watch-tags">
+            {% for tag in tags %}
+              <span class="watch-tag">{{ tag }}</span>
+            {% endfor %}
+          </p>
+        {% endif %}
+        <p class="watch-rating">
+          {% if rating.count %}
+            <span class="star-read" aria-hidden="true">
+              {% for n in [1, 2, 3, 4, 5] %}
+                <span class="{% if n <= rating.filled %}is-on{% endif %}">★</span>
+              {% endfor %}
+            </span>
+            <span>{{ rating.average|avg_pt }} — {{ rating.count }} {% if rating.count == 1 %}avaliação{% else %}avaliações{% endif %}</span>
+          {% else %}
+            <span class="muted">Ainda sem avaliações</span>
+          {% endif %}
+        </p>
+        <form class="star-form" action="/clubs/{{ club_id }}/shows/{{ show.id }}/avaliar" method="post">
+          <span class="muted">Sua avaliação:</span>
+          <button class="star-zero {% if rating.mine == 0 %}is-on{% endif %}" type="submit" name="stars" value="0" title="0 estrelas">0</button>
+          {% for n in [1, 2, 3, 4, 5] %}
+            <button class="star-btn {% if rating.mine is not none and rating.mine >= n %}is-on{% endif %}" type="submit" name="stars" value="{{ n }}" aria-label="{{ n }} estrela{% if n != 1 %}s{% endif %}">★</button>
+          {% endfor %}
+        </form>
+      </div>
+    </div>
+    {% if show.summary %}<p class="show-summary">{{ show.summary }}</p>{% endif %}
+    {% if show.official_site %}<p><a href="{{ show.official_site }}" rel="noopener" target="_blank">Site oficial</a></p>{% endif %}
+    {% if show.news %}
+      <section class="show-news">
+        <h2>Notícias</h2>
+        <ul class="news">
+          {% for item in show.news %}
+            <li>
+              <a href="{{ item.url }}" rel="noopener" target="_blank">{{ item.title }}</a>
+              <span class="muted">{{ item.source or "" }} {{ item.published_at or "" }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+  </section>
 
-<section>
-  <h2>Notícias</h2>
-  <ul class="news">
-    {% for item in show.news %}
-      <li>
-        <a href="{{ item.url }}" rel="noopener" target="_blank">{{ item.title }}</a>
-        <span class="muted">{{ item.source or "" }} {{ item.published_at or "" }}</span>
-      </li>
+  <section class="episode-progress" id="episodios">
+    <h2>Episódios</h2>
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    {% if progress.has_regular %}
+      <p class="episode-progress-summary">{{ progress.watched_count }} de {{ progress.total }} episódio{% if progress.total != 1 %}s{% endif %} assistidos</p>
+      {% if progress.complete %}
+        <p class="muted">Todos os episódios disponíveis foram assistidos.</p>
+      {% elif progress.next_label %}
+        <p class="muted">Próximo: {{ progress.next_label }}</p>
+      {% endif %}
+      <form class="season-picker" method="get" action="/clubs/{{ club_id }}/shows/{{ show.id }}#episodios">
+        <label>
+          <span class="visually-hidden">Temporada</span>
+          <select name="t" onchange="this.form.submit()">
+            {% for season_number, _episodes in progress.groups %}
+              <option value="{{ season_number }}" {% if season_number == selected_season %}selected{% endif %}>Temporada {{ season_number }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </form>
+      <ul class="episode-list">
+        {% for episode in season_episodes %}
+          {% set watched = episode.id in progress.watched_ids %}
+          <li class="episode-row{% if watched %} is-watched{% endif %}">
+            {% if can_progress %}
+              {% if watched %}
+                <form action="/clubs/{{ club_id }}/shows/{{ show.id }}/episodios/{{ episode.id }}/desmarcar" method="post">
+                  <input type="hidden" name="t" value="{{ selected_season }}">
+                  <button class="episode-toggle is-on" type="submit" aria-pressed="true" aria-label="Desmarcar {{ episode.name }} como assistido" title="Assistido">
+                    {{ watched_icon() }}
+                  </button>
+                </form>
+              {% else %}
+                <form action="/clubs/{{ club_id }}/shows/{{ show.id }}/episodios/{{ episode.id }}/visto" method="post">
+                  <input type="hidden" name="t" value="{{ selected_season }}">
+                  <button class="episode-toggle" type="submit" aria-pressed="false" aria-label="Marcar {{ episode.name }} como assistido" title="Não assistido">
+                    {{ idle_icon() }}
+                  </button>
+                </form>
+              {% endif %}
+            {% else %}
+              <span class="episode-toggle is-static{% if watched %} is-on{% endif %}" aria-hidden="true">{% if watched %}{{ watched_icon() }}{% else %}{{ idle_icon() }}{% endif %}</span>
+              <span class="visually-hidden">{% if watched %}Assistido{% else %}Não assistido{% endif %}</span>
+            {% endif %}
+            <span class="episode-copy">
+              <span class="episode-name">{{ episode.name }}</span>
+              <span class="episode-code">T{{ episode.season_number }} E{{ episode.number }}</span>
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% elif seasons and show.tvmaze_id > 0 %}
+      <p class="muted">Os episódios deste título ainda não foram sincronizados.</p>
+      <form action="/clubs/{{ club_id }}/shows/{{ show.id }}/refresh" method="post">
+        <button class="btn btn-ghost" type="submit">Atualizar informações</button>
+      </form>
     {% else %}
-      <li class="muted">Nenhuma notícia no momento. Tente atualizar.</li>
-    {% endfor %}
-  </ul>
-</section>
+      <p class="muted">Não há informações de episódios disponíveis para este título.</p>
+    {% endif %}
+  </section>
+</div>
 {% endblock %}

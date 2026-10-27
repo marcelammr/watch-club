@@ -910,8 +910,9 @@ def test_club_chat_and_watching_are_members_only():
     watching = owner.get(f"/clubs/{club_id}")
     assert "Filme da Casa" in watching.text
     assert "Filme" in watching.text
-    assert "Já assistimos" in watching.text
-    assert "Ver detalhes" in watching.text
+    assert "Marcar como finalizado" in watching.text
+    assert "watch-title" in watching.text
+    assert "Ver detalhes" not in watching.text
 
     db = SessionLocal()
     try:
@@ -977,6 +978,7 @@ def test_club_ratings_genres_and_admin_remove():
             "kind": "serie",
             "genres": ["Drama", "Crime"],
         },
+        [],
         [],
     )
     with patch("app.catalog.tvmaze.fetch_show_and_seasons", AsyncMock(return_value=fake)):

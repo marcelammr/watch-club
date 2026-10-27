@@ -57,7 +57,7 @@
   </div>
 {% endblock %}
 {% block content %}
-{% macro catalog_row(link, flag_label, flag_class, next_status, next_label, next_class) %}
+{% macro catalog_row(link, flag_label, flag_class, next_status, next_label) %}
   {% set info = ratings.get(link.show.id, {"average": None, "count": 0, "mine": None, "filled": 0}) %}
   {% set tags = link.show.genres|genres %}
   <article class="watch-row">
@@ -69,7 +69,31 @@
       {% endif %}
     </a>
     <div class="watch-copy">
-      <h3>{{ link.show.name }}</h3>
+      <div class="watch-head">
+        <h3><a class="watch-title" href="/clubs/{{ club.id }}/shows/{{ link.show.id }}">{{ link.show.name }}</a></h3>
+        <div class="action-menu js-action-menu">
+          <button
+            type="button"
+            class="btn btn-icon action-menu-toggle js-action-menu-toggle"
+            aria-expanded="false"
+            aria-haspopup="menu"
+            aria-controls="watch-menu-{{ link.show.id }}"
+            aria-label="Ações de {{ link.show.name }}"
+            title="Ações"
+          >⋯</button>
+          <div id="watch-menu-{{ link.show.id }}" class="action-menu-panel js-action-menu-panel" hidden role="menu">
+            <form action="/clubs/{{ club.id }}/shows/{{ link.show.id }}/status" method="post" role="none">
+              <input type="hidden" name="watch_status" value="{{ next_status }}">
+              <button class="action-menu-item" role="menuitem" type="submit">{{ next_label }}</button>
+            </form>
+            {% if can_titles %}
+              <form action="/clubs/{{ club.id }}/shows/{{ link.show.id }}/remover" method="post" role="none" data-confirm="Remover “{{ link.show.name }}” deste clube?">
+                <button class="action-menu-item is-danger" role="menuitem" type="submit">Remover do clube</button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+      </div>
       {% if tags %}
         <p class="watch-tags">
           {% for tag in tags %}
@@ -103,18 +127,17 @@
       {% if link.show.summary %}
         <p class="watch-synopsis">{{ link.show.summary[:180] }}{% if link.show.summary|length > 180 %}…{% endif %}</p>
       {% endif %}
-      <div class="watch-actions">
-        <a href="/clubs/{{ club.id }}/shows/{{ link.show.id }}">Ver detalhes</a>
-        <form action="/clubs/{{ club.id }}/shows/{{ link.show.id }}/status" method="post">
-          <input type="hidden" name="watch_status" value="{{ next_status }}">
-          <button class="btn {{ next_class }}" type="submit">{{ next_label }}</button>
-        </form>
-        {% if can_titles %}
-          <form action="/clubs/{{ club.id }}/shows/{{ link.show.id }}/remover" method="post" onsubmit="return confirm('Remover “{{ link.show.name }}” deste clube?');">
-            <button class="btn btn-danger" type="submit">Remover do clube</button>
-          </form>
-        {% endif %}
-      </div>
+      {% set progress = progress_by_show.get(link.show.id) %}
+      {% if progress and progress.has_regular %}
+        <div class="watch-progress">
+          <p>{{ progress.watched_count }} de {{ progress.total }} episódio{% if progress.total != 1 %}s{% endif %} assistidos</p>
+          {% if progress.complete %}
+            <p class="muted">Todos os episódios disponíveis foram assistidos.</p>
+          {% elif progress.next_label %}
+            <p class="muted watch-progress-next">Próximo: {{ progress.next_label }}</p>
+          {% endif %}
+        </div>
+      {% endif %}
     </div>
   </article>
 {% endmacro %}
@@ -136,6 +159,7 @@
     <nav class="club-side-nav">
       <a class="club-side-link {% if tab == 'chat' %}is-on{% endif %}" href="/clubs/{{ club.id }}?aba=chat">Bate-papo</a>
       <a class="club-side-link {% if tab == 'assistindo' %}is-on{% endif %}" href="/clubs/{{ club.id }}?aba=assistindo">Assistindo</a>
+      <a class="club-side-link {% if tab == 'agendamentos' %}is-on{% endif %}" href="/clubs/{{ club.id }}?aba=agendamentos">Agendamentos</a>
       {% if is_admin %}
         <a class="club-side-link is-quiet" href="/clubs/{{ club.id }}/config">Configurações</a>
       {% elif can_tag %}
@@ -233,6 +257,45 @@
           </div>
         </form>
       </section>
+    {% elif tab == 'agendamentos' %}
+      <section class="schedule-panel">
+        <div class="schedule-toolbar">
+          <h2 class="schedule-heading">Próximos agendamentos</h2>
+          {% if can_schedules %}
+            <button type="button" class="btn btn-secondary js-add-schedule-open">+ Novo agendamento</button>
+          {% endif %}
+        </div>
+        <div class="schedule-list">
+          {% for item in schedules %}
+            <article class="schedule-card">
+              <p class="schedule-when">{{ item.starts_at|schedule_when }}</p>
+              <h3>{{ item.show.name }}</h3>
+              {% set episode_line = schedule_episode_line(item) %}
+              {% if episode_line %}
+                <p class="schedule-episode">{{ episode_line }}</p>
+              {% endif %}
+              {% if item.notes %}
+                <p class="schedule-notes">{{ item.notes }}</p>
+              {% endif %}
+              {% if can_schedules %}
+                <form
+                  class="schedule-cancel"
+                  action="/clubs/{{ club.id }}/agendamentos/{{ item.id }}/cancelar"
+                  method="post"
+                  onsubmit="return confirm('Cancelar o agendamento de “{{ item.show.name }}”?');"
+                >
+                  <button class="btn btn-ghost" type="submit">Cancelar agendamento</button>
+                </form>
+              {% endif %}
+            </article>
+          {% else %}
+            <p class="muted">Nenhum agendamento próximo.</p>
+            {% if can_schedules %}
+              <p class="muted">Crie o primeiro com + Novo agendamento.</p>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </section>
     {% else %}
       <section class="watch-panel">
         <div class="watch-toolbar">
@@ -270,6 +333,20 @@
           </ul>
         {% endif %}
 
+        {% if week_schedules %}
+          <section class="week-schedule" aria-labelledby="week-schedule-title">
+            <div class="week-schedule-head">
+              <h2 id="week-schedule-title" class="schedule-heading">Programação da semana</h2>
+              <a class="week-schedule-link" href="/clubs/{{ club.id }}?aba=agendamentos">Ver agenda completa</a>
+            </div>
+            <ul class="week-schedule-list">
+              {% for item in week_schedules %}
+                <li>{{ schedule_week_line(item) }}</li>
+              {% endfor %}
+            </ul>
+          </section>
+        {% endif %}
+
         <nav class="watch-tabs" aria-label="Lista de títulos">
           <a class="watch-tab {% if watch_list != 'finalizados' %}is-on{% endif %}" href="/clubs/{{ club.id }}?aba=assistindo&lista=assistindo">Assistindo</a>
           <a class="watch-tab {% if watch_list == 'finalizados' %}is-on{% endif %}" href="/clubs/{{ club.id }}?aba=assistindo&lista=finalizados">Finalizados</a>
@@ -278,7 +355,7 @@
         {% if watch_list == 'finalizados' %}
           <div class="watch-list">
             {% for link in watched %}
-              {{ catalog_row(link, 'Já assistimos', 'is-done', 'watching', 'Voltar para Assistindo', 'btn-ghost') }}
+              {{ catalog_row(link, 'Já assistimos', 'is-done', 'watching', 'Voltar para Assistindo') }}
             {% else %}
               <p class="muted">Nenhum título finalizado ainda.</p>
             {% endfor %}
@@ -286,7 +363,7 @@
         {% else %}
           <div class="watch-list">
             {% for link in watching %}
-              {{ catalog_row(link, 'Assistindo', '', 'watched', 'Já assistimos', 'btn-primary') }}
+              {{ catalog_row(link, 'Assistindo', '', 'watched', 'Marcar como finalizado') }}
             {% else %}
               <p class="muted">Nenhum título por aqui ainda.</p>
               <p class="muted">Pesquise uma série ou filme para começar.</p>
@@ -364,6 +441,41 @@
     <p class="members-manage"><a class="btn btn-secondary" href="/clubs/{{ club.id }}/config#cargos">Gerenciar cargos</a></p>
   {% endif %}
 </dialog>
+{% if tab == 'agendamentos' and can_schedules %}
+<dialog class="leave-dialog schedule-dialog" id="add-schedule-dialog" aria-labelledby="add-schedule-dialog-title">
+  <h2 id="add-schedule-dialog-title">Novo agendamento</h2>
+  {% if club.shows %}
+    <form action="/clubs/{{ club.id }}/agendamentos" method="post">
+      <label>Série
+        <select name="show_id" required>
+          {% for link in club.shows %}
+            <option value="{{ link.show.id }}">{{ link.show.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <div class="schedule-form-row">
+        <label>Data <input type="date" name="date" required></label>
+        <label>Horário <input type="time" name="time" required></label>
+      </div>
+      <div class="schedule-form-row">
+        <label>Temporada <input type="number" name="season_number" min="1" max="999" inputmode="numeric" placeholder="Opcional"></label>
+        <label>Episódio <input type="number" name="episode_number" min="1" max="999" inputmode="numeric" placeholder="Opcional"></label>
+      </div>
+      <label>Observação <textarea name="notes" rows="2" maxlength="200" placeholder="Opcional"></textarea></label>
+      <div class="leave-dialog-actions">
+        <button type="button" class="btn btn-ghost js-add-schedule-cancel">Cancelar</button>
+        <button class="btn btn-primary" type="submit">Agendar</button>
+      </div>
+    </form>
+  {% else %}
+    <p>Adicione um título na aba Assistindo antes de criar um agendamento.</p>
+    <div class="leave-dialog-actions">
+      <button type="button" class="btn btn-ghost js-add-schedule-cancel">Fechar</button>
+      <a class="btn btn-primary" href="/clubs/{{ club.id }}?aba=assistindo">Ir para Assistindo</a>
+    </div>
+  {% endif %}
+</dialog>
+{% endif %}
 <dialog class="leave-dialog" id="add-title-dialog" aria-labelledby="add-title-dialog-title">
   <h2 id="add-title-dialog-title">Adicionar manualmente</h2>
   <form action="/clubs/{{ club.id }}/titulos" method="post">
@@ -536,6 +648,22 @@
       }
     });
   })();
+
+  {% if tab == 'agendamentos' and can_schedules %}
+  (function () {
+    const dialog = document.getElementById("add-schedule-dialog");
+    if (!dialog) return;
+    document.querySelectorAll(".js-add-schedule-open").forEach((btn) => {
+      btn.addEventListener("click", () => dialog.showModal());
+    });
+    dialog.querySelectorAll(".js-add-schedule-cancel").forEach((btn) => {
+      btn.addEventListener("click", () => dialog.close());
+    });
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+  })();
+  {% endif %}
 
   (function () {
     const dialog = document.getElementById("add-title-dialog");

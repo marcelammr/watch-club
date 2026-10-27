@@ -60,14 +60,44 @@ async def search_shows(query: str) -> list[dict]:
         return results
 
 
-async def fetch_show_and_seasons(tvmaze_id: int) -> tuple[dict, list[dict]]:
+def _optional_int(value) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_episodes(payload: list | None) -> list[dict]:
+    episodes = []
+    for item in payload or []:
+        tvmaze_id = _optional_int(item.get("id"))
+        if tvmaze_id is None:
+            continue
+        airdate = (item.get("airdate") or "").strip() or None
+        episodes.append(
+            {
+                "tvmaze_id": tvmaze_id,
+                "season_number": _optional_int(item.get("season")) or 0,
+                "number": _optional_int(item.get("number")),
+                "name": (item.get("name") or "").strip()[:255],
+                "airdate": airdate[:20] if airdate else None,
+            }
+        )
+    return episodes
+
+
+async def fetch_show_and_seasons(tvmaze_id: int) -> tuple[dict, list[dict], list[dict]]:
     async with httpx.AsyncClient(timeout=20.0) as client:
-        show_resp, seasons_resp = await asyncio.gather(
+        show_resp, seasons_resp, episodes_resp = await asyncio.gather(
             client.get(f"{TVMAZE}/shows/{tvmaze_id}"),
             client.get(f"{TVMAZE}/shows/{tvmaze_id}/seasons"),
+            client.get(f"{TVMAZE}/shows/{tvmaze_id}/episodes"),
         )
         show_resp.raise_for_status()
         seasons_resp.raise_for_status()
+        episodes_resp.raise_for_status()
         show = show_resp.json()
         show_data = {
             "tvmaze_id": show["id"],
@@ -92,7 +122,7 @@ async def fetch_show_and_seasons(tvmaze_id: int) -> tuple[dict, list[dict]]:
                     "image_url": _image(season.get("image")),
                 }
             )
-        return show_data, seasons
+        return show_data, seasons, _parse_episodes(episodes_resp.json())
 
 
 async def fetch_show_genres(tvmaze_id: int) -> list[str]:

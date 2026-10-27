@@ -17,11 +17,15 @@ ROLE_LABELS = {
 PERM_TAG = "manage_tag"
 PERM_JOINS = "manage_join_requests"
 PERM_TITLES = "manage_titles"
-SUPPORT_PERMS = (PERM_TAG, PERM_JOINS, PERM_TITLES)
+PERM_SCHEDULES = "manage_schedules"
+PERM_PROGRESS = "manage_progress"
+SUPPORT_PERMS = (PERM_TAG, PERM_JOINS, PERM_TITLES, PERM_SCHEDULES, PERM_PROGRESS)
 SUPPORT_PERM_LABELS = {
     PERM_TAG: "Gerenciar tag do clube",
     PERM_JOINS: "Gerenciar solicitações de entrada",
     PERM_TITLES: "Gerenciar títulos",
+    PERM_SCHEDULES: "Gerenciar agendamentos",
+    PERM_PROGRESS: "Gerenciar progresso",
 }
 
 

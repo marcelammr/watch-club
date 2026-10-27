@@ -93,6 +93,10 @@ class Club(Base):
 
     members: Mapped[list["ClubMember"]] = relationship(back_populates="club")
     shows: Mapped[list["ClubShow"]] = relationship(back_populates="club")
+    watch_rounds: Mapped[list["ClubWatchRound"]] = relationship(
+        back_populates="club", cascade="all, delete-orphan"
+    )
+    schedules: Mapped[list["ClubSchedule"]] = relationship(back_populates="club")
     messages: Mapped[list["ClubMessage"]] = relationship(back_populates="club")
     catalog_categories: Mapped[list["ClubCatalogCategory"]] = relationship(back_populates="club")
     content_tags: Mapped[list["ClubContentTag"]] = relationship(back_populates="club")
@@ -140,6 +144,7 @@ class Show(Base):
     news_fetched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     seasons: Mapped[list["Season"]] = relationship(back_populates="show", cascade="all, delete-orphan")
+    episodes: Mapped[list["Episode"]] = relationship(back_populates="show", cascade="all, delete-orphan")
     news: Mapped[list["NewsItem"]] = relationship(back_populates="show", cascade="all, delete-orphan")
     clubs: Mapped[list["ClubShow"]] = relationship(back_populates="show")
 
@@ -158,6 +163,24 @@ class Season(Base):
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     show: Mapped[Show] = relationship(back_populates="seasons")
+    episodes: Mapped[list["Episode"]] = relationship(back_populates="season")
+
+
+class Episode(Base):
+    __tablename__ = "episodes"
+    __table_args__ = (Index("ix_episodes_show_season_number", "show_id", "season_number", "number"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    show_id: Mapped[int] = mapped_column(ForeignKey("shows.id"), nullable=False, index=True)
+    season_id: Mapped[int | None] = mapped_column(ForeignKey("seasons.id"), nullable=True)
+    tvmaze_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    season_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    airdate: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    show: Mapped[Show] = relationship(back_populates="episodes")
+    season: Mapped[Season | None] = relationship(back_populates="episodes")
 
 
 class ClubShow(Base):
@@ -173,6 +196,61 @@ class ClubShow(Base):
 
     club: Mapped[Club] = relationship(back_populates="shows")
     show: Mapped[Show] = relationship(back_populates="clubs")
+
+
+class ClubWatchRound(Base):
+    __tablename__ = "club_watch_rounds"
+    __table_args__ = (
+        UniqueConstraint("club_id", "show_id", "number"),
+        Index("ix_club_watch_rounds_club_show", "club_id", "show_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), nullable=False)
+    show_id: Mapped[int] = mapped_column(ForeignKey("shows.id"), nullable=False)
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    club: Mapped[Club] = relationship(back_populates="watch_rounds")
+    show: Mapped[Show] = relationship()
+    watches: Mapped[list["ClubEpisodeWatch"]] = relationship(
+        back_populates="round", cascade="all, delete-orphan"
+    )
+
+
+class ClubEpisodeWatch(Base):
+    __tablename__ = "club_episode_watches"
+    __table_args__ = (UniqueConstraint("round_id", "episode_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    round_id: Mapped[int] = mapped_column(ForeignKey("club_watch_rounds.id"), nullable=False, index=True)
+    episode_id: Mapped[int] = mapped_column(ForeignKey("episodes.id"), nullable=False)
+    watched_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    marked_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    round: Mapped[ClubWatchRound] = relationship(back_populates="watches")
+    episode: Mapped[Episode] = relationship()
+    marked_by: Mapped[User | None] = relationship()
+
+
+class ClubSchedule(Base):
+    __tablename__ = "club_schedules"
+    __table_args__ = (Index("ix_club_schedules_club_starts", "club_id", "starts_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), nullable=False, index=True)
+    show_id: Mapped[int] = mapped_column(ForeignKey("shows.id"), nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    season_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    episode_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    club: Mapped[Club] = relationship(back_populates="schedules")
+    show: Mapped[Show] = relationship()
+    created_by: Mapped[User] = relationship()
 
 
 class ClubShowRating(Base):

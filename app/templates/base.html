@@ -108,6 +108,58 @@
     window.addEventListener("pagehide", () => ping("away"));
 
     (function () {
+      function closeMenus(except) {
+        document.querySelectorAll(".js-action-menu").forEach((menu) => {
+          if (menu === except) return;
+          const panel = menu.querySelector(".js-action-menu-panel");
+          const toggle = menu.querySelector(".js-action-menu-toggle");
+          if (panel) panel.hidden = true;
+          if (toggle) toggle.setAttribute("aria-expanded", "false");
+        });
+      }
+      function eventElement(event) {
+        const node = event.target;
+        if (node instanceof Element) return node;
+        return node && node.parentElement;
+      }
+      document.addEventListener("click", (event) => {
+        const el = eventElement(event);
+        if (!el) return;
+        const submitter = el.closest("form[data-confirm] button");
+        if (submitter && submitter.type !== "button" && submitter.type !== "reset") {
+          const form = submitter.closest("form");
+          const message = form && form.getAttribute("data-confirm");
+          if (message && !window.confirm(message)) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+          return;
+        }
+        const toggle = el.closest(".js-action-menu-toggle");
+        const menu = el.closest(".js-action-menu");
+        if (toggle && menu) {
+          event.preventDefault();
+          const panel = menu.querySelector(".js-action-menu-panel");
+          const willOpen = Boolean(panel && panel.hidden);
+          closeMenus(willOpen ? menu : null);
+          if (!panel) return;
+          panel.hidden = !willOpen;
+          toggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+          return;
+        }
+        if (!menu) closeMenus();
+      }, true);
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        const openToggle = document.querySelector(".js-action-menu-toggle[aria-expanded='true']");
+        if (!openToggle) return;
+        closeMenus();
+        openToggle.focus();
+        event.preventDefault();
+      });
+    })();
+
+    (function () {
       const back = document.querySelector(".js-back");
       try {
         const referrer = document.referrer ? new URL(document.referrer) : null;
