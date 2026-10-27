@@ -1,0 +1,27 @@
+{% macro club_star_form(club_id, show_id, info, voltar="lista", lista="assistindo", temporada="") %}
+<form class="star-form" action="/clubs/{{ club_id }}/shows/{{ show_id }}/avaliar" method="post">
+  <input type="hidden" name="voltar" value="{{ voltar }}">
+  {% if voltar == "obra" %}
+    {% if temporada %}<input type="hidden" name="t" value="{{ temporada }}">{% endif %}
+  {% else %}
+    <input type="hidden" name="lista" value="{{ lista }}">
+  {% endif %}
+  <div class="star-picker" role="group" aria-label="Sua avaliação">
+    {% for n in [1, 2, 3, 4, 5] %}
+      <button
+        class="star-btn {% if info.mine is not none and info.mine >= n %}is-on{% endif %}"
+        type="submit"
+        name="stars"
+        value="{{ n }}"
+        aria-label="Avaliar com {{ n }} de 5 estrelas"
+        aria-pressed="{% if info.mine == n %}true{% else %}false{% endif %}"
+      >{% if info.mine is not none and info.mine >= n %}★{% else %}☆{% endif %}</button>
+    {% endfor %}
+  </div>
+  {% if info.count %}
+    <span class="star-avg" aria-label="Média do clube: {{ info.average|avg_pt }} de 5">{{ info.average|avg_pt }}</span>
+  {% else %}
+    <span class="star-avg is-empty" aria-label="Média do clube: sem avaliações">—</span>
+  {% endif %}
+</form>
+{% endmacro %}

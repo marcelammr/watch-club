@@ -6,7 +6,7 @@ from app.db import SessionLocal
 from app.main import app
 from app.models import ClubEpisodeWatch, ClubMember, ClubShow, ClubWatchRound, User
 from app.roles import PERM_PROGRESS, PERM_SCHEDULES, PERM_TAG, ROLE_MEMBER, ROLE_SUPPORT
-from tests.test_app import register_active
+from tests.test_app import register_active, star_button_values
 from tests.test_progress import _create_club, _seed_title, _user_id_by_key
 
 client = TestClient(app)
@@ -339,6 +339,63 @@ def test_unsynced_seasons_prompt_refresh_not_manual():
     assert "Voltar ao clube" not in page.text
 
 
+def test_show_page_rating_matches_cards_and_stays_on_show():
+    owner = TestClient(app)
+    register_active(owner, "pui_nota", "pui.nota@example.com")
+    club_id = _create_club(owner, "Sala Nota Obra")
+    user_id = _user_id_by_key("pui_nota")
+    show_id, _episode_ids = _seed_title(
+        club_id,
+        user_id,
+        82009,
+        "Obra Nota",
+        [(1, 1, "Pilot"), (2, 1, "Season Two Start")],
+    )
+    empty = owner.get(f"/clubs/{club_id}/shows/{show_id}")
+    assert "Sua avaliação:" not in empty.text
+    assert "Ainda sem avaliações" not in empty.text
+    assert "star-read" not in empty.text
+    assert empty.text.count("star-btn") == 5
+    assert star_button_values(empty.text) == ["1", "2", "3", "4", "5"]
+    assert "Média do clube: sem avaliações" in empty.text
+    assert 'name="voltar" value="obra"' in empty.text
+    guest = TestClient(app)
+    register_active(guest, "pui_nota_b", "pui.nota.b@example.com")
+    guest.post("/clubs/join", data={"join_code": _club_code(club_id), "next": "/"}, follow_redirects=False)
+    guest.post(
+        f"/clubs/{club_id}/shows/{show_id}/avaliar",
+        data={"stars": "2", "voltar": "obra"},
+        follow_redirects=False,
+    )
+    rated = owner.post(
+        f"/clubs/{club_id}/shows/{show_id}/avaliar",
+        data={"stars": "5", "voltar": "obra", "t": "2"},
+        follow_redirects=False,
+    )
+    assert rated.status_code == 303
+    assert rated.headers["location"] == f"/clubs/{club_id}/shows/{show_id}?t=2#episodios"
+    page = owner.get(f"/clubs/{club_id}/shows/{show_id}?t=2")
+    assert "Sua avaliação:" not in page.text
+    assert "Média do clube: 3,5 de 5" in page.text
+    assert page.text.count("star-btn is-on") == 5
+    assert page.text.count('aria-pressed="true"') == 1
+    guest_page = guest.get(f"/clubs/{club_id}/shows/{show_id}")
+    assert "Média do clube: 3,5 de 5" in guest_page.text
+    assert guest_page.text.count("star-btn is-on") == 2
+    unsafe_t = owner.post(
+        f"/clubs/{club_id}/shows/{show_id}/avaliar",
+        data={"stars": "5", "voltar": "obra", "t": "../episodios"},
+        follow_redirects=False,
+    )
+    assert unsafe_t.headers["location"] == f"/clubs/{club_id}/shows/{show_id}"
+    from_list = owner.post(
+        f"/clubs/{club_id}/shows/{show_id}/avaliar",
+        data={"stars": "5", "lista": "assistindo"},
+        follow_redirects=False,
+    )
+    assert from_list.headers["location"] == f"/clubs/{club_id}?aba=assistindo&lista=assistindo"
+
+
 def test_overflow_menu_keeps_status_and_remove_actions():
     owner = TestClient(app)
     register_active(owner, "pui_menu", "pui.menu@example.com")
@@ -358,8 +415,16 @@ def test_overflow_menu_keeps_status_and_remove_actions():
     assert "js-action-menu" in page.text
     assert "Marcar como finalizado" in page.text
     assert "Remover do clube" in page.text
-    assert f'/shows/{show_id}/remover" method="post" role="none" data-confirm="Remover “Obra Menu” deste clube?"' in page.text
-    assert f'/shows/{show_id}/remover" method="post" role="none" onsubmit=' not in page.text
+    watching = page.text.split('id="watch-menu-' + str(show_id) + '"', 1)[-1].split("</article>", 1)[0]
+    assert f'action="/clubs/{club_id}/shows/{show_id}/remover" method="post"' in watching
+    assert 'data-title="Obra Menu"' in watching
+    assert "type=\"button\"" in watching
+    assert "confirm('Remover \\u201c' + this.form.dataset.title + '\\u201d deste clube?')" in watching
+    assert "this.form.requestSubmit()" in watching
+    assert "data-confirm=" not in watching
+    status_form = watching.split("/remover", 1)[0]
+    assert "confirm(" not in status_form
+    assert "Marcar como finalizado" in status_form
     marked = owner.post(
         f"/clubs/{club_id}/shows/{show_id}/status",
         data={"watch_status": "watched"},
@@ -369,7 +434,11 @@ def test_overflow_menu_keeps_status_and_remove_actions():
     finished = owner.get(f"/clubs/{club_id}?aba=assistindo&lista=finalizados")
     assert "Obra Menu" in finished.text
     assert "Voltar para Assistindo" in finished.text
-    assert f'/shows/{show_id}/remover" method="post" role="none" data-confirm="Remover “Obra Menu” deste clube?"' in finished.text
+    finished_menu = finished.text.split('id="watch-menu-' + str(show_id) + '"', 1)[-1].split("</article>", 1)[0]
+    assert "Voltar para Assistindo" in finished_menu
+    assert "confirm('Remover \\u201c' + this.form.dataset.title + '\\u201d deste clube?')" in finished_menu
+    assert "this.form.requestSubmit()" in finished_menu
+    assert "confirm(" not in finished_menu.split("/remover", 1)[0]
     member = TestClient(app)
     register_active(member, "pui_menu_mem", "pui.menu.mem@example.com")
     member.post("/clubs/join", data={"join_code": _club_code(club_id), "next": "/"}, follow_redirects=False)

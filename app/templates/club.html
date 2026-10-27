@@ -4,6 +4,7 @@
 {% from "macros/sidebar.html" import club_menu_toggle, nav_icon %}
 {% from "macros/emoji.html" import emoji_picker %}
 {% from "macros/club_tag.html" import club_tag_chip, club_person_name %}
+{% from "macros/star_form.html" import club_star_form %}
 {% block title %}{{ club.name }} · Watch Club{% endblock %}
 {% block body_class %}club-room club-ui{% endblock %}
 {% block top_start %}
@@ -76,19 +77,23 @@
             type="button"
             class="btn btn-icon action-menu-toggle js-action-menu-toggle"
             aria-expanded="false"
-            aria-haspopup="menu"
+            aria-haspopup="true"
             aria-controls="watch-menu-{{ link.show.id }}"
             aria-label="Ações de {{ link.show.name }}"
             title="Ações"
           >⋯</button>
-          <div id="watch-menu-{{ link.show.id }}" class="action-menu-panel js-action-menu-panel" hidden role="menu">
-            <form action="/clubs/{{ club.id }}/shows/{{ link.show.id }}/status" method="post" role="none">
+          <div id="watch-menu-{{ link.show.id }}" class="action-menu-panel js-action-menu-panel" hidden>
+            <form action="/clubs/{{ club.id }}/shows/{{ link.show.id }}/status" method="post">
               <input type="hidden" name="watch_status" value="{{ next_status }}">
-              <button class="action-menu-item" role="menuitem" type="submit">{{ next_label }}</button>
+              <button class="action-menu-item" type="submit">{{ next_label }}</button>
             </form>
             {% if can_titles %}
-              <form action="/clubs/{{ club.id }}/shows/{{ link.show.id }}/remover" method="post" role="none" data-confirm="Remover “{{ link.show.name }}” deste clube?">
-                <button class="action-menu-item is-danger" role="menuitem" type="submit">Remover do clube</button>
+              <form action="/clubs/{{ club.id }}/shows/{{ link.show.id }}/remover" method="post" data-title="{{ link.show.name }}">
+                <button
+                  class="action-menu-item is-danger"
+                  type="button"
+                  onclick="if (confirm('Remover \u201c' + this.form.dataset.title + '\u201d deste clube?')) this.form.requestSubmit();"
+                >Remover do clube</button>
               </form>
             {% endif %}
           </div>
@@ -101,25 +106,7 @@
           {% endfor %}
         </p>
       {% endif %}
-      <p class="watch-rating">
-        {% if info.count %}
-          <span class="star-read" aria-hidden="true">
-            {% for n in [1, 2, 3, 4, 5] %}
-              <span class="{% if n <= info.filled %}is-on{% endif %}">★</span>
-            {% endfor %}
-          </span>
-          <span>{{ info.average|avg_pt }} — {{ info.count }} {% if info.count == 1 %}avaliação{% else %}avaliações{% endif %}</span>
-        {% else %}
-          <span class="muted">Ainda sem avaliações</span>
-        {% endif %}
-      </p>
-      <form class="star-form" action="/clubs/{{ club.id }}/shows/{{ link.show.id }}/avaliar" method="post">
-        <span class="muted">Sua avaliação:</span>
-        <button class="star-zero {% if info.mine == 0 %}is-on{% endif %}" type="submit" name="stars" value="0" title="0 estrelas">0</button>
-        {% for n in [1, 2, 3, 4, 5] %}
-          <button class="star-btn {% if info.mine is not none and info.mine >= n %}is-on{% endif %}" type="submit" name="stars" value="{{ n }}" aria-label="{{ n }} estrela{% if n != 1 %}s{% endif %}">★</button>
-        {% endfor %}
-      </form>
+      {{ club_star_form(club.id, link.show.id, info, lista=watch_list) }}
       <p class="watch-meta">
         <span>{{ CONTENT_KINDS.get(link.show.kind, 'Série') }}</span>
         <span class="watch-flag {{ flag_class }}">{{ flag_label }}</span>

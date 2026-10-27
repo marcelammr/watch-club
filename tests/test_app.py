@@ -11,6 +11,20 @@ from app.roles import PERM_TAG, ROLE_SUPPORT
 client = TestClient(app)
 
 
+def star_button_values(html: str) -> list[str]:
+    chunk = html.split('class="star-picker"', 1)[1].split("</div>", 1)[0]
+    values = []
+    token = 'aria-label="Avaliar com '
+    start = 0
+    while True:
+        index = chunk.find(token, start)
+        if index < 0:
+            break
+        values.append(chunk[index + len(token)])
+        start = index + len(token)
+    return values
+
+
 def register_active(
     http: TestClient,
     username: str,
@@ -990,7 +1004,12 @@ def test_club_ratings_genres_and_admin_remove():
     assert "Breaking Bad" in page.text
     assert "Drama" in page.text
     assert "Crime" in page.text
-    assert "Ainda sem avaliações" in page.text
+    assert "Ainda sem avaliações" not in page.text
+    assert "Sua avaliação:" not in page.text
+    assert "star-read" not in page.text
+    assert page.text.count("star-btn") == 5
+    assert star_button_values(page.text) == ["1", "2", "3", "4", "5"]
+    assert "Média do clube: sem avaliações" in page.text
     assert "Remover do clube" in page.text
 
     db = SessionLocal()
@@ -1001,12 +1020,20 @@ def test_club_ratings_genres_and_admin_remove():
     finally:
         db.close()
 
-    rated = owner.post(f"/clubs/{club_id}/shows/{show_id}/avaliar", data={"stars": "5"}, follow_redirects=False)
+    rated = owner.post(
+        f"/clubs/{club_id}/shows/{show_id}/avaliar",
+        data={"stars": "5", "lista": "assistindo"},
+        follow_redirects=False,
+    )
     assert rated.status_code == 303
-    after = owner.get(f"/clubs/{club_id}")
+    assert rated.headers["location"] == f"/clubs/{club_id}?aba=assistindo&lista=assistindo"
+    after = owner.get(f"/clubs/{club_id}?aba=assistindo&lista=assistindo")
     assert "5,0" in after.text
-    assert "1 avaliação" in after.text
-    assert "Ainda sem avaliações" not in after.text
+    assert "Média do clube: 5,0 de 5" in after.text
+    assert "1 avaliação" not in after.text
+    assert "Sua avaliação:" not in after.text
+    assert after.text.count('aria-pressed="true"') == 1
+    assert after.text.count("star-btn is-on") == 5
 
     guest = TestClient(app)
     register_active(guest, "nota_membro", "nota.membro@example.com")
@@ -1019,9 +1046,33 @@ def test_club_ratings_genres_and_admin_remove():
     guest_page = guest.get(f"/clubs/{club_id}")
     assert "Remover do clube" not in guest_page.text
     guest.post(f"/clubs/{club_id}/shows/{show_id}/avaliar", data={"stars": "3"}, follow_redirects=False)
-    averaged = owner.get(f"/clubs/{club_id}")
-    assert "4,0" in averaged.text
-    assert "2 avaliações" in averaged.text
+    averaged = owner.get(f"/clubs/{club_id}?aba=assistindo")
+    assert "Média do clube: 4,0 de 5" in averaged.text
+    assert averaged.text.count("star-btn is-on") == 5
+    guest_view = guest.get(f"/clubs/{club_id}?aba=assistindo")
+    assert "Média do clube: 4,0 de 5" in guest_view.text
+    assert guest_view.text.count("star-btn is-on") == 3
+    changed = owner.post(
+        f"/clubs/{club_id}/shows/{show_id}/avaliar",
+        data={"stars": "5"},
+        follow_redirects=False,
+    )
+    assert changed.status_code == 303
+    assert changed.headers["location"] == f"/clubs/{club_id}?aba=assistindo&lista=assistindo"
+    owner.post(
+        f"/clubs/{club_id}/shows/{show_id}/avaliar",
+        data={"stars": "4", "lista": "assistindo"},
+        follow_redirects=False,
+    )
+    updated = owner.get(f"/clubs/{club_id}?aba=assistindo")
+    assert "Média do clube: 3,5 de 5" in updated.text
+    assert updated.text.count("star-btn is-on") == 4
+    unsafe = owner.post(
+        f"/clubs/{club_id}/shows/{show_id}/avaliar",
+        data={"stars": "4", "lista": "https://example.com"},
+        follow_redirects=False,
+    )
+    assert unsafe.headers["location"] == f"/clubs/{club_id}?aba=assistindo&lista=assistindo"
 
     blocked = guest.post(f"/clubs/{club_id}/shows/{show_id}/remover", follow_redirects=False)
     assert blocked.status_code == 303
@@ -1043,6 +1094,49 @@ def test_club_ratings_genres_and_admin_remove():
         assert db.scalar(select(ClubShow).where(ClubShow.club_id == club_id, ClubShow.show_id == show_id)) is None
     finally:
         db.close()
+
+
+def test_rating_from_finalizados_stays_on_finalizados():
+    owner = TestClient(app)
+    register_active(owner, "nota_lista", "nota.lista@example.com")
+    created = owner.post("/clubs", data={"name": "Sala Lista Nota"}, follow_redirects=False)
+    club_id = int(created.headers["location"].rsplit("/", 1)[-1])
+    added = owner.post(
+        f"/clubs/{club_id}/titulos",
+        data={"name": "Obra Finalizada", "kind": "serie"},
+        follow_redirects=False,
+    )
+    assert added.status_code == 303
+    db = SessionLocal()
+    try:
+        show_id = db.scalar(select(ClubShow.show_id).where(ClubShow.club_id == club_id).order_by(ClubShow.id.desc()))
+        assert show_id
+    finally:
+        db.close()
+    owner.post(
+        f"/clubs/{club_id}/shows/{show_id}/status",
+        data={"watch_status": "watched"},
+        follow_redirects=False,
+    )
+    finished = owner.get(f"/clubs/{club_id}?aba=assistindo&lista=finalizados")
+    assert "Obra Finalizada" in finished.text
+    assert 'name="lista" value="finalizados"' in finished.text
+    assert "Sua avaliação:" not in finished.text
+    rated = owner.post(
+        f"/clubs/{club_id}/shows/{show_id}/avaliar",
+        data={"stars": "4", "lista": "finalizados"},
+        follow_redirects=False,
+    )
+    assert rated.status_code == 303
+    assert rated.headers["location"] == f"/clubs/{club_id}?aba=assistindo&lista=finalizados"
+    after = owner.get(rated.headers["location"])
+    assert "Obra Finalizada" in after.text
+    assert "Voltar para Assistindo" in after.text
+    assert "Média do clube: 4,0 de 5" in after.text
+    assert after.text.count("star-btn") == 5
+    assert star_button_values(after.text) == ["1", "2", "3", "4", "5"]
+    watching = owner.get(f"/clubs/{club_id}?aba=assistindo&lista=assistindo")
+    assert "Obra Finalizada" not in watching.text
 
 
 def test_friends_private_chat_history_and_auth():

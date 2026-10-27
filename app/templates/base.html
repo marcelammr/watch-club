@@ -125,16 +125,6 @@
       document.addEventListener("click", (event) => {
         const el = eventElement(event);
         if (!el) return;
-        const submitter = el.closest("form[data-confirm] button");
-        if (submitter && submitter.type !== "button" && submitter.type !== "reset") {
-          const form = submitter.closest("form");
-          const message = form && form.getAttribute("data-confirm");
-          if (message && !window.confirm(message)) {
-            event.preventDefault();
-            event.stopPropagation();
-          }
-          return;
-        }
         const toggle = el.closest(".js-action-menu-toggle");
         const menu = el.closest(".js-action-menu");
         if (toggle && menu) {

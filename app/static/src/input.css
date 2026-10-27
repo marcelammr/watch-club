@@ -962,25 +962,55 @@
   .star-form {
     @apply m-0 flex flex-wrap items-center gap-x-2 gap-y-1.5;
   }
+  .star-picker {
+    display: inline-flex;
+    flex-direction: row;
+    gap: 0.05rem;
+  }
+  .star-avg {
+    @apply text-[0.92rem] font-medium tabular-nums text-muted-foreground;
+  }
+  .star-avg.is-empty {
+    @apply font-normal;
+  }
   .star-read span,
   .star-btn {
     @apply text-[1.15rem] leading-none text-muted-foreground;
   }
   .star-read .is-on,
   .star-btn.is-on {
-    @apply text-primary;
+    @apply font-bold text-primary;
   }
   .star-btn,
-  .star-zero {
-    @apply m-0 cursor-pointer border-0 bg-transparent p-0 text-[1.2rem] text-muted-foreground;
+  .star-zero,
+  main button.star-btn {
+    @apply m-0 cursor-pointer border-0 bg-transparent p-0 text-[1.2rem] font-normal leading-none text-muted-foreground;
   }
   .star-zero {
     @apply min-w-[1.2rem] text-[0.85rem] font-bold text-muted-foreground;
   }
   .star-btn:hover,
   .star-btn.is-on,
-  .star-zero.is-on {
-    @apply text-primary;
+  .star-zero.is-on,
+  main button.star-btn:hover,
+  main button.star-btn.is-on {
+    @apply font-bold text-primary;
+  }
+  .star-picker:hover .star-btn,
+  main .star-picker:hover button.star-btn {
+    color: var(--muted-foreground);
+    font-weight: 400;
+  }
+  .star-picker .star-btn:hover,
+  .star-picker .star-btn:has(~ .star-btn:hover),
+  .star-picker .star-btn:focus-visible,
+  .star-picker .star-btn:has(~ .star-btn:focus-visible),
+  main .star-picker button.star-btn:hover,
+  main .star-picker button.star-btn:has(~ button.star-btn:hover),
+  main .star-picker button.star-btn:focus-visible,
+  main .star-picker button.star-btn:has(~ button.star-btn:focus-visible) {
+    color: var(--primary);
+    font-weight: 700;
   }
   .watch-progress {
     @apply mt-1 flex min-w-0 flex-col gap-0.5;

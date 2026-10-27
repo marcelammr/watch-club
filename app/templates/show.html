@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/star_form.html" import club_star_form %}
 {% block title %}{{ show.name }} · Watch Club{% endblock %}
 {% block page_heading %}{{ show.name }}{% endblock %}
 {% block content %}
@@ -50,25 +51,7 @@
             {% endfor %}
           </p>
         {% endif %}
-        <p class="watch-rating">
-          {% if rating.count %}
-            <span class="star-read" aria-hidden="true">
-              {% for n in [1, 2, 3, 4, 5] %}
-                <span class="{% if n <= rating.filled %}is-on{% endif %}">★</span>
-              {% endfor %}
-            </span>
-            <span>{{ rating.average|avg_pt }} — {{ rating.count }} {% if rating.count == 1 %}avaliação{% else %}avaliações{% endif %}</span>
-          {% else %}
-            <span class="muted">Ainda sem avaliações</span>
-          {% endif %}
-        </p>
-        <form class="star-form" action="/clubs/{{ club_id }}/shows/{{ show.id }}/avaliar" method="post">
-          <span class="muted">Sua avaliação:</span>
-          <button class="star-zero {% if rating.mine == 0 %}is-on{% endif %}" type="submit" name="stars" value="0" title="0 estrelas">0</button>
-          {% for n in [1, 2, 3, 4, 5] %}
-            <button class="star-btn {% if rating.mine is not none and rating.mine >= n %}is-on{% endif %}" type="submit" name="stars" value="{{ n }}" aria-label="{{ n }} estrela{% if n != 1 %}s{% endif %}">★</button>
-          {% endfor %}
-        </form>
+        {{ club_star_form(club_id, show.id, rating, voltar="obra", temporada=selected_season) }}
       </div>
     </div>
     {% if show.summary %}<p class="show-summary">{{ show.summary }}</p>{% endif %}

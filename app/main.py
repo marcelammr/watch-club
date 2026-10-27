@@ -1801,14 +1801,38 @@ def update_watch_status(request: Request, club_id: int, show_id: int, watch_stat
         db.close()
 
 
+def _rating_redirect(club_id: int, show_id: int, voltar: str, lista: str, temporada: str) -> RedirectResponse:
+    if voltar == "obra":
+        text = (temporada or "").strip()
+        if text.isdigit():
+            return RedirectResponse(
+                f"/clubs/{club_id}/shows/{show_id}?t={text}#episodios",
+                status_code=303,
+            )
+        return RedirectResponse(f"/clubs/{club_id}/shows/{show_id}", status_code=303)
+    watch_list = "finalizados" if lista == "finalizados" else "assistindo"
+    return RedirectResponse(
+        f"/clubs/{club_id}?aba=assistindo&lista={watch_list}",
+        status_code=303,
+    )
+
+
 @app.post("/clubs/{club_id}/shows/{show_id}/avaliar")
-def rate_club_show(request: Request, club_id: int, show_id: int, stars: str = Form(...)):
+def rate_club_show(
+    request: Request,
+    club_id: int,
+    show_id: int,
+    stars: str = Form(...),
+    lista: str = Form(""),
+    voltar: str = Form(""),
+    t: str = Form(""),
+):
     db = db_session()
     try:
         user = login_required(request, db)
         require_club_member(db, club_id, user.id)
         set_club_show_rating(db, club_id, show_id, user.id, valid_stars(stars))
-        return RedirectResponse(f"/clubs/{club_id}?aba=assistindo", status_code=303)
+        return _rating_redirect(club_id, show_id, voltar, lista, t)
     except HTTPException as exc:
         if exc.status_code == 401:
             return RedirectResponse("/login", status_code=303)
