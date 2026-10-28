@@ -4,20 +4,25 @@
 {% block page_heading %}{{ show.name }}{% endblock %}
 {% block content %}
 {% set tags = show.genres|genres %}
-{% macro watched_icon() %}
-  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-    <rect x="3.5" y="3.5" width="17" height="17" rx="5" fill="currentColor"/>
-    <path d="M8 12.2l2.6 2.6L16.4 9" fill="none" stroke="#1F1B24" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+{% set episode_preview = 5 %}
+{% set news_preview = 3 %}
+{% macro eye_open() %}
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/>
+    <circle cx="12" cy="12" r="3"/>
   </svg>
 {% endmacro %}
-{% macro idle_icon() %}
-  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-    <rect x="4" y="4" width="16" height="16" rx="5"/>
+{% macro eye_off() %}
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 3l18 18"/>
+    <path d="M10.6 10.6a3 3 0 0 0 4.2 4.2"/>
+    <path d="M9.9 5.1A11 11 0 0 1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-3.2 3.8"/>
+    <path d="M6.6 6.6C3.5 8.6 2 12 2 12s3.5 7 10 7a10.7 10.7 0 0 0 4.4-.9"/>
   </svg>
 {% endmacro %}
-<div class="show-layout">
-  <section class="show-info">
-    <div class="show-info-head">
+<div class="show-page">
+  <section class="show-hero{% if show.summary %} has-synopsis{% endif %}">
+    <div class="show-hero-meta">
       {% if show.image_url %}
         <img class="show-poster" src="{{ show.image_url }}" alt="{{ show.name }}">
       {% endif %}
@@ -52,76 +57,102 @@
           </p>
         {% endif %}
         {{ club_star_form(club_id, show.id, rating, voltar="obra", temporada=selected_season) }}
+        {% if show.official_site %}
+          <p class="show-site"><a href="{{ show.official_site }}" rel="noopener" target="_blank">Site oficial</a></p>
+        {% endif %}
       </div>
     </div>
-    {% if show.summary %}<p class="show-summary">{{ show.summary }}</p>{% endif %}
-    {% if show.official_site %}<p><a href="{{ show.official_site }}" rel="noopener" target="_blank">Site oficial</a></p>{% endif %}
-    {% if show.news %}
-      <section class="show-news">
-        <h2>Notícias</h2>
-        <ul class="news">
-          {% for item in show.news %}
-            <li>
-              <a href="{{ item.url }}" rel="noopener" target="_blank">{{ item.title }}</a>
-              <span class="muted">{{ item.source or "" }} {{ item.published_at or "" }}</span>
-            </li>
-          {% endfor %}
-        </ul>
+    {% if show.summary %}
+      <section class="show-synopsis" aria-labelledby="show-synopsis-title">
+        <h2 id="show-synopsis-title">Sinopse</h2>
+        <p>{{ show.summary }}</p>
       </section>
     {% endif %}
   </section>
 
-  <section class="episode-progress" id="episodios">
-    <h2>Episódios</h2>
-    {% if error %}<p class="error">{{ error }}</p>{% endif %}
-    {% if progress.has_regular %}
-      <p class="episode-progress-summary">{{ progress.watched_count }} de {{ progress.total }} episódio{% if progress.total != 1 %}s{% endif %} assistidos</p>
-      {% if progress.complete %}
-        <p class="muted">Todos os episódios disponíveis foram assistidos.</p>
-      {% elif progress.next_label %}
-        <p class="muted">Próximo: {{ progress.next_label }}</p>
+  <section class="show-episodes" id="episodios">
+    <div class="episode-head">
+      <div class="episode-head-copy">
+        <h2>Episódios</h2>
+        {% if error %}<p class="error">{{ error }}</p>{% endif %}
+        {% if progress.has_regular %}
+          <p class="episode-progress-summary">{{ progress.watched_count }} de {{ progress.total }} episódio{% if progress.total != 1 %}s{% endif %} assistidos</p>
+          {% if progress.complete %}
+            <p class="muted">Todos os episódios disponíveis foram assistidos.</p>
+          {% elif progress.next_label %}
+            <p class="muted">Próximo: {{ progress.next_label }}</p>
+          {% endif %}
+        {% endif %}
+      </div>
+      {% if progress.has_regular %}
+        <form class="season-picker" method="get" action="/clubs/{{ club_id }}/shows/{{ show.id }}#episodios">
+          <label>
+            <span class="visually-hidden">Temporada</span>
+            <select name="t" onchange="this.form.submit()">
+              {% for season_number, _episodes in progress.groups %}
+                <option value="{{ season_number }}" {% if season_number == selected_season %}selected{% endif %}>Temporada {{ season_number }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </form>
       {% endif %}
-      <form class="season-picker" method="get" action="/clubs/{{ club_id }}/shows/{{ show.id }}#episodios">
-        <label>
-          <span class="visually-hidden">Temporada</span>
-          <select name="t" onchange="this.form.submit()">
-            {% for season_number, _episodes in progress.groups %}
-              <option value="{{ season_number }}" {% if season_number == selected_season %}selected{% endif %}>Temporada {{ season_number }}</option>
-            {% endfor %}
-          </select>
-        </label>
-      </form>
-      <ul class="episode-list">
+    </div>
+    {% if progress.has_regular %}
+      <div class="episode-list episode-grid">
         {% for episode in season_episodes %}
           {% set watched = episode.id in progress.watched_ids %}
-          <li class="episode-row{% if watched %} is-watched{% endif %}">
+          {% set extra = loop.index > episode_preview %}
+          {% set aired = episode.airdate|news_when %}
+          <article class="episode-card{% if watched %} is-watched{% endif %}{% if extra %} is-extra{% endif %}"{% if extra %} hidden{% endif %}>
             {% if can_progress %}
               {% if watched %}
-                <form action="/clubs/{{ club_id }}/shows/{{ show.id }}/episodios/{{ episode.id }}/desmarcar" method="post">
+                <form class="episode-eye-form" action="/clubs/{{ club_id }}/shows/{{ show.id }}/episodios/{{ episode.id }}/desmarcar" method="post">
                   <input type="hidden" name="t" value="{{ selected_season }}">
-                  <button class="episode-toggle is-on" type="submit" aria-pressed="true" aria-label="Desmarcar {{ episode.name }} como assistido" title="Assistido">
-                    {{ watched_icon() }}
+                  <button class="episode-eye is-on" type="submit" aria-pressed="true" aria-label="Marcar {{ episode.name }} como não assistido" title="Marcar como não assistido">
+                    {{ eye_off() }}
                   </button>
                 </form>
               {% else %}
-                <form action="/clubs/{{ club_id }}/shows/{{ show.id }}/episodios/{{ episode.id }}/visto" method="post">
+                <form class="episode-eye-form" action="/clubs/{{ club_id }}/shows/{{ show.id }}/episodios/{{ episode.id }}/visto" method="post">
                   <input type="hidden" name="t" value="{{ selected_season }}">
-                  <button class="episode-toggle" type="submit" aria-pressed="false" aria-label="Marcar {{ episode.name }} como assistido" title="Não assistido">
-                    {{ idle_icon() }}
+                  <button class="episode-eye" type="submit" aria-pressed="false" aria-label="Marcar {{ episode.name }} como assistido" title="Marcar como assistido">
+                    {{ eye_open() }}
                   </button>
                 </form>
               {% endif %}
             {% else %}
-              <span class="episode-toggle is-static{% if watched %} is-on{% endif %}" aria-hidden="true">{% if watched %}{{ watched_icon() }}{% else %}{{ idle_icon() }}{% endif %}</span>
+              <span class="episode-eye is-static{% if watched %} is-on{% endif %}">
+                {% if watched %}{{ eye_off() }}{% else %}{{ eye_open() }}{% endif %}
+              </span>
               <span class="visually-hidden">{% if watched %}Assistido{% else %}Não assistido{% endif %}</span>
             {% endif %}
-            <span class="episode-copy">
-              <span class="episode-name">{{ episode.name }}</span>
-              <span class="episode-code">T{{ episode.season_number }} E{{ episode.number }}</span>
-            </span>
-          </li>
+            <div class="episode-copy">
+              <p class="episode-name">{% if episode.number %}E{{ episode.number }}{% else %}E—{% endif %}{% if episode.name %}: {{ episode.name }}{% endif %}</p>
+              {% if aired %}<p class="muted episode-air">{{ aired }}</p>{% endif %}
+            </div>
+          </article>
         {% endfor %}
-      </ul>
+        {% if season_episodes|length > episode_preview %}
+          {% set leftover = season_episodes|length - episode_preview %}
+          <button
+            type="button"
+            class="episode-more js-reveal-more"
+            data-extra=".show-episodes .is-extra"
+            data-more="Ver mais"
+            data-less="Ver menos"
+            data-more-aria="Ver mais {{ leftover }} episódio{% if leftover != 1 %}s{% endif %}"
+            data-less-aria="Ver menos episódios"
+            aria-expanded="false"
+            aria-label="Ver mais {{ leftover }} episódio{% if leftover != 1 %}s{% endif %}"
+          >
+            <span class="episode-more-mark" data-reveal-mark aria-hidden="true">+</span>
+            <span class="episode-copy">
+              <span class="episode-name" data-reveal-label>Ver mais</span>
+              <span class="muted episode-air" data-reveal-meta>{{ leftover }} restante{% if leftover != 1 %}s{% endif %}</span>
+            </span>
+          </button>
+        {% endif %}
+      </div>
     {% elif seasons and show.tvmaze_id > 0 %}
       <p class="muted">Os episódios deste título ainda não foram sincronizados.</p>
       <form action="/clubs/{{ club_id }}/shows/{{ show.id }}/refresh" method="post">
@@ -131,5 +162,57 @@
       <p class="muted">Não há informações de episódios disponíveis para este título.</p>
     {% endif %}
   </section>
+
+  {% if show.news %}
+    <section class="show-news">
+      <h2>Notícias</h2>
+      <ul class="show-news-list">
+        {% for item in show.news %}
+          {% set extra = loop.index > news_preview %}
+          <li class="show-news-item{% if extra %} is-extra{% endif %}"{% if extra %} hidden{% endif %}>
+            <a href="{{ item.url }}" rel="noopener" target="_blank">{{ item.title }}</a>
+            {% set when = item.published_at|news_when %}
+            {% if item.source or when %}
+              <p class="muted show-news-meta">{% if item.source %}{{ item.source }}{% endif %}{% if item.source and when %} · {% endif %}{% if when %}{{ when }}{% endif %}</p>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+      {% if show.news|length > news_preview %}
+        <button type="button" class="btn btn-ghost js-reveal-more" data-extra=".show-news .is-extra" data-more="Ver mais notícias" data-less="Ver menos notícias" aria-expanded="false">Ver mais notícias</button>
+      {% endif %}
+    </section>
+  {% endif %}
 </div>
+<script>
+  (function () {
+    document.querySelectorAll(".js-reveal-more").forEach((btn) => {
+      const extras = document.querySelectorAll(btn.getAttribute("data-extra") || "");
+      if (!extras.length) {
+        btn.hidden = true;
+        return;
+      }
+      btn.addEventListener("click", () => {
+        const open = btn.getAttribute("aria-expanded") === "true";
+        extras.forEach((item) => { item.hidden = open; });
+        btn.setAttribute("aria-expanded", open ? "false" : "true");
+        const more = btn.getAttribute("data-more") || "Ver mais";
+        const less = btn.getAttribute("data-less") || "Ver menos";
+        const label = btn.querySelector("[data-reveal-label]");
+        if (label) {
+          label.textContent = open ? more : less;
+        } else {
+          btn.textContent = open ? more : less;
+        }
+        const meta = btn.querySelector("[data-reveal-meta]");
+        if (meta) meta.hidden = !open;
+        const mark = btn.querySelector("[data-reveal-mark]");
+        if (mark) mark.textContent = open ? "+" : "–";
+        const moreAria = btn.getAttribute("data-more-aria") || more;
+        const lessAria = btn.getAttribute("data-less-aria") || less;
+        btn.setAttribute("aria-label", open ? moreAria : lessAria);
+      });
+    });
+  })();
+</script>
 {% endblock %}

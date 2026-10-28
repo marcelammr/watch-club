@@ -4,7 +4,8 @@ from sqlalchemy import func, select
 from app.catalog import WATCHED, WATCHING
 from app.db import SessionLocal
 from app.main import app
-from app.models import ClubEpisodeWatch, ClubMember, ClubShow, ClubWatchRound, User
+from app.models import ClubEpisodeWatch, ClubMember, ClubShow, ClubWatchRound, Episode, NewsItem, User
+from app.services.news import format_news_when
 from app.roles import PERM_PROGRESS, PERM_SCHEDULES, PERM_TAG, ROLE_MEMBER, ROLE_SUPPORT
 from tests.test_app import register_active, star_button_values
 from tests.test_progress import _create_club, _seed_title, _user_id_by_key
@@ -103,6 +104,8 @@ def test_admin_marks_and_unmarks_episode_on_open_round():
         db.close()
     restored = owner.get(f"/clubs/{club_id}/shows/{show_id}")
     assert "0 de 2 episódios assistidos" in restored.text
+    assert "Marcar como assistido" in restored.text
+    assert "episode-eye" in restored.text
 
 
 def test_support_progress_perm_and_member_readonly():
@@ -173,7 +176,9 @@ def test_support_progress_perm_and_member_readonly():
     assert "0 de 2 episódios assistidos" in view.text
     assert "Próximo: T1 E1 — Pilot" in view.text
     assert f"/episodios/{episode_ids[0]}/visto" not in view.text
-    assert "episode-toggle is-static" in view.text
+    assert "episode-eye is-static" in view.text
+    assert "Marcar como assistido" not in view.text
+    assert 'type="submit"' not in view.text.split("episode-card", 1)[-1]
     list_page = member.get(f"/clubs/{club_id}?aba=assistindo")
     assert "0 de 2 episódios assistidos" in list_page.text
 
@@ -451,4 +456,122 @@ def test_overflow_menu_keeps_status_and_remove_actions():
         assert db.scalar(select(ClubShow).where(ClubShow.club_id == club_id, ClubShow.show_id == show_id))
     finally:
         db.close()
+
+
+def test_news_when_formats_valid_dates_and_ignores_invalid():
+    assert format_news_when("Mon, 26 Oct 2026 08:42:22 GMT") == "26 out 2026"
+    assert format_news_when("2013-09-29") == "29 set 2013"
+    assert format_news_when(None) == ""
+    assert format_news_when("") == ""
+    assert format_news_when("amanhã") == ""
+    assert format_news_when("not-a-date") == ""
+
+
+def test_show_page_episode_grid_preview_and_news_layout():
+    from app.models import Show
+
+    owner = TestClient(app)
+    register_active(owner, "pui_grid", "pui.grid@example.com")
+    club_id = _create_club(owner, "Sala Grid")
+    user_id = _user_id_by_key("pui_grid")
+    episodes = [(1, n, f"Episódio {n}") for n in range(1, 13)]
+    episodes.append((2, 1, "Só na T2"))
+    show_id, episode_ids = _seed_title(club_id, user_id, 82010, "Obra Grid", episodes)
+    db = SessionLocal()
+    try:
+        show = db.get(Show, show_id)
+        show.summary = "Uma sinopse longa o bastante para ocupar a coluna de leitura."
+        db.add(
+            NewsItem(
+                show_id=show_id,
+                title="Nova temporada ganha data de estreia",
+                url="https://example.com/noticia-1",
+                source="IMDb",
+                published_at="Mon, 26 Oct 2026 08:42:22 GMT",
+            )
+        )
+        db.add(
+            NewsItem(
+                show_id=show_id,
+                title="Sem data válida",
+                url="https://example.com/noticia-2",
+                source="Veja",
+                published_at="xyz",
+            )
+        )
+        db.add(
+            NewsItem(
+                show_id=show_id,
+                title="Terceira nota",
+                url="https://example.com/noticia-3",
+                source="O Globo",
+                published_at=None,
+            )
+        )
+        db.add(
+            NewsItem(
+                show_id=show_id,
+                title="Quarta nota extra",
+                url="https://example.com/noticia-4",
+                source="Exame",
+                published_at="2026-05-15",
+            )
+        )
+        first = db.scalar(
+            select(Episode).where(Episode.show_id == show_id, Episode.season_number == 1, Episode.number == 1)
+        )
+        first.airdate = "2013-09-29"
+        db.commit()
+    finally:
+        db.close()
+    page = owner.get(f"/clubs/{club_id}/shows/{show_id}")
+    assert page.status_code == 200
+    assert 'href="/static/style.css?v=' in page.text
+    assert "Sinopse" in page.text
+    assert "Uma sinopse longa o bastante" in page.text
+    assert "Sua avaliação:" not in page.text
+    assert "star-read" not in page.text
+    assert page.text.count("<article class=\"episode-card") == 12
+    assert page.text.count("episode-card is-extra") == 7
+    assert "episode-more" in page.text
+    assert "7 restantes" in page.text
+    assert "Só na T2" not in page.text.split("episode-list", 1)[1]
+    assert "Episódio 12" in page.text
+    assert "E1: Episódio 1" in page.text
+    assert "29 set 2013" in page.text
+    assert "Marcar como assistido" in page.text
+    assert "https://example.com/noticia-1" in page.text
+    assert "26 out 2026" in page.text
+    assert "GMT" not in page.text
+    assert "xyz" not in page.text
+    assert "15 mai 2026" in page.text
+    assert "Ver mais notícias" in page.text
+    assert page.text.count("show-news-item is-extra") == 1
+    season_two = owner.get(f"/clubs/{club_id}/shows/{show_id}?t=2")
+    t2 = season_two.text.split("episode-list", 1)[1]
+    assert "Só na T2" in t2
+    assert "Episódio 1" not in t2
+    assert "episode-more" not in t2
+    ten_id, _ids = _seed_title(
+        club_id,
+        user_id,
+        82011,
+        "Obra Dez",
+        [(1, n, f"Dez {n}") for n in range(1, 11)],
+    )
+    ten = owner.get(f"/clubs/{club_id}/shows/{ten_id}")
+    assert ten.text.count("<article class=\"episode-card") == 10
+    assert ten.text.count("episode-card is-extra") == 5
+    assert "5 restantes" in ten.text
+    five_id, _ids = _seed_title(
+        club_id,
+        user_id,
+        82012,
+        "Obra Cinco",
+        [(1, n, f"Cinco {n}") for n in range(1, 6)],
+    )
+    five = owner.get(f"/clubs/{club_id}/shows/{five_id}")
+    assert five.text.count("<article class=\"episode-card") == 5
+    assert "episode-card is-extra" not in five.text
+    assert "episode-more" not in five.text
 

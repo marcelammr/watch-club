@@ -166,6 +166,7 @@ from app.schedules import (
 from app.schema import migrate_schema
 from app.security import hash_password, make_join_code, verify_password
 from app.services import tvmaze
+from app.services.news import format_news_when
 from app.usernames import (
     NICKNAME_DAYS,
     USERNAME_RE,
@@ -188,6 +189,15 @@ app = FastAPI(title="Watch Club", description="Séries assistidas com amigos")
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "app" / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
+_STYLE_CSS = BASE_DIR / "app" / "static" / "style.css"
+
+
+def stylesheet_href() -> str:
+    try:
+        stamp = int(_STYLE_CSS.stat().st_mtime)
+    except OSError:
+        stamp = 0
+    return f"/static/style.css?v={stamp}"
 templates.env.globals["presence_of"] = presence_of
 templates.env.globals["presence_label"] = lambda user: PRESENCE_LABELS[presence_of(user)]
 templates.env.globals["avatar_initials"] = avatar_initials
@@ -231,6 +241,8 @@ templates.env.globals["schedule_episode_line"] = lambda item: format_episode_lin
 templates.env.globals["schedule_week_line"] = format_week_line
 templates.env.filters["genres"] = parse_genres
 templates.env.filters["avg_pt"] = lambda value: f"{value:.1f}".replace(".", ",") if value is not None else ""
+templates.env.filters["news_when"] = format_news_when
+templates.env.globals["stylesheet_href"] = stylesheet_href
 templates.env.filters["chat_format"] = format_chat
 
 

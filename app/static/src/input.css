@@ -441,11 +441,22 @@
   .seasons img {
     @apply h-auto w-[90px] rounded-lg object-cover;
   }
-  .show-hero {
-    @apply mb-8 grid grid-cols-1 gap-6 md:grid-cols-[220px_1fr];
+  .show-page {
+    @apply flex flex-col gap-10 pb-10;
   }
-  .show-hero img {
-    @apply w-full rounded-lg object-cover md:w-[220px];
+  .show-hero {
+    @apply grid grid-cols-1 items-start gap-8;
+  }
+  .show-hero-meta {
+    @apply flex min-w-0 flex-col gap-4;
+  }
+  .show-synopsis h2,
+  .show-episodes h2,
+  .show-news h2 {
+    @apply mb-3 mt-0 text-lg font-semibold;
+  }
+  .show-synopsis p {
+    @apply m-0 max-w-[42rem] text-[1.05rem] leading-relaxed text-foreground;
   }
   .posters {
     @apply grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-4;
@@ -1021,101 +1032,226 @@
   .watch-progress-next {
     @apply overflow-hidden text-ellipsis whitespace-nowrap;
   }
-  .show-layout {
-    @apply grid grid-cols-1 gap-10;
-  }
-  .show-info-head {
-    @apply grid grid-cols-1 gap-5;
-  }
   .show-poster {
-    @apply w-full max-w-[220px] rounded-[14px] object-cover;
+    width: 7.5rem;
+    max-width: 40%;
+    border-radius: 14px;
+    object-fit: cover;
     aspect-ratio: 2 / 3;
+  }
+  .show-hero-meta {
+    flex-direction: row;
+    align-items: start;
+    gap: 1rem;
+  }
+  .show-info-copy {
+    @apply min-w-0 flex-1;
   }
   .show-title-row {
     @apply flex min-w-0 items-start justify-between gap-2;
   }
   .show-info-copy h1 {
-    @apply m-0 min-w-0 text-[1.7rem] font-semibold leading-tight;
+    @apply m-0 min-w-0 text-[1.55rem] font-semibold leading-tight;
   }
-  .show-meta,
-  .show-summary {
+  .show-meta {
     @apply mt-2;
   }
-  .show-news {
-    @apply mt-8;
+  .show-site {
+    @apply mt-3 mb-0;
   }
-  .show-news h2 {
-    @apply mb-2 text-lg font-semibold;
+  .show-episodes {
+    min-width: 0;
   }
-  .episode-progress h2 {
-    @apply mb-2 text-lg font-semibold;
+  .episode-head {
+    @apply mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between;
+  }
+  .episode-head-copy {
+    @apply min-w-0;
   }
   .episode-progress-summary {
     @apply mb-1 mt-0 font-medium;
   }
   .season-picker {
-    @apply my-4 max-w-[16rem];
+    @apply m-0 w-full max-w-[16rem];
   }
   .season-picker label,
   .season-picker select {
     @apply m-0 w-full;
   }
-  .episode-list {
-    @apply m-0 list-none p-0;
-  }
-  .episode-row {
-    @apply flex min-w-0 items-center gap-3 border-b border-border py-2.5;
-  }
-  .episode-row form {
-    @apply m-0 shrink-0;
-  }
-  main button.episode-toggle,
-  .episode-toggle {
+  .episode-grid {
     display: grid;
-    place-items: center;
-    width: 2.5rem;
-    height: 2.5rem;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 13.5rem), 1fr));
+    column-gap: 1.75rem;
+    row-gap: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .episode-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 0.15rem 0.55rem;
+    min-width: 0;
+    margin: 0;
+    padding: 0.85rem 0.1rem 0.9rem;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .episode-card[hidden],
+  .show-news-item[hidden] {
+    display: none;
+  }
+  .episode-eye-form {
+    margin: 0;
+  }
+  .episode-copy {
+    min-width: 0;
+  }
+  .episode-name {
+    display: -webkit-box;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .episode-air {
+    margin: 0.2rem 0 0;
+    font-size: 0.8rem;
+  }
+  .episode-card.is-watched .episode-name {
+    color: var(--muted-foreground);
+    font-weight: 500;
+  }
+  main button.episode-eye,
+  .episode-eye {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
     margin: 0;
     padding: 0;
     border: 0;
-    border-radius: 0.7rem;
+    border-radius: 0;
     background: transparent;
+    box-shadow: none;
+    font: inherit;
+    font-weight: 400;
     color: var(--muted-foreground);
+    line-height: 0;
+  }
+  main button.episode-eye {
     cursor: pointer;
   }
-  main button.episode-toggle:hover,
-  main button.episode-toggle:focus-visible {
+  main button.episode-eye:hover,
+  main button.episode-eye:focus-visible {
     color: var(--primary);
-    background: color-mix(in srgb, var(--primary) 14%, transparent);
+    background: transparent;
+    box-shadow: none;
   }
-  main button.episode-toggle.is-on,
-  .episode-toggle.is-on {
+  main button.episode-eye:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  main button.episode-eye.is-on,
+  .episode-eye.is-on {
     color: var(--primary);
-    background: color-mix(in srgb, var(--primary) 18%, transparent);
   }
-  .episode-toggle.is-static {
+  .episode-eye.is-static {
+    width: 1.35rem;
+    height: 1.35rem;
+    margin-top: 0.15rem;
     cursor: default;
+    pointer-events: none;
   }
-  .episode-copy {
-    @apply flex min-w-0 flex-1 flex-col gap-0.5;
+  main button.episode-more,
+  .episode-more {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 0.15rem 0.55rem;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 0.85rem 0.1rem 0.9rem;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    font: inherit;
+    font-weight: 400;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
   }
-  .episode-code {
-    @apply text-[0.78rem] font-medium text-muted-foreground;
+  main button.episode-more:hover,
+  main button.episode-more:focus-visible {
+    background: transparent;
+    box-shadow: none;
+    color: inherit;
   }
-  .episode-name {
-    @apply min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-medium;
+  main button.episode-more:hover .episode-name,
+  main button.episode-more:focus-visible .episode-name {
+    color: var(--primary);
   }
-  .episode-row.is-watched .episode-name {
-    @apply text-muted-foreground;
+  main button.episode-more:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .episode-more-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    color: var(--muted-foreground);
+    font-size: 1.15rem;
+    line-height: 1;
+  }
+  .show-news .js-reveal-more {
+    margin-top: 1rem;
+  }
+  .show-news-list {
+    @apply m-0 flex list-none flex-col p-0;
+  }
+  .show-news-item {
+    @apply min-w-0 border-b border-border py-3.5;
+  }
+  .show-news-item a {
+    @apply font-semibold leading-snug;
+  }
+  .show-news-meta {
+    @apply mt-1 mb-0 text-[0.82rem];
   }
   @media (min-width: 721px) {
-    .show-layout {
-      grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
-      align-items: start;
-      gap: 2.5rem 3rem;
+    .show-hero.has-synopsis {
+      grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
+      gap: 2.5rem 3.25rem;
     }
-    .show-info-head {
-      grid-template-columns: 1fr;
+    .show-hero-meta {
+      flex-direction: column;
+    }
+    .show-poster {
+      width: 11.5rem;
+      max-width: 100%;
+    }
+    .show-info-copy h1 {
+      font-size: 1.7rem;
+    }
+    .show-synopsis p {
+      font-size: 1.08rem;
+      line-height: 1.7;
     }
   }
   .visually-hidden {
