@@ -226,6 +226,8 @@ def test_add_tmdb_movie_persists_catalog_without_episodes():
     assert "O Senhor dos Anéis: A Sociedade do Anel" in page.text
     assert "show-episodes" not in page.text
     assert "Atualizar informações" in page.text
+    assert "show-refresh" in page.text
+    assert f'id="show-menu-{show_id}"' not in page.text
     assert "2001" in page.text
     assert "Aventura" in page.text
     about = owner.get("/sobre")

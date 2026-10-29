@@ -173,6 +173,8 @@ def test_support_progress_perm_and_member_readonly():
         db.close()
 
     view = member.get(f"/clubs/{club_id}/shows/{show_id}")
+    assert "Atualizar informações" in view.text
+    assert "show-refresh" in view.text
     assert "0 de 2 episódios assistidos" in view.text
     assert "Próximo: T1 E1 — Pilot" in view.text
     assert f"/episodios/{episode_ids[0]}/visto" not in view.text
@@ -344,7 +346,9 @@ def test_unsynced_seasons_prompt_refresh_not_manual():
     page = owner.get(f"/clubs/{club_id}/shows/{show_id}")
     assert "Os episódios deste título ainda não foram sincronizados." in page.text
     assert "Atualizar informações" in page.text
+    assert "show-refresh" in page.text
     assert f"/shows/{show_id}/refresh" in page.text
+    assert f'id="show-menu-{show_id}"' not in page.text
     assert "episode-list" not in page.text
     assert "Voltar ao clube" not in page.text
 
