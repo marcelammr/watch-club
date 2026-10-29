@@ -8,7 +8,7 @@ from sqlalchemy import inspect, select
 from app.db import SessionLocal, engine
 from app.main import app
 from app.models import ClubShow, Episode, Season, Show
-from app.services.tvmaze import _parse_episodes, _pick_backdrop, fetch_show_and_seasons
+from app.services.tvmaze import _parse_episodes, _parse_imdb_id, _pick_backdrop, fetch_show_and_seasons
 from tests.test_app import register_active
 
 client = TestClient(app)
@@ -72,6 +72,16 @@ def test_episode_schema_is_catalog_only():
     } <= cols
     show_cols = {column["name"] for column in inspector.get_columns("shows")}
     assert "backdrop_url" in show_cols
+    assert "tmdb_id" in show_cols
+    assert "imdb_id" in show_cols
+    unique_show = {
+        tuple(item.get("column_names") or ())
+        for item in inspector.get_indexes("shows")
+        if item.get("unique")
+    }
+    unique_show.update(tuple(item.get("column_names") or ()) for item in inspector.get_unique_constraints("shows"))
+    assert any("tmdb_id" in cols for cols in unique_show)
+    assert any("imdb_id" in cols for cols in unique_show)
     assert "club_id" not in cols
     assert "watched" not in cols
     assert "watch_status" not in cols
@@ -349,6 +359,7 @@ class _FakeTVmaze:
                 "officialSite": None,
                 "type": "Scripted",
                 "genres": ["Drama"],
+                "externals": {"tvrage": 18164, "thetvdb": 81189, "imdb": "tt0903747"},
             },
         )
 
@@ -362,6 +373,8 @@ def test_fetch_show_picks_backdrop_and_survives_images_failure():
     with patch("app.services.tvmaze.httpx.AsyncClient", return_value=ok_client):
         show, _seasons, episodes = asyncio.run(fetch_show_and_seasons(169))
     assert show["backdrop_url"] == "https://example.com/bg.jpg"
+    assert show["imdb_id"] == "tt0903747"
+    assert "tmdb_id" not in show
     assert episodes[0]["image_url"] == "https://example.com/ep.jpg"
     assert any(url.endswith("/images") for url in ok_client.requested)
 
@@ -370,6 +383,7 @@ def test_fetch_show_picks_backdrop_and_survives_images_failure():
         show, _seasons, episodes = asyncio.run(fetch_show_and_seasons(169))
     assert show["name"] == "Breaking Bad"
     assert show["backdrop_url"] is None
+    assert show["imdb_id"] == "tt0903747"
     assert episodes[0]["name"] == "Pilot"
 
 
@@ -488,3 +502,144 @@ def test_refresh_fills_images_and_keeps_them_when_payload_has_none():
     page = owner.get(f"/clubs/{club_id}/shows/{show_id}")
     assert 'class="show-hero-backdrop"' in page.text
     assert "https://example.com/keep-hero.jpg" in page.text
+
+
+def test_parse_imdb_id_accepts_tt_codes_only():
+    assert _parse_imdb_id("tt0903747") == "tt0903747"
+    assert _parse_imdb_id("  TT0120737  ") == "tt0120737"
+    assert _parse_imdb_id("tt123456789012") == "tt123456789012"
+    assert _parse_imdb_id("") is None
+    assert _parse_imdb_id(None) is None
+    assert _parse_imdb_id("0903747") is None
+    assert _parse_imdb_id("imdb") is None
+    assert _parse_imdb_id(123) is None
+
+
+def test_new_tvmaze_title_stores_imdb_and_leaves_tmdb_empty():
+    owner = TestClient(app)
+    register_active(owner, "imdb_new", "imdb.new@example.com")
+    club_id = _create_club(owner, "Sala Imdb Nova")
+    payload = _show_data(94001)
+    payload["imdb_id"] = "tt0903747"
+    payload["tmdb_id"] = None
+    _add_tvmaze_show(owner, club_id, (payload, SEASONS, []))
+    db = SessionLocal()
+    try:
+        show = db.scalar(select(Show).where(Show.tvmaze_id == 94001))
+        assert show.imdb_id == "tt0903747"
+        assert show.tmdb_id is None
+        assert show.tvmaze_id == 94001
+    finally:
+        db.close()
+
+
+def test_refresh_fills_imdb_and_keeps_it_when_payload_omits_it():
+    owner = TestClient(app)
+    register_active(owner, "imdb_keep", "imdb.keep@example.com")
+    club_id = _create_club(owner, "Sala Imdb Keep")
+    payload = _show_data(94002)
+    _add_tvmaze_show(owner, club_id, (payload, SEASONS, []))
+    db = SessionLocal()
+    try:
+        show = db.scalar(select(Show).where(Show.tvmaze_id == 94002))
+        show_id = show.id
+        assert show.imdb_id is None
+        assert show.tmdb_id is None
+    finally:
+        db.close()
+
+    filled = dict(payload)
+    filled["imdb_id"] = "tt2357547"
+    with patch("app.catalog.tvmaze.fetch_show_and_seasons", AsyncMock(return_value=(filled, SEASONS, []))):
+        with patch("app.catalog.refresh_news"):
+            assert owner.post(f"/clubs/{club_id}/shows/{show_id}/refresh", follow_redirects=False).status_code == 303
+
+    empty = dict(payload)
+    empty["imdb_id"] = None
+    with patch("app.catalog.tvmaze.fetch_show_and_seasons", AsyncMock(return_value=(empty, SEASONS, []))):
+        with patch("app.catalog.refresh_news"):
+            assert owner.post(f"/clubs/{club_id}/shows/{show_id}/refresh", follow_redirects=False).status_code == 303
+
+    db = SessionLocal()
+    try:
+        show = db.get(Show, show_id)
+        assert show.imdb_id == "tt2357547"
+        assert show.tmdb_id is None
+    finally:
+        db.close()
+
+
+def test_manual_title_keeps_null_external_ids():
+    owner = TestClient(app)
+    register_active(owner, "imdb_manual", "imdb.manual@example.com")
+    club_id = _create_club(owner, "Sala Imdb Manual")
+    added = owner.post(
+        f"/clubs/{club_id}/titulos",
+        data={"name": "Filme Manual Sem Ids", "kind": "filme"},
+        follow_redirects=False,
+    )
+    assert added.status_code == 303
+    db = SessionLocal()
+    try:
+        show = db.scalar(
+            select(Show)
+            .join(ClubShow)
+            .where(ClubShow.club_id == club_id, Show.name == "Filme Manual Sem Ids")
+        )
+        assert show.tvmaze_id < 0
+        assert show.tmdb_id is None
+        assert show.imdb_id is None
+    finally:
+        db.close()
+
+
+def test_show_external_ids_are_unique_and_allow_many_nulls():
+    from sqlalchemy.exc import IntegrityError
+
+    from app.schema import migrate_schema
+
+    migrate_schema()
+    db = SessionLocal()
+    try:
+        first = Show(tvmaze_id=-94011, name="A", kind="serie", tmdb_id=11, imdb_id="tt0000011")
+        second = Show(tvmaze_id=-94012, name="B", kind="serie", tmdb_id=None, imdb_id=None)
+        third = Show(tvmaze_id=-94013, name="C", kind="serie", tmdb_id=None, imdb_id=None)
+        db.add_all([first, second, third])
+        db.commit()
+        clash = Show(tvmaze_id=-94014, name="D", kind="serie", imdb_id="tt0000011")
+        db.add(clash)
+        try:
+            db.commit()
+            raise AssertionError("expected unique imdb_id")
+        except IntegrityError:
+            db.rollback()
+        clash_tmdb = Show(tvmaze_id=-94015, name="E", kind="serie", tmdb_id=11)
+        db.add(clash_tmdb)
+        try:
+            db.commit()
+            raise AssertionError("expected unique tmdb_id")
+        except IntegrityError:
+            db.rollback()
+    finally:
+        db.close()
+
+
+def test_imdb_id_is_not_stolen_from_another_show():
+    owner = TestClient(app)
+    register_active(owner, "imdb_clash", "imdb.clash@example.com")
+    club_id = _create_club(owner, "Sala Imdb Clash")
+    first = _show_data(94003)
+    first["imdb_id"] = "tt3032476"
+    _add_tvmaze_show(owner, club_id, (first, SEASONS, []))
+    second = _show_data(94004, "Better Call Saul")
+    second["imdb_id"] = "tt3032476"
+    _add_tvmaze_show(owner, club_id, (second, SEASONS, []))
+    db = SessionLocal()
+    try:
+        original = db.scalar(select(Show).where(Show.tvmaze_id == 94003))
+        other = db.scalar(select(Show).where(Show.tvmaze_id == 94004))
+        assert original.imdb_id == "tt3032476"
+        assert other.imdb_id is None
+        assert other.tmdb_id is None
+    finally:
+        db.close()

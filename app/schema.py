@@ -252,6 +252,19 @@ def migrate_schema() -> None:
         if "backdrop_url" not in show_cols:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE shows ADD COLUMN backdrop_url VARCHAR(500)"))
+        if "tmdb_id" not in show_cols:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE shows ADD COLUMN tmdb_id INTEGER"))
+        if "imdb_id" not in show_cols:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE shows ADD COLUMN imdb_id VARCHAR(20)"))
+        inspector.clear_cache()
+        show_indexes = {index["name"] for index in inspector.get_indexes("shows")}
+        with engine.begin() as connection:
+            if "ix_shows_tmdb_id" not in show_indexes:
+                connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_shows_tmdb_id ON shows (tmdb_id)"))
+            if "ix_shows_imdb_id" not in show_indexes:
+                connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_shows_imdb_id ON shows (imdb_id)"))
     if "episodes" in inspector.get_table_names():
         episode_cols = {column["name"] for column in inspector.get_columns("episodes")}
         if "image_url" not in episode_cols:

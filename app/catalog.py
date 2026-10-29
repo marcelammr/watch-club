@@ -333,9 +333,14 @@ async def upsert_show_from_tvmaze(db: Session, tvmaze_id: int) -> Show:
     for key, value in show_data.items():
         if key == "genres":
             show.genres = encode_genres(value)
-        elif key == "backdrop_url":
-            if value:
-                show.backdrop_url = value
+        elif key in {"backdrop_url", "imdb_id", "tmdb_id"}:
+            if not value:
+                continue
+            if key in {"imdb_id", "tmdb_id"}:
+                owner_id = db.scalar(select(Show.id).where(getattr(Show, key) == value))
+                if owner_id is not None and owner_id != show.id:
+                    continue
+            setattr(show, key, value)
         else:
             setattr(show, key, value)
     db.flush()

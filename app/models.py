@@ -130,9 +130,15 @@ class ClubJoinRequest(Base):
 
 class Show(Base):
     __tablename__ = "shows"
+    __table_args__ = (
+        Index("ix_shows_tmdb_id", "tmdb_id", unique=True),
+        Index("ix_shows_imdb_id", "imdb_id", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tvmaze_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    tmdb_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    imdb_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     kind: Mapped[str] = mapped_column(String(20), default="serie", nullable=False)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)

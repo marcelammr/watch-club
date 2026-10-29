@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import re
 
 import httpx
+
+_IMDB_ID = re.compile(r"^tt\d{7,12}$")
 
 TVMAZE = "https://api.tvmaze.com"
 
@@ -26,6 +29,22 @@ def _image(payload: dict | None) -> str | None:
         if isinstance(value, str) and value.strip():
             return value.strip()[:500]
     return None
+
+
+def _parse_imdb_id(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip().casefold()
+    if not _IMDB_ID.match(text):
+        return None
+    return text[:20]
+
+
+def _imdb_from_show(payload: dict) -> str | None:
+    externals = payload.get("externals")
+    if not isinstance(externals, dict):
+        return None
+    return _parse_imdb_id(externals.get("imdb"))
 
 
 def _strip_html(value: str | None) -> str | None:
@@ -141,6 +160,7 @@ async def fetch_show_and_seasons(tvmaze_id: int) -> tuple[dict, list[dict], list
             "kind": _kind(show.get("type")),
             "genres": [item for item in (show.get("genres") or []) if item],
             "backdrop_url": None,
+            "imdb_id": _imdb_from_show(show),
         }
         seasons = []
         for season in seasons_resp.json():
