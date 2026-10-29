@@ -333,6 +333,9 @@ async def upsert_show_from_tvmaze(db: Session, tvmaze_id: int) -> Show:
     for key, value in show_data.items():
         if key == "genres":
             show.genres = encode_genres(value)
+        elif key == "backdrop_url":
+            if value:
+                show.backdrop_url = value
         else:
             setattr(show, key, value)
     db.flush()
@@ -364,6 +367,8 @@ async def upsert_show_from_tvmaze(db: Session, tvmaze_id: int) -> Show:
         episode.number = payload["number"]
         episode.name = payload["name"]
         episode.airdate = payload["airdate"]
+        if payload.get("image_url"):
+            episode.image_url = payload["image_url"]
     db.flush()
     return show
 
@@ -474,6 +479,15 @@ def parse_genres(raw: str | None) -> list[str]:
     if not isinstance(data, list):
         return []
     return [str(item).strip() for item in data if str(item).strip()]
+
+
+def premiere_year(raw: str | None) -> str:
+    text = (raw or "").strip()
+    if len(text) >= 4 and text[:4].isdigit():
+        year = int(text[:4])
+        if 1800 <= year <= 2100:
+            return text[:4]
+    return ""
 
 
 def valid_stars(value: int | str) -> int:

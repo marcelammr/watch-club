@@ -20,54 +20,61 @@
     <path d="M6.6 6.6C3.5 8.6 2 12 2 12s3.5 7 10 7a10.7 10.7 0 0 0 4.4-.9"/>
   </svg>
 {% endmacro %}
+{% set year = show.premiered|premiere_year %}
 <div class="show-page">
-  <section class="show-hero{% if show.summary %} has-synopsis{% endif %}">
-    <div class="show-hero-meta">
-      {% if show.image_url %}
+  <section class="show-hero{% if show.backdrop_url %} has-backdrop{% endif %}{% if show.summary %} has-synopsis{% endif %}">
+    {% if show.backdrop_url %}
+      <div class="show-hero-art" aria-hidden="true">
+        <img class="show-hero-backdrop" src="{{ show.backdrop_url }}" alt="">
+      </div>
+    {% endif %}
+    <div class="show-hero-body">
+      {% if not show.backdrop_url and show.image_url %}
         <img class="show-poster" src="{{ show.image_url }}" alt="{{ show.name }}">
       {% endif %}
       <div class="show-info-copy">
         <div class="show-title-row">
           <h1>{{ show.name }}</h1>
-          {% if show.tvmaze_id > 0 %}
-            <div class="action-menu js-action-menu">
-              <button
-                type="button"
-                class="btn btn-icon action-menu-toggle js-action-menu-toggle"
-                aria-expanded="false"
-                aria-haspopup="menu"
-                aria-controls="show-menu-{{ show.id }}"
-                aria-label="Ações de {{ show.name }}"
-                title="Ações"
-              >⋯</button>
-              <div id="show-menu-{{ show.id }}" class="action-menu-panel js-action-menu-panel" hidden role="menu">
-                <form action="/clubs/{{ club_id }}/shows/{{ show.id }}/refresh" method="post" role="none">
-                  <button class="action-menu-item" role="menuitem" type="submit">Atualizar informações</button>
-                </form>
+          <div class="show-hero-tools">
+            {% if show.tvmaze_id > 0 %}
+              <div class="action-menu js-action-menu">
+                <button
+                  type="button"
+                  class="btn btn-icon action-menu-toggle js-action-menu-toggle"
+                  aria-expanded="false"
+                  aria-haspopup="menu"
+                  aria-controls="show-menu-{{ show.id }}"
+                  aria-label="Ações de {{ show.name }}"
+                  title="Ações"
+                >⋯</button>
+                <div id="show-menu-{{ show.id }}" class="action-menu-panel js-action-menu-panel" hidden role="menu">
+                  <form action="/clubs/{{ club_id }}/shows/{{ show.id }}/refresh" method="post" role="none">
+                    <button class="action-menu-item" role="menuitem" type="submit">Atualizar informações</button>
+                  </form>
+                </div>
               </div>
-            </div>
-          {% endif %}
+            {% endif %}
+          </div>
         </div>
-        <p class="muted show-meta">{{ CONTENT_KINDS.get(show.kind, 'Série') }}{% if show.status %} · {{ show.status }}{% endif %}{% if show.premiered %} · estreia {{ show.premiered }}{% endif %}</p>
-        {% if tags %}
-          <p class="watch-tags">
-            {% for tag in tags %}
-              <span class="watch-tag">{{ tag }}</span>
-            {% endfor %}
+        {% if year or tags %}
+          <p class="show-hero-facts muted">
+            {% if year %}<span class="show-year">{{ year }}</span>{% endif %}
+            {% if year and tags %}<span aria-hidden="true"> · </span>{% endif %}
+            {% if tags %}<span class="show-genres">{{ tags|join(" · ") }}</span>{% endif %}
           </p>
         {% endif %}
         {{ club_star_form(club_id, show.id, rating, voltar="obra", temporada=selected_season) }}
         {% if show.official_site %}
           <p class="show-site"><a href="{{ show.official_site }}" rel="noopener" target="_blank">Site oficial</a></p>
         {% endif %}
+        {% if show.summary %}
+          <section class="show-synopsis" aria-labelledby="show-synopsis-title">
+            <h2 id="show-synopsis-title" class="visually-hidden">Sinopse</h2>
+            <p>{{ show.summary }}</p>
+          </section>
+        {% endif %}
       </div>
     </div>
-    {% if show.summary %}
-      <section class="show-synopsis" aria-labelledby="show-synopsis-title">
-        <h2 id="show-synopsis-title">Sinopse</h2>
-        <p>{{ show.summary }}</p>
-      </section>
-    {% endif %}
   </section>
 
   <section class="show-episodes" id="episodios">

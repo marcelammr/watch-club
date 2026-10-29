@@ -19,9 +19,13 @@ def _kind(type_name: str | None) -> str:
 
 
 def _image(payload: dict | None) -> str | None:
-    if not payload:
+    if not isinstance(payload, dict):
         return None
-    return payload.get("original") or payload.get("medium")
+    for key in ("original", "medium"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:500]
+    return None
 
 
 def _strip_html(value: str | None) -> str | None:
@@ -83,9 +87,36 @@ def _parse_episodes(payload: list | None) -> list[dict]:
                 "number": _optional_int(item.get("number")),
                 "name": (item.get("name") or "").strip()[:255],
                 "airdate": airdate[:20] if airdate else None,
+                "image_url": _image(item.get("image")),
             }
         )
     return episodes
+
+
+def _pick_backdrop(payload) -> str | None:
+    if not isinstance(payload, list):
+        return None
+    best_url = None
+    best_size = (-1, -1)
+    for item in payload:
+        if not isinstance(item, dict) or item.get("type") != "background":
+            continue
+        resolutions = item.get("resolutions")
+        if not isinstance(resolutions, dict):
+            continue
+        chosen = resolutions.get("original")
+        if not isinstance(chosen, dict):
+            chosen = resolutions.get("medium")
+        if not isinstance(chosen, dict):
+            continue
+        url = chosen.get("url")
+        if not isinstance(url, str) or not url.strip():
+            continue
+        size = (_optional_int(chosen.get("width")) or 0, _optional_int(chosen.get("height")) or 0)
+        if best_url is None or size > best_size:
+            best_url = url.strip()[:500]
+            best_size = size
+    return best_url
 
 
 async def fetch_show_and_seasons(tvmaze_id: int) -> tuple[dict, list[dict], list[dict]]:
@@ -109,6 +140,7 @@ async def fetch_show_and_seasons(tvmaze_id: int) -> tuple[dict, list[dict], list
             "official_site": show.get("officialSite"),
             "kind": _kind(show.get("type")),
             "genres": [item for item in (show.get("genres") or []) if item],
+            "backdrop_url": None,
         }
         seasons = []
         for season in seasons_resp.json():
@@ -122,6 +154,12 @@ async def fetch_show_and_seasons(tvmaze_id: int) -> tuple[dict, list[dict], list
                     "image_url": _image(season.get("image")),
                 }
             )
+        try:
+            images_resp = await client.get(f"{TVMAZE}/shows/{tvmaze_id}/images")
+            images_resp.raise_for_status()
+            show_data["backdrop_url"] = _pick_backdrop(images_resp.json())
+        except (httpx.HTTPError, ValueError, TypeError) as exc:
+            print(f"[watch-club] TVMaze images indisponível para {tvmaze_id}: {exc.__class__.__name__}")
         return show_data, seasons, _parse_episodes(episodes_resp.json())
 
 

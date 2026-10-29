@@ -1,12 +1,14 @@
+import asyncio
 from unittest.mock import AsyncMock, patch
 
+import httpx
 from fastapi.testclient import TestClient
 from sqlalchemy import inspect, select
 
 from app.db import SessionLocal, engine
 from app.main import app
 from app.models import ClubShow, Episode, Season, Show
-from app.services.tvmaze import _parse_episodes
+from app.services.tvmaze import _parse_episodes, _pick_backdrop, fetch_show_and_seasons
 from tests.test_app import register_active
 
 client = TestClient(app)
@@ -66,7 +68,10 @@ def test_episode_schema_is_catalog_only():
         "number",
         "name",
         "airdate",
+        "image_url",
     } <= cols
+    show_cols = {column["name"] for column in inspector.get_columns("shows")}
+    assert "backdrop_url" in show_cols
     assert "club_id" not in cols
     assert "watched" not in cols
     assert "watch_status" not in cols
@@ -87,6 +92,7 @@ def test_parse_episodes_skips_missing_ids_and_keeps_null_numbers():
             "number": None,
             "name": "Special",
             "airdate": None,
+            "image_url": None,
         },
         {
             "tvmaze_id": 11,
@@ -94,6 +100,7 @@ def test_parse_episodes_skips_missing_ids_and_keeps_null_numbers():
             "number": 1,
             "name": "Pilot",
             "airdate": "2008-01-20",
+            "image_url": None,
         },
     ]
 
@@ -239,5 +246,245 @@ def test_refresh_skips_episode_fetch_for_manual_titles():
     db = SessionLocal()
     try:
         assert db.scalar(select(Episode.id).where(Episode.show_id == show_id)) is None
+        assert db.get(Show, show_id).backdrop_url is None
     finally:
         db.close()
+
+
+def test_parse_episodes_reads_original_then_medium_image():
+    parsed = _parse_episodes(
+        [
+            {
+                "id": 1,
+                "season": 1,
+                "number": 1,
+                "name": "Pilot",
+                "image": {
+                    "medium": "https://example.com/med.jpg",
+                    "original": "https://example.com/orig.jpg",
+                },
+            },
+            {
+                "id": 2,
+                "season": 1,
+                "number": 2,
+                "name": "Só medium",
+                "image": {"medium": "https://example.com/only-med.jpg", "original": None},
+            },
+            {"id": 3, "season": 1, "number": 3, "name": "Sem imagem", "image": None},
+        ]
+    )
+    assert parsed[0]["image_url"] == "https://example.com/orig.jpg"
+    assert parsed[1]["image_url"] == "https://example.com/only-med.jpg"
+    assert parsed[2]["image_url"] is None
+
+
+def test_pick_backdrop_prefers_widest_background_and_ignores_other_types():
+    chosen = _pick_backdrop(
+        [
+            {"type": "poster", "resolutions": {"original": {"url": "https://example.com/poster.jpg", "width": 2000, "height": 3000}}},
+            {"type": "banner", "resolutions": {"original": {"url": "https://example.com/banner.jpg", "width": 1500, "height": 500}}},
+            {"type": "background", "resolutions": {"original": {"url": "https://example.com/bg-small.jpg", "width": 534, "height": 300}}},
+            {"type": "background", "resolutions": {"original": {"url": "https://example.com/bg-wide.jpg", "width": 1920, "height": 1080}}},
+            {"type": "typography", "resolutions": {"original": {"url": "https://example.com/logo.png", "width": 800, "height": 200}}},
+            {"type": "background", "resolutions": {"original": {"url": "", "width": 3840, "height": 2160}}},
+            {"type": "background", "resolutions": None},
+            "broken",
+        ]
+    )
+    assert chosen == "https://example.com/bg-wide.jpg"
+    assert _pick_backdrop([]) is None
+    assert _pick_backdrop(None) is None
+    assert _pick_backdrop({"type": "background"}) is None
+
+
+def _http_json(url: str, payload, status: int = 200) -> httpx.Response:
+    return httpx.Response(status, json=payload, request=httpx.Request("GET", url))
+
+
+class _FakeTVmaze:
+    def __init__(self, images=None, images_status: int = 200, fail_images: bool = False):
+        self.images = images if images is not None else []
+        self.images_status = images_status
+        self.fail_images = fail_images
+        self.requested = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return None
+
+    async def get(self, url, **kwargs):
+        self.requested.append(str(url))
+        if str(url).endswith("/images"):
+            if self.fail_images:
+                raise httpx.ConnectError("offline")
+            return _http_json(url, self.images, self.images_status)
+        if str(url).endswith("/seasons"):
+            return _http_json(url, [])
+        if str(url).endswith("/episodes"):
+            return _http_json(
+                url,
+                [
+                    {
+                        "id": 77,
+                        "season": 1,
+                        "number": 1,
+                        "name": "Pilot",
+                        "airdate": "2008-01-20",
+                        "image": {"original": "https://example.com/ep.jpg"},
+                    }
+                ],
+            )
+        return _http_json(
+            url,
+            {
+                "id": 169,
+                "name": "Breaking Bad",
+                "summary": None,
+                "status": "Ended",
+                "premiered": "2008-01-20",
+                "image": {"original": "https://example.com/poster.jpg"},
+                "officialSite": None,
+                "type": "Scripted",
+                "genres": ["Drama"],
+            },
+        )
+
+
+def test_fetch_show_picks_backdrop_and_survives_images_failure():
+    ok_client = _FakeTVmaze(
+        images=[
+            {"type": "background", "resolutions": {"original": {"url": "https://example.com/bg.jpg", "width": 1280, "height": 720}}},
+        ]
+    )
+    with patch("app.services.tvmaze.httpx.AsyncClient", return_value=ok_client):
+        show, _seasons, episodes = asyncio.run(fetch_show_and_seasons(169))
+    assert show["backdrop_url"] == "https://example.com/bg.jpg"
+    assert episodes[0]["image_url"] == "https://example.com/ep.jpg"
+    assert any(url.endswith("/images") for url in ok_client.requested)
+
+    failed = _FakeTVmaze(fail_images=True)
+    with patch("app.services.tvmaze.httpx.AsyncClient", return_value=failed):
+        show, _seasons, episodes = asyncio.run(fetch_show_and_seasons(169))
+    assert show["name"] == "Breaking Bad"
+    assert show["backdrop_url"] is None
+    assert episodes[0]["name"] == "Pilot"
+
+
+def test_new_tvmaze_title_stores_backdrop_and_episode_image():
+    owner = TestClient(app)
+    register_active(owner, "img_new", "img.new@example.com")
+    club_id = _create_club(owner, "Sala Imagens Nova")
+    payload = _show_data(93001)
+    payload["backdrop_url"] = "https://example.com/hero.jpg"
+    episodes = [
+        {
+            "tvmaze_id": 3001,
+            "season_number": 1,
+            "number": 1,
+            "name": "Pilot",
+            "airdate": "2008-01-20",
+            "image_url": "https://example.com/still.jpg",
+        },
+        {
+            "tvmaze_id": 3002,
+            "season_number": 1,
+            "number": 2,
+            "name": "Sem still",
+            "airdate": "2008-01-27",
+            "image_url": None,
+        },
+    ]
+    _add_tvmaze_show(owner, club_id, (payload, SEASONS, episodes))
+    db = SessionLocal()
+    try:
+        show = db.scalar(select(Show).where(Show.tvmaze_id == 93001))
+        assert show.backdrop_url == "https://example.com/hero.jpg"
+        rows = db.scalars(select(Episode).where(Episode.show_id == show.id).order_by(Episode.tvmaze_id)).all()
+        assert rows[0].image_url == "https://example.com/still.jpg"
+        assert rows[1].image_url is None
+    finally:
+        db.close()
+
+
+def test_refresh_fills_images_and_keeps_them_when_payload_has_none():
+    owner = TestClient(app)
+    register_active(owner, "img_keep", "img.keep@example.com")
+    club_id = _create_club(owner, "Sala Imagens Keep")
+    payload = _show_data(93002)
+    first = [
+        {"tvmaze_id": 4001, "season_number": 1, "number": 1, "name": "Pilot", "airdate": "2008-01-20"},
+    ]
+    _add_tvmaze_show(owner, club_id, (payload, SEASONS, first))
+    db = SessionLocal()
+    try:
+        show = db.scalar(select(Show).where(Show.tvmaze_id == 93002))
+        show_id = show.id
+        assert show.backdrop_url is None
+        assert db.scalar(select(Episode).where(Episode.tvmaze_id == 4001)).image_url is None
+    finally:
+        db.close()
+    before = owner.get(f"/clubs/{club_id}/shows/{show_id}")
+    assert "show-hero-backdrop" not in before.text
+
+    filled = dict(payload)
+    filled["backdrop_url"] = "https://example.com/keep-hero.jpg"
+    with patch(
+        "app.catalog.tvmaze.fetch_show_and_seasons",
+        AsyncMock(
+            return_value=(
+                filled,
+                SEASONS,
+                [
+                    {
+                        "tvmaze_id": 4001,
+                        "season_number": 1,
+                        "number": 1,
+                        "name": "Pilot",
+                        "airdate": "2008-01-20",
+                        "image_url": "https://example.com/keep-still.jpg",
+                    }
+                ],
+            )
+        ),
+    ):
+        with patch("app.catalog.refresh_news"):
+            assert owner.post(f"/clubs/{club_id}/shows/{show_id}/refresh", follow_redirects=False).status_code == 303
+
+    empty = dict(payload)
+    empty["backdrop_url"] = None
+    with patch(
+        "app.catalog.tvmaze.fetch_show_and_seasons",
+        AsyncMock(
+            return_value=(
+                empty,
+                SEASONS,
+                [
+                    {
+                        "tvmaze_id": 4001,
+                        "season_number": 1,
+                        "number": 1,
+                        "name": "Pilot",
+                        "airdate": "2008-01-20",
+                        "image_url": None,
+                    }
+                ],
+            )
+        ),
+    ):
+        with patch("app.catalog.refresh_news"):
+            assert owner.post(f"/clubs/{club_id}/shows/{show_id}/refresh", follow_redirects=False).status_code == 303
+
+    db = SessionLocal()
+    try:
+        show = db.get(Show, show_id)
+        episode = db.scalar(select(Episode).where(Episode.tvmaze_id == 4001))
+        assert show.backdrop_url == "https://example.com/keep-hero.jpg"
+        assert episode.image_url == "https://example.com/keep-still.jpg"
+    finally:
+        db.close()
+    page = owner.get(f"/clubs/{club_id}/shows/{show_id}")
+    assert 'class="show-hero-backdrop"' in page.text
+    assert "https://example.com/keep-hero.jpg" in page.text

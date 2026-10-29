@@ -139,6 +139,7 @@ class Show(Base):
     status: Mapped[str | None] = mapped_column(String(40), nullable=True)
     premiered: Mapped[str | None] = mapped_column(String(20), nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    backdrop_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     official_site: Mapped[str | None] = mapped_column(String(500), nullable=True)
     genres: Mapped[str | None] = mapped_column(Text, nullable=True)
     news_fetched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -178,6 +179,7 @@ class Episode(Base):
     number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     airdate: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     show: Mapped[Show] = relationship(back_populates="episodes")
     season: Mapped[Season | None] = relationship(back_populates="episodes")

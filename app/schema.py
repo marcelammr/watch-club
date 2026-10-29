@@ -249,6 +249,14 @@ def migrate_schema() -> None:
         if "genres" not in show_cols:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE shows ADD COLUMN genres TEXT"))
+        if "backdrop_url" not in show_cols:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE shows ADD COLUMN backdrop_url VARCHAR(500)"))
+    if "episodes" in inspector.get_table_names():
+        episode_cols = {column["name"] for column in inspector.get_columns("episodes")}
+        if "image_url" not in episode_cols:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE episodes ADD COLUMN image_url VARCHAR(500)"))
     if "club_shows" in inspector.get_table_names():
         link_cols = {column["name"] for column in inspector.get_columns("club_shows")}
         if "watch_status" not in link_cols:

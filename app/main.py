@@ -48,6 +48,7 @@ from app.catalog import (
     leave_club as remove_club_membership,
     load_show,
     parse_genres,
+    premiere_year,
     parse_member_limit,
     list_join_requests,
     pending_join_request,
@@ -66,6 +67,7 @@ from app.catalog import (
     valid_kind,
     valid_stars,
 )
+from app.navigation import back_href_for
 from app.club_tags import (
     TAG_BG_DEFAULT,
     TAG_BG_MAX,
@@ -163,6 +165,7 @@ from app.schedules import (
     list_upcoming_schedules,
     list_week_schedules,
 )
+from app.search import SEARCH_MIN_CHARS, normalize_search_query, rank_search_results, search_ready
 from app.schema import migrate_schema
 from app.security import hash_password, make_join_code, verify_password
 from app.services import tvmaze
@@ -240,9 +243,11 @@ templates.env.globals["schedule_episode_line"] = lambda item: format_episode_lin
 )
 templates.env.globals["schedule_week_line"] = format_week_line
 templates.env.filters["genres"] = parse_genres
+templates.env.filters["premiere_year"] = premiere_year
 templates.env.filters["avg_pt"] = lambda value: f"{value:.1f}".replace(".", ",") if value is not None else ""
 templates.env.filters["news_when"] = format_news_when
 templates.env.globals["stylesheet_href"] = stylesheet_href
+templates.env.globals["back_href_for"] = back_href_for
 templates.env.filters["chat_format"] = format_chat
 
 
@@ -1220,7 +1225,14 @@ async def club_detail(
                 {"user": user, "club": club},
             )
         tab = _club_tab(aba)
-        results = await tvmaze.search_shows(q) if tab == "assistindo" and q else []
+        search_query = normalize_search_query(q)
+        results = []
+        search_too_short = False
+        if tab == "assistindo" and search_query:
+            if search_ready(search_query):
+                results = rank_search_results(await tvmaze.search_shows(search_query), search_query)
+            else:
+                search_too_short = True
         watching = [link for link in club.shows if (link.watch_status or "watching") != "watched"]
         watched = [link for link in club.shows if link.watch_status == "watched"]
         schedules = list_upcoming_schedules(db, club.id) if tab == "agendamentos" else []
@@ -1246,8 +1258,10 @@ async def club_detail(
             {
                 "user": user,
                 "club": club,
-                "query": q or "",
+                "query": search_query,
                 "results": results,
+                "search_too_short": search_too_short,
+                "search_min_chars": SEARCH_MIN_CHARS,
                 "is_member": True,
                 "tab": tab,
                 "watch_list": "finalizados" if lista == "finalizados" else "assistindo",
@@ -2042,8 +2056,21 @@ def api_command(request: Request):
 
 
 @app.get("/api/shows/search")
-async def api_search(q: str = Query(..., min_length=1)):
-    return await tvmaze.search_shows(q)
+async def api_search(request: Request, q: str = Query("")):
+    db = db_session()
+    try:
+        login_required(request, db)
+    finally:
+        db.close()
+    query = normalize_search_query(q)
+    if not search_ready(query):
+        return []
+    try:
+        return rank_search_results(await tvmaze.search_shows(query), query)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=503, detail="Não foi possível pesquisar agora.")
 
 
 @app.get("/api/username")

@@ -285,6 +285,7 @@
       </section>
     {% else %}
       <section class="watch-panel">
+        <div class="js-title-search" data-club-id="{{ club.id }}" data-min-chars="{{ search_min_chars }}">
         <div class="watch-toolbar">
           <form class="watch-search" method="get" role="search">
             <input type="hidden" name="aba" value="assistindo">
@@ -295,30 +296,30 @@
                 <path d="M20 20l-3-3"></path>
               </svg>
             </button>
-            <input name="q" value="{{ query }}" placeholder="Pesquisar série, filme, animação..." aria-label="Pesquisar série, filme, animação">
+            <input class="js-title-search-input" name="q" value="{{ query }}" placeholder="Pesquisar série, filme, animação..." aria-label="Pesquisar série, filme, animação" autocomplete="off">
           </form>
           <button class="watch-add-btn js-add-title-open" type="button" title="Adicionar manualmente" aria-label="Adicionar manualmente">+</button>
         </div>
 
-        {% if results %}
-          <ul class="results">
-            {% for item in results %}
-              <li>
-                {% if item.image_url %}<img src="{{ item.image_url }}" alt=""> {% endif %}
-                <div>
-                  <strong>{{ item.name }}</strong>
-                  <span class="muted">{{ CONTENT_KINDS.get(item.kind, 'Série') }} · {{ item.premiered or "—" }}</span>
-                  <p>{{ item.summary[:220] if item.summary else "" }}{% if item.summary and item.summary|length > 220 %}…{% endif %}</p>
-                  <form action="/clubs/{{ club.id }}/shows" method="post">
-                    <input type="hidden" name="tvmaze_id" value="{{ item.tvmaze_id }}">
-                    <input type="hidden" name="kind" value="{{ item.kind or 'serie' }}">
-                    <button class="btn btn-primary" type="submit">Adicionar ao clube</button>
-                  </form>
-                </div>
-              </li>
-            {% endfor %}
-          </ul>
-        {% endif %}
+        <p class="muted search-status js-title-search-status" role="status" aria-live="polite">{% if search_too_short %}Digite ao menos {{ search_min_chars }} letras para pesquisar.{% elif query and not results %}Nenhum título encontrado.{% endif %}</p>
+        <ul class="results js-title-search-results">
+          {% for item in results %}
+            <li>
+              {% if item.image_url %}<img src="{{ item.image_url }}" alt=""> {% endif %}
+              <div>
+                <strong>{{ item.name }}</strong>
+                <span class="muted">{{ CONTENT_KINDS.get(item.kind, 'Série') }} · {{ item.premiered or "—" }}</span>
+                <p>{{ item.summary[:220] if item.summary else "" }}{% if item.summary and item.summary|length > 220 %}…{% endif %}</p>
+                <form action="/clubs/{{ club.id }}/shows" method="post">
+                  <input type="hidden" name="tvmaze_id" value="{{ item.tvmaze_id }}">
+                  <input type="hidden" name="kind" value="{{ item.kind or 'serie' }}">
+                  <button class="btn btn-primary" type="submit">Adicionar ao clube</button>
+                </form>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+        </div>
 
         {% if week_schedules %}
           <section class="week-schedule" aria-labelledby="week-schedule-title">
@@ -736,6 +737,117 @@
 
     input.addEventListener("input", resizeInput);
     resizeInput();
+  })();
+  (function () {
+    const root = document.querySelector(".js-title-search");
+    if (!root) return;
+    const input = root.querySelector(".js-title-search-input");
+    const status = root.querySelector(".js-title-search-status");
+    const list = root.querySelector(".js-title-search-results");
+    if (!input || !status || !list) return;
+
+    const clubId = root.dataset.clubId || "";
+    const minChars = Number(root.dataset.minChars || 2);
+    const kinds = {{ CONTENT_KINDS | tojson }};
+    const debounceMs = 300;
+    let timer = 0;
+    let controller = null;
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[ch]));
+    }
+
+    function normalizeQuery(raw) {
+      return String(raw || "").trim().replace(/\s+/g, " ");
+    }
+
+    function foldedLength(text) {
+      try {
+        return text.normalize("NFKD").replace(/\p{M}/gu, "").length;
+      } catch (err) {
+        return text.length;
+      }
+    }
+
+    function setStatus(text) {
+      status.textContent = text || "";
+    }
+
+    function renderResults(items) {
+      list.innerHTML = (items || []).map((item) => {
+        const name = escapeHtml(item.name || "");
+        const kind = escapeHtml(kinds[item.kind] || "Série");
+        const premiered = escapeHtml(item.premiered || "—");
+        const summary = String(item.summary || "");
+        const clipped = summary.length > 220 ? summary.slice(0, 220) + "…" : summary;
+        const image = item.image_url
+          ? `<img src="${escapeHtml(item.image_url)}" alt=""> `
+          : "";
+        return `<li>
+              ${image}<div>
+                <strong>${name}</strong>
+                <span class="muted">${kind} · ${premiered}</span>
+                <p>${escapeHtml(clipped)}</p>
+                <form action="/clubs/${escapeHtml(clubId)}/shows" method="post">
+                  <input type="hidden" name="tvmaze_id" value="${escapeHtml(item.tvmaze_id)}">
+                  <input type="hidden" name="kind" value="${escapeHtml(item.kind || "serie")}">
+                  <button class="btn btn-primary" type="submit">Adicionar ao clube</button>
+                </form>
+              </div>
+            </li>`;
+      }).join("");
+    }
+
+    function search(query) {
+      if (controller) controller.abort();
+      controller = new AbortController();
+      const pending = controller;
+      setStatus("Pesquisando…");
+      fetch("/api/shows/search?q=" + encodeURIComponent(query), { signal: pending.signal })
+        .then((response) => {
+          if (!response.ok) throw new Error("search-failed");
+          return response.json();
+        })
+        .then((items) => {
+          if (pending !== controller) return;
+          const rows = Array.isArray(items) ? items : [];
+          renderResults(rows);
+          setStatus(rows.length ? "" : "Nenhum título encontrado.");
+        })
+        .catch((err) => {
+          if (err && err.name === "AbortError") return;
+          if (pending !== controller) return;
+          setStatus("Não foi possível pesquisar agora.");
+        });
+    }
+
+    function onQueryChange() {
+      const query = normalizeQuery(input.value);
+      if (!query) {
+        if (controller) controller.abort();
+        renderResults([]);
+        setStatus("");
+        return;
+      }
+      if (foldedLength(query) < minChars) {
+        if (controller) controller.abort();
+        renderResults([]);
+        setStatus("Digite ao menos " + minChars + " letras para pesquisar.");
+        return;
+      }
+      search(query);
+    }
+
+    input.addEventListener("input", () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(onQueryChange, debounceMs);
+    });
   })();
 </script>
 {% endblock %}

@@ -114,6 +114,10 @@ def test_command_api_guest_and_member():
 
 
 def test_search_api_uses_tvmaze():
+    from unittest.mock import AsyncMock
+
+    member = TestClient(app)
+    register_active(member, "busca_tvmaze", "busca.tvmaze@example.com")
     fake = [
         {
             "tvmaze_id": 169,
@@ -124,8 +128,10 @@ def test_search_api_uses_tvmaze():
             "summary": "Um professor de química.",
         }
     ]
-    with patch("app.main.tvmaze.search_shows", return_value=fake):
-        response = client.get("/api/shows/search", params={"q": "breaking"})
+    with patch("app.main.tvmaze.search_shows", AsyncMock(return_value=fake)):
+        guest = client.get("/api/shows/search", params={"q": "breaking"})
+        response = member.get("/api/shows/search", params={"q": "breaking"})
+    assert guest.status_code == 401
     assert response.status_code == 200
     assert response.json()[0]["name"] == "Breaking Bad"
 
@@ -1268,8 +1274,14 @@ def test_back_button_only_when_logged_in():
     assert "js-sidebar-toggle" in home.text
     assert "Início" in home.text
     conta = member.get("/conta")
-    assert 'class="back-btn js-back"' in conta.text
-    assert 'aria-label="Voltar"' in conta.text
+    assert 'aria-label="Voltar"' not in conta.text
+    from_home = member.get("/conta", headers={"Referer": "http://testserver/"})
+    assert 'aria-label="Voltar"' in from_home.text
+    assert 'class="back-btn" href="/"' in from_home.text
+    assert "history.back" not in from_home.text
+    external = member.get("/conta", headers={"Referer": "https://evil.example/phish"})
+    assert "evil.example" not in external.text
+    assert 'class="back-btn" href="/"' in external.text
     guest = TestClient(app)
     home_guest = guest.get("/")
     assert 'aria-label="Voltar"' not in home_guest.text

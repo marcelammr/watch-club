@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from app.catalog import WATCHED, WATCHING
+from app.catalog import WATCHED, WATCHING, encode_genres, premiere_year
 from app.db import SessionLocal
 from app.main import app
 from app.models import ClubEpisodeWatch, ClubMember, ClubShow, ClubWatchRound, Episode, NewsItem, User
@@ -273,6 +273,10 @@ def test_manual_title_empty_episode_state():
     assert f"/shows/{show_id}/refresh" not in detail.text
     assert "Voltar ao clube" not in detail.text
     assert detail.status_code == 200
+    assert "show-hero-backdrop" not in detail.text
+    assert "watch-tag" not in detail.text
+    assert "Filme" not in detail.text
+    assert "estreia " not in detail.text
 
 
 def test_season_selector_filters_and_preserves_after_mark():
@@ -529,8 +533,13 @@ def test_show_page_episode_grid_preview_and_news_layout():
     assert 'href="/static/style.css?v=' in page.text
     assert "Sinopse" in page.text
     assert "Uma sinopse longa o bastante" in page.text
+    assert "show-hero-backdrop" not in page.text
+    assert "watch-tag" not in page.text
+    assert " · estreia " not in page.text
+    assert ">Série<" not in page.text
     assert "Sua avaliação:" not in page.text
     assert "star-read" not in page.text
+    assert 'class="episode-list episode-grid"' in page.text
     assert page.text.count("<article class=\"episode-card") == 12
     assert page.text.count("episode-card is-extra") == 7
     assert "episode-more" in page.text
@@ -574,4 +583,135 @@ def test_show_page_episode_grid_preview_and_news_layout():
     assert five.text.count("<article class=\"episode-card") == 5
     assert "episode-card is-extra" not in five.text
     assert "episode-more" not in five.text
+
+
+def test_premiere_year_reads_iso_and_ignores_invalid():
+    assert premiere_year("2013-09-29") == "2013"
+    assert premiere_year("1999") == "1999"
+    assert premiere_year(None) == ""
+    assert premiere_year("") == ""
+    assert premiere_year("amanhã") == ""
+    assert premiere_year("13") == ""
+    assert premiere_year("0001-01-01") == ""
+
+
+def test_show_hero_uses_backdrop_year_and_plain_genres():
+    from app.models import Show
+
+    owner = TestClient(app)
+    register_active(owner, "pui_hero", "pui.hero@example.com")
+    club_id = _create_club(owner, "Sala Hero")
+    user_id = _user_id_by_key("pui_hero")
+    show_id, _episode_ids = _seed_title(
+        club_id,
+        user_id,
+        82013,
+        "Obra Hero",
+        [(1, 1, "Pilot")],
+    )
+    db = SessionLocal()
+    try:
+        show = db.get(Show, show_id)
+        show.summary = "Sinopse da obra no hero."
+        show.premiered = "2013-09-29"
+        show.genres = encode_genres(["Drama", "Romance", "História"])
+        show.backdrop_url = "https://example.com/hero-bg.jpg"
+        show.image_url = "https://example.com/poster.jpg"
+        db.commit()
+    finally:
+        db.close()
+    page = owner.get(f"/clubs/{club_id}/shows/{show_id}")
+    assert page.status_code == 200
+    assert 'class="show-hero-backdrop"' in page.text
+    assert "https://example.com/hero-bg.jpg" in page.text
+    assert "show-poster" not in page.text
+    assert "https://example.com/poster.jpg" not in page.text
+    assert ">2013<" in page.text
+    assert "2013-09-29" not in page.text
+    assert "29 de setembro" not in page.text
+    assert "Drama · Romance · História" in page.text
+    assert "watch-tag" not in page.text
+    assert " · estreia " not in page.text
+    assert ">Série<" not in page.text
+    assert "Sinopse da obra no hero." in page.text
+    assert page.text.count("star-btn") == 5
+    assert "episode-list" in page.text
+    assert "Pilot" in page.text
+    assert "Marcar como assistido" in page.text
+
+
+def test_show_hero_without_backdrop_keeps_poster_and_survives_missing_premiere():
+    from app.models import Show
+
+    owner = TestClient(app)
+    register_active(owner, "pui_nobg", "pui.nobg@example.com")
+    club_id = _create_club(owner, "Sala Sem Fundo")
+    user_id = _user_id_by_key("pui_nobg")
+    show_id, _episode_ids = _seed_title(
+        club_id,
+        user_id,
+        82014,
+        "Obra Sem Fundo",
+        [(1, 1, "Pilot")],
+    )
+    db = SessionLocal()
+    try:
+        show = db.get(Show, show_id)
+        show.premiered = "não é data"
+        show.genres = encode_genres(["Drama"])
+        show.image_url = "https://example.com/only-poster.jpg"
+        show.backdrop_url = None
+        db.commit()
+    finally:
+        db.close()
+    page = owner.get(f"/clubs/{club_id}/shows/{show_id}")
+    assert page.status_code == 200
+    assert "show-hero-backdrop" not in page.text
+    assert 'class="show-poster"' in page.text
+    assert "https://example.com/only-poster.jpg" in page.text
+    assert ">2013<" not in page.text
+    assert "não é data" not in page.text
+    assert "Drama" in page.text
+    assert "watch-tag" not in page.text
+    assert page.text.count("star-btn") == 5
+
+
+def test_show_back_link_keeps_club_origin_after_inpage_requests():
+    owner = TestClient(app)
+    register_active(owner, "pui_back", "pui.back@example.com")
+    club_id = _create_club(owner, "Sala Voltar")
+    user_id = _user_id_by_key("pui_back")
+    show_id, episode_ids = _seed_title(
+        club_id,
+        user_id,
+        82015,
+        "Obra Voltar",
+        [(1, 1, "Pilot"), (2, 1, "T2")],
+    )
+    origin = f"/clubs/{club_id}?aba=assistindo"
+    show_path = f"/clubs/{club_id}/shows/{show_id}"
+    first = owner.get(show_path, headers={"Referer": f"http://testserver{origin}"})
+    assert f'class="back-btn" href="{origin}"' in first.text
+    season = owner.get(f"{show_path}?t=2", headers={"Referer": f"http://testserver{show_path}"})
+    assert f'class="back-btn" href="{origin}"' in season.text
+    owner.post(
+        f"{show_path}/avaliar",
+        data={"stars": "4", "voltar": "obra", "t": "2"},
+        headers={"Referer": f"http://testserver{show_path}?t=2"},
+        follow_redirects=False,
+    )
+    after_rate = owner.get(f"{show_path}?t=2", headers={"Referer": f"http://testserver{show_path}?t=2"})
+    assert f'class="back-btn" href="{origin}"' in after_rate.text
+    owner.post(
+        f"{show_path}/episodios/{episode_ids[0]}/visto",
+        data={"t": "1"},
+        headers={"Referer": f"http://testserver{show_path}"},
+        follow_redirects=False,
+    )
+    after_mark = owner.get(show_path, headers={"Referer": f"http://testserver{show_path}#episodios"})
+    assert f'class="back-btn" href="{origin}"' in after_mark.text
+    poisoned = owner.get(show_path, headers={"Referer": "https://evil.example/phish"})
+    assert f'class="back-btn" href="{origin}"' in poisoned.text
+    assert "evil.example" not in poisoned.text
+
 
