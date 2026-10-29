@@ -22,6 +22,7 @@
 {% endmacro %}
 {% set year = show.premiered|premiere_year %}
 <div class="show-page">
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
   <section class="show-hero{% if show.backdrop_url %} has-backdrop{% endif %}{% if show.summary %} has-synopsis{% endif %}">
     {% if show.backdrop_url %}
       <div class="show-hero-art" aria-hidden="true">
@@ -36,7 +37,7 @@
         <div class="show-title-row">
           <h1>{{ show.name }}</h1>
           <div class="show-hero-tools">
-            {% if show.tvmaze_id > 0 %}
+            {% if can_refresh_catalog(show) %}
               <div class="action-menu js-action-menu">
                 <button
                   type="button"
@@ -77,11 +78,11 @@
     </div>
   </section>
 
+  {% if show.kind != 'filme' %}
   <section class="show-episodes" id="episodios">
     <div class="episode-head">
       <div class="episode-head-copy">
         <h2>Episódios</h2>
-        {% if error %}<p class="error">{{ error }}</p>{% endif %}
         {% if progress.has_regular %}
           <p class="episode-progress-summary">{{ progress.watched_count }} de {{ progress.total }} episódio{% if progress.total != 1 %}s{% endif %} assistidos</p>
           {% if progress.complete %}
@@ -169,6 +170,7 @@
       <p class="muted">Não há informações de episódios disponíveis para este título.</p>
     {% endif %}
   </section>
+  {% endif %}
 
   {% if show.news %}
     <section class="show-news">

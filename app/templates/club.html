@@ -301,17 +301,22 @@
           <button class="watch-add-btn js-add-title-open" type="button" title="Adicionar manualmente" aria-label="Adicionar manualmente">+</button>
         </div>
 
-        <p class="muted search-status js-title-search-status" role="status" aria-live="polite">{% if search_too_short %}Digite ao menos {{ search_min_chars }} letras para pesquisar.{% elif query and not results %}Nenhum título encontrado.{% endif %}</p>
+        <p class="muted search-status js-title-search-status" role="status" aria-live="polite">{% if search_too_short %}Digite ao menos {{ search_min_chars }} letras para pesquisar.{% elif search_failed %}Não foi possível pesquisar agora.{% elif query and not results %}Nenhum título encontrado.{% endif %}</p>
         <ul class="results js-title-search-results">
           {% for item in results %}
+            {% set year = item.premiered[:4] if item.premiered and item.premiered[:4]|length == 4 and item.premiered[:4].isdigit() else (item.premiered or "—") %}
             <li>
               {% if item.image_url %}<img src="{{ item.image_url }}" alt=""> {% endif %}
               <div>
                 <strong>{{ item.name }}</strong>
-                <span class="muted">{{ CONTENT_KINDS.get(item.kind, 'Série') }} · {{ item.premiered or "—" }}</span>
+                <span class="muted">{{ year }} · {{ CONTENT_KINDS.get(item.kind, 'Série') }}</span>
                 <p>{{ item.summary[:220] if item.summary else "" }}{% if item.summary and item.summary|length > 220 %}…{% endif %}</p>
                 <form action="/clubs/{{ club.id }}/shows" method="post">
-                  <input type="hidden" name="tvmaze_id" value="{{ item.tvmaze_id }}">
+                  <input type="hidden" name="provider" value="{{ item.provider or 'tvmaze' }}">
+                  <input type="hidden" name="external_id" value="{{ item.external_id or item.tvmaze_id }}">
+                  {% if item.provider != 'tmdb' %}
+                    <input type="hidden" name="tvmaze_id" value="{{ item.tvmaze_id }}">
+                  {% endif %}
                   <input type="hidden" name="kind" value="{{ item.kind or 'serie' }}">
                   <button class="btn btn-primary" type="submit">Adicionar ao clube</button>
                 </form>
@@ -783,19 +788,27 @@
       list.innerHTML = (items || []).map((item) => {
         const name = escapeHtml(item.name || "");
         const kind = escapeHtml(kinds[item.kind] || "Série");
-        const premiered = escapeHtml(item.premiered || "—");
+        const premiered = String(item.premiered || "");
+        const year = /^\d{4}/.test(premiered) ? premiered.slice(0, 4) : (premiered || "—");
         const summary = String(item.summary || "");
         const clipped = summary.length > 220 ? summary.slice(0, 220) + "…" : summary;
         const image = item.image_url
           ? `<img src="${escapeHtml(item.image_url)}" alt=""> `
           : "";
+        const provider = item.provider === "tmdb" ? "tmdb" : "tvmaze";
+        const externalId = escapeHtml(item.external_id || item.tvmaze_id || "");
+        const tvmazeField = provider === "tvmaze"
+          ? `<input type="hidden" name="tvmaze_id" value="${externalId}">`
+          : "";
         return `<li>
               ${image}<div>
                 <strong>${name}</strong>
-                <span class="muted">${kind} · ${premiered}</span>
+                <span class="muted">${escapeHtml(year)} · ${kind}</span>
                 <p>${escapeHtml(clipped)}</p>
                 <form action="/clubs/${escapeHtml(clubId)}/shows" method="post">
-                  <input type="hidden" name="tvmaze_id" value="${escapeHtml(item.tvmaze_id)}">
+                  <input type="hidden" name="provider" value="${provider}">
+                  <input type="hidden" name="external_id" value="${externalId}">
+                  ${tvmazeField}
                   <input type="hidden" name="kind" value="${escapeHtml(item.kind || "serie")}">
                   <button class="btn btn-primary" type="submit">Adicionar ao clube</button>
                 </form>

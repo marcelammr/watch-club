@@ -36,6 +36,7 @@ from app.catalog import (
     add_club_member,
     add_manual_title,
     add_show_to_club,
+    add_tmdb_movie_to_club,
     accept_join_request,
     admin_count,
     apply_member_role,
@@ -63,6 +64,9 @@ from app.catalog import (
     set_club_show_rating,
     set_watch_status,
     support_count,
+    can_refresh_catalog,
+    show_source,
+    upsert_show_from_tmdb,
     upsert_show_from_tvmaze,
     valid_kind,
     valid_stars,
@@ -165,10 +169,15 @@ from app.schedules import (
     list_upcoming_schedules,
     list_week_schedules,
 )
-from app.search import SEARCH_MIN_CHARS, normalize_search_query, rank_search_results, search_ready
+from app.search import (
+    SEARCH_MIN_CHARS,
+    CatalogSearchError,
+    normalize_search_query,
+    search_catalog,
+    search_ready,
+)
 from app.schema import migrate_schema
 from app.security import hash_password, make_join_code, verify_password
-from app.services import tvmaze
 from app.services.news import format_news_when
 from app.usernames import (
     NICKNAME_DAYS,
@@ -218,6 +227,8 @@ templates.env.globals["MAX_TAGS"] = MAX_TAGS
 templates.env.globals["TAG_LABEL_MAX"] = TAG_LABEL_MAX
 templates.env.globals["KIND_LABELS"] = KIND_LABELS
 templates.env.globals["CONTENT_KINDS"] = CONTENT_KINDS
+templates.env.globals["can_refresh_catalog"] = can_refresh_catalog
+templates.env.globals["show_source"] = show_source
 templates.env.globals["person_href"] = person_href
 templates.env.globals["COLOR_PRESETS"] = COLOR_PRESETS
 templates.env.globals["DEFAULT_HEX"] = DEFAULT_HEX
@@ -934,6 +945,19 @@ async def create_club(
         db.close()
 
 
+@app.get("/sobre", response_class=HTMLResponse)
+def about_page(request: Request):
+    db = db_session()
+    try:
+        return templates.TemplateResponse(
+            request,
+            "about.html",
+            {"user": current_user(request, db)},
+        )
+    finally:
+        db.close()
+
+
 @app.get("/conta", response_class=HTMLResponse)
 def account(request: Request):
     db = db_session()
@@ -1228,9 +1252,13 @@ async def club_detail(
         search_query = normalize_search_query(q)
         results = []
         search_too_short = False
+        search_failed = False
         if tab == "assistindo" and search_query:
             if search_ready(search_query):
-                results = rank_search_results(await tvmaze.search_shows(search_query), search_query)
+                try:
+                    results = await search_catalog(search_query)
+                except CatalogSearchError:
+                    search_failed = True
             else:
                 search_too_short = True
         watching = [link for link in club.shows if (link.watch_status or "watching") != "watched"]
@@ -1261,6 +1289,7 @@ async def club_detail(
                 "query": search_query,
                 "results": results,
                 "search_too_short": search_too_short,
+                "search_failed": search_failed,
                 "search_min_chars": SEARCH_MIN_CHARS,
                 "is_member": True,
                 "tab": tab,
@@ -1691,24 +1720,49 @@ def create_club_message(request: Request, club_id: int, body: str = Form("")):
         db.close()
 
 
+def _positive_id(raw: object) -> int | None:
+    try:
+        value = int(str(raw or "").strip())
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
 @app.post("/clubs/{club_id}/shows")
 async def add_show(
     request: Request,
     club_id: int,
-    tvmaze_id: int = Form(...),
+    provider: str = Form(""),
+    external_id: str = Form(""),
+    tvmaze_id: str = Form(""),
     kind: str = Form("serie"),
 ):
     db = db_session()
     try:
         user = login_required(request, db)
         club = require_club_member(db, club_id, user.id)
-        show = await add_show_to_club(db, club, tvmaze_id, user.id, valid_kind(kind))
+        source = (provider or "").strip().lower()
+        chosen_id = _positive_id(external_id)
+        if not source:
+            source = "tvmaze"
+            chosen_id = chosen_id or _positive_id(tvmaze_id)
+        if source not in {"tvmaze", "tmdb"} or chosen_id is None:
+            raise HTTPException(status_code=400, detail="Obra inválida")
+        if source == "tmdb":
+            await add_tmdb_movie_to_club(db, club, chosen_id, user.id)
+        else:
+            await add_show_to_club(db, club, chosen_id, user.id, valid_kind(kind))
         return RedirectResponse(f"/clubs/{club_id}?aba=assistindo", status_code=303)
     except HTTPException as exc:
         if exc.status_code == 401:
             return RedirectResponse("/login", status_code=303)
         if exc.status_code == 403:
             return RedirectResponse(f"/clubs/{club_id}", status_code=303)
+        if exc.status_code == 400:
+            return RedirectResponse(
+                f"/clubs/{club_id}?aba=assistindo&error={quote(str(exc.detail))}",
+                status_code=303,
+            )
         raise
     finally:
         db.close()
@@ -1998,14 +2052,24 @@ async def refresh_show(request: Request, club_id: int, show_id: int):
         user = login_required(request, db)
         require_club_member(db, club_id, user.id)
         show = load_show(db, show_id)
-        if show.tvmaze_id > 0:
+        source = show_source(show)
+        if source == "tvmaze":
             await upsert_show_from_tvmaze(db, show.tvmaze_id)
+            refresh_news(db, show, force=True)
+            db.commit()
+        elif source == "tmdb":
+            await upsert_show_from_tmdb(db, show.tmdb_id)
             refresh_news(db, show, force=True)
             db.commit()
         return RedirectResponse(f"/clubs/{club_id}/shows/{show_id}", status_code=303)
     except HTTPException as exc:
         if exc.status_code == 401:
             return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 400:
+            return RedirectResponse(
+                f"/clubs/{club_id}/shows/{show_id}?error={quote(str(exc.detail))}",
+                status_code=303,
+            )
         raise
     finally:
         db.close()
@@ -2066,10 +2130,8 @@ async def api_search(request: Request, q: str = Query("")):
     if not search_ready(query):
         return []
     try:
-        return rank_search_results(await tvmaze.search_shows(query), query)
-    except HTTPException:
-        raise
-    except Exception:
+        return await search_catalog(query)
+    except CatalogSearchError:
         raise HTTPException(status_code=503, detail="Não foi possível pesquisar agora.")
 
 

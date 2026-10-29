@@ -115,7 +115,7 @@ def test_search_api_normalizes_ranks_and_skips_short_queries():
         _item("Masters of Sex", 20),
         _item("Masters", 40),
     ]
-    with patch("app.main.tvmaze.search_shows", AsyncMock(return_value=fake)) as mocked:
+    with patch("app.search.tvmaze.search_shows", AsyncMock(return_value=fake)) as mocked:
         short = member.get("/api/shows/search", params={"q": "M"})
         empty = member.get("/api/shows/search", params={"q": "   "})
         spaced = member.get("/api/shows/search", params={"q": "   Masters    of   Sex   "})
@@ -130,7 +130,7 @@ def test_search_api_normalizes_ranks_and_skips_short_queries():
 def test_search_api_returns_generic_error_without_traceback():
     member = TestClient(app)
     register_active(member, "busca_erro", "busca.erro@example.com")
-    with patch("app.main.tvmaze.search_shows", AsyncMock(side_effect=RuntimeError("boom tvmaze"))):
+    with patch("app.search.tvmaze.search_shows", AsyncMock(side_effect=RuntimeError("boom tvmaze"))):
         response = member.get("/api/shows/search", params={"q": "Masters"})
     assert response.status_code == 503
     assert response.json()["detail"] == "Não foi possível pesquisar agora."
@@ -142,7 +142,7 @@ def test_club_search_fallback_and_typeahead_markup():
     owner = TestClient(app)
     club_id = _club(owner, "busca_ui", "busca.ui@example.com", "Sala Busca")
     fake = [_item("Masters of Sex", 169, summary="A" * 240)]
-    with patch("app.main.tvmaze.search_shows", AsyncMock(return_value=fake)) as mocked:
+    with patch("app.search.tvmaze.search_shows", AsyncMock(return_value=fake)) as mocked:
         page = owner.get(f"/clubs/{club_id}?aba=assistindo&q=  Masters   of   Sex ")
         short = owner.get(f"/clubs/{club_id}?aba=assistindo&q=M")
         blank = owner.get(f"/clubs/{club_id}?aba=assistindo")
@@ -156,6 +156,9 @@ def test_club_search_fallback_and_typeahead_markup():
     assert "debounceMs = 300" in page.text
     assert "/api/shows/search" in page.text
     assert 'name="tvmaze_id" value="169"' in page.text
+    assert 'name="provider" value="tvmaze"' in page.text
+    assert 'name="external_id" value="169"' in page.text
+    assert "2013 · Série" in page.text
     assert "Adicionar ao clube" in page.text
     assert "Masters of Sex" in page.text
     assert "watch-search" in page.text
@@ -209,3 +212,88 @@ def test_add_show_from_search_result_still_uses_tvmaze_id():
         assert show.episodes[0].image_url == "https://example.com/still.jpg"
     finally:
         db.close()
+
+
+def test_unified_search_merges_tvmaze_and_tmdb_and_limits_results():
+    from app.search import SEARCH_RESULT_LIMIT, search_catalog
+
+    tv_rows = [_item(f"Show {index}", index, kind="serie") for index in range(1, 15)]
+    movie_rows = [
+        {
+            "provider": "tmdb",
+            "external_id": 100 + index,
+            "tmdb_id": 100 + index,
+            "name": f"Filme {index}",
+            "premiered": "2001-12-19",
+            "kind": "filme",
+            "image_url": "https://image.tmdb.org/t/p/w342/x.jpg",
+            "summary": "Filme.",
+        }
+        for index in range(1, 15)
+    ]
+    member = TestClient(app)
+    register_active(member, "busca_mix", "busca.mix@example.com")
+    with patch("app.search.tmdb.configured", return_value=True):
+        with patch("app.search.tvmaze.search_shows", AsyncMock(return_value=tv_rows)):
+            with patch("app.search.tmdb.search_movies", AsyncMock(return_value=movie_rows)):
+                response = member.get("/api/shows/search", params={"q": "Show"})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) <= SEARCH_RESULT_LIMIT
+    kinds = {item["kind"] for item in body}
+    assert "serie" in kinds
+    assert "filme" in kinds
+    assert any(item.get("provider") == "tmdb" for item in body)
+    assert any(item.get("provider") == "tvmaze" for item in body)
+
+
+def test_unified_search_survives_partial_provider_failure():
+    member = TestClient(app)
+    register_active(member, "busca_parcial", "busca.parcial@example.com")
+    movies = [
+        {
+            "provider": "tmdb",
+            "external_id": 120,
+            "tmdb_id": 120,
+            "name": "O Senhor dos Anéis: A Sociedade do Anel",
+            "premiered": "2001-12-19",
+            "kind": "filme",
+            "image_url": None,
+            "summary": "A jornada.",
+        }
+    ]
+    with patch("app.search.tmdb.configured", return_value=True):
+        with patch("app.search.tvmaze.search_shows", AsyncMock(side_effect=RuntimeError("tv down"))):
+            with patch("app.search.tmdb.search_movies", AsyncMock(return_value=movies)):
+                only_movies = member.get("/api/shows/search", params={"q": "Senhor dos Aneis"})
+        with patch("app.search.tvmaze.search_shows", AsyncMock(return_value=[_item("Masters of Sex", 169)])):
+            with patch("app.search.tmdb.search_movies", AsyncMock(side_effect=RuntimeError("tmdb down"))):
+                only_tv = member.get("/api/shows/search", params={"q": "Masters of"})
+        with patch("app.search.tvmaze.search_shows", AsyncMock(side_effect=RuntimeError("tv down"))):
+            with patch("app.search.tmdb.search_movies", AsyncMock(side_effect=RuntimeError("tmdb down"))):
+                both = member.get("/api/shows/search", params={"q": "Hobbit"})
+    assert only_movies.status_code == 200
+    assert only_movies.json()[0]["kind"] == "filme"
+    assert only_movies.json()[0]["name"].startswith("O Senhor dos Anéis")
+    assert only_tv.status_code == 200
+    assert only_tv.json()[0]["provider"] == "tvmaze"
+    assert both.status_code == 503
+
+
+def test_unified_search_ranks_folded_movie_title():
+    from app.search import rank_search_results
+
+    results = [
+        {
+            "name": "Outro Filme",
+            "kind": "filme",
+            "provider": "tmdb",
+        },
+        {
+            "name": "O Senhor dos Anéis: A Sociedade do Anel",
+            "kind": "filme",
+            "provider": "tmdb",
+        },
+    ]
+    ranked = rank_search_results(results, "Senhor dos Aneis")
+    assert ranked[0]["name"] == "O Senhor dos Anéis: A Sociedade do Anel"

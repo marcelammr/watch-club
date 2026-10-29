@@ -268,7 +268,8 @@ def test_manual_title_empty_episode_state():
     assert "episódios assistidos" not in list_page.text
     assert "Ver episódios" not in list_page.text
     detail = owner.get(f"/clubs/{club_id}/shows/{show_id}")
-    assert "Não há informações de episódios disponíveis para este título." in detail.text
+    assert "show-episodes" not in detail.text
+    assert "Não há informações de episódios disponíveis para este título." not in detail.text
     assert "Atualizar informações" not in detail.text
     assert f"/shows/{show_id}/refresh" not in detail.text
     assert "Voltar ao clube" not in detail.text

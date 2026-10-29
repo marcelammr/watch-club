@@ -940,6 +940,18 @@
   .search-status:not(:empty) {
     @apply mb-3;
   }
+  .about-page {
+    @apply mx-auto max-w-xl py-2;
+  }
+  .about-credit {
+    @apply mt-8;
+  }
+  .tmdb-logo-link {
+    @apply mt-3 inline-block;
+  }
+  .tmdb-logo {
+    @apply h-10 w-auto;
+  }
   .watch-add-btn {
     @apply m-0 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-card p-0 text-xl font-medium leading-none text-foreground;
   }

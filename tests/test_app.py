@@ -69,7 +69,9 @@ def test_logged_in_shell_and_clubes_page():
     assert 'aria-label="Meus Clubes"' in home.text
     assert 'aria-label="Amigos"' in home.text
     assert 'aria-label="Configurações"' in home.text
+    assert 'aria-label="Sobre"' in home.text
     assert 'href="/conta"' in home.text
+    assert 'href="/sobre"' in home.text
     assert 'aria-label="Notificações"' in home.text
     assert 'href="/amigos"' in home.text
     assert 'id="open-clubs"' in home.text
@@ -128,7 +130,7 @@ def test_search_api_uses_tvmaze():
             "summary": "Um professor de química.",
         }
     ]
-    with patch("app.main.tvmaze.search_shows", AsyncMock(return_value=fake)):
+    with patch("app.search.tvmaze.search_shows", AsyncMock(return_value=fake)):
         guest = client.get("/api/shows/search", params={"q": "breaking"})
         response = member.get("/api/shows/search", params={"q": "breaking"})
     assert guest.status_code == 401

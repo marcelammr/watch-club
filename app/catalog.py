@@ -38,7 +38,8 @@ from app.roles import (
     set_member_role,
 )
 from app.services import news as news_service
-from app.services import tvmaze
+from app.services import tmdb, tvmaze
+from app.services.tmdb import TmdbUnavailable
 
 CONTENT_KINDS = {
     "serie": "Série",
@@ -49,6 +50,21 @@ CONTENT_KINDS = {
 }
 WATCHING = "watching"
 WATCHED = "watched"
+SOURCE_TVMAZE = "tvmaze"
+SOURCE_TMDB = "tmdb"
+SOURCE_MANUAL = "manual"
+
+
+def show_source(show: Show) -> str:
+    if show.tvmaze_id > 0:
+        return SOURCE_TVMAZE
+    if show.tmdb_id:
+        return SOURCE_TMDB
+    return SOURCE_MANUAL
+
+
+def can_refresh_catalog(show: Show) -> bool:
+    return show_source(show) in {SOURCE_TVMAZE, SOURCE_TMDB}
 
 
 def valid_kind(value: str | None) -> str:
@@ -320,6 +336,40 @@ def leave_club(db: Session, club_id: int, user_id: int) -> str:
     return f"Você saiu do clube “{club_name}”."
 
 
+def _apply_catalog_fields(db: Session, show: Show, show_data: dict) -> None:
+    keep_if_empty = {
+        "backdrop_url",
+        "imdb_id",
+        "tmdb_id",
+        "image_url",
+        "official_site",
+        "summary",
+        "premiered",
+        "status",
+    }
+    for key, value in show_data.items():
+        if key in {"tvmaze_id"}:
+            continue
+        if key == "genres":
+            if value:
+                show.genres = encode_genres(value)
+            continue
+        if key in keep_if_empty:
+            if not value:
+                continue
+            if key in {"imdb_id", "tmdb_id"}:
+                owner_id = db.scalar(select(Show.id).where(getattr(Show, key) == value))
+                if owner_id is not None and owner_id != show.id:
+                    print(
+                        f"[watch-club] {key} {value} já pertence à obra {owner_id}; "
+                        "identificador não foi alterado"
+                    )
+                    continue
+            setattr(show, key, value)
+            continue
+        setattr(show, key, value)
+
+
 async def upsert_show_from_tvmaze(db: Session, tvmaze_id: int) -> Show:
     show_data, seasons_data, episodes_data = await tvmaze.fetch_show_and_seasons(tvmaze_id)
     show = db.scalar(
@@ -330,19 +380,7 @@ async def upsert_show_from_tvmaze(db: Session, tvmaze_id: int) -> Show:
     if not show:
         show = Show(tvmaze_id=tvmaze_id)
         db.add(show)
-    for key, value in show_data.items():
-        if key == "genres":
-            show.genres = encode_genres(value)
-        elif key in {"backdrop_url", "imdb_id", "tmdb_id"}:
-            if not value:
-                continue
-            if key in {"imdb_id", "tmdb_id"}:
-                owner_id = db.scalar(select(Show.id).where(getattr(Show, key) == value))
-                if owner_id is not None and owner_id != show.id:
-                    continue
-            setattr(show, key, value)
-        else:
-            setattr(show, key, value)
+    _apply_catalog_fields(db, show, show_data)
     db.flush()
 
     existing = {season.number: season for season in show.seasons}
@@ -378,6 +416,67 @@ async def upsert_show_from_tvmaze(db: Session, tvmaze_id: int) -> Show:
     return show
 
 
+def _find_show_by_tmdb(db: Session, tmdb_id: int) -> Show | None:
+    return db.scalar(
+        select(Show)
+        .options(selectinload(Show.seasons), selectinload(Show.episodes))
+        .where(Show.tmdb_id == tmdb_id)
+    )
+
+
+def _find_show_by_imdb(db: Session, imdb_id: str) -> Show | None:
+    return db.scalar(
+        select(Show)
+        .options(selectinload(Show.seasons), selectinload(Show.episodes))
+        .where(Show.imdb_id == imdb_id)
+    )
+
+
+async def upsert_show_from_tmdb(db: Session, tmdb_id: int) -> Show:
+    if tmdb_id <= 0:
+        raise HTTPException(status_code=400, detail="Filme inválido")
+    try:
+        show_data = await tmdb.fetch_movie(tmdb_id)
+    except TmdbUnavailable:
+        raise HTTPException(status_code=400, detail="Não foi possível adicionar este filme agora.")
+    show = _find_show_by_tmdb(db, tmdb_id)
+    imdb_id = show_data.get("imdb_id")
+    if show is None and imdb_id:
+        by_imdb = _find_show_by_imdb(db, imdb_id)
+        if by_imdb is not None:
+            if by_imdb.tmdb_id and by_imdb.tmdb_id != tmdb_id:
+                print(
+                    f"[watch-club] IMDb {imdb_id} já ligado à obra {by_imdb.id} "
+                    f"(tmdb_id={by_imdb.tmdb_id}); reusando sem alterar IDs"
+                )
+                show = by_imdb
+            elif by_imdb.tvmaze_id > 0:
+                print(
+                    f"[watch-club] IMDb {imdb_id} já pertence à obra TVMaze {by_imdb.id}; "
+                    "filme TMDB será criado sem copiar o IMDb"
+                )
+                show_data = dict(show_data)
+                show_data["imdb_id"] = None
+            else:
+                show = by_imdb
+    if show is None:
+        show = Show(tvmaze_id=allocate_local_tvmaze_id(db), kind="filme")
+        db.add(show)
+    show.kind = "filme"
+    _apply_catalog_fields(db, show, show_data)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        existing = _find_show_by_tmdb(db, tmdb_id)
+        if existing is None:
+            raise HTTPException(status_code=400, detail="Não foi possível adicionar este filme agora.")
+        show = existing
+        _apply_catalog_fields(db, show, show_data)
+        db.flush()
+    return show
+
+
 def refresh_news(db: Session, show: Show, force: bool = False) -> None:
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     if (
@@ -393,17 +492,30 @@ def refresh_news(db: Session, show: Show, force: bool = False) -> None:
     show.news_fetched_at = now
 
 
+def _link_show_to_club(db: Session, club: Club, show: Show, user_id: int) -> Show:
+    link = db.scalar(select(ClubShow).where(ClubShow.club_id == club.id, ClubShow.show_id == show.id))
+    if not link:
+        db.add(ClubShow(club_id=club.id, show_id=show.id, added_by_id=user_id, watch_status=WATCHING))
+    try:
+        refresh_news(db, show)
+    except Exception as exc:
+        print(f"[watch-club] notícias indisponíveis para obra {show.id}: {exc.__class__.__name__}")
+    db.commit()
+    db.refresh(show)
+    return show
+
+
 async def add_show_to_club(db: Session, club: Club, tvmaze_id: int, user_id: int, kind: str | None = None) -> Show:
     show = await upsert_show_from_tvmaze(db, tvmaze_id)
     if kind:
         show.kind = valid_kind(kind)
-    link = db.scalar(select(ClubShow).where(ClubShow.club_id == club.id, ClubShow.show_id == show.id))
-    if not link:
-        db.add(ClubShow(club_id=club.id, show_id=show.id, added_by_id=user_id, watch_status=WATCHING))
-    refresh_news(db, show)
-    db.commit()
-    db.refresh(show)
-    return show
+    return _link_show_to_club(db, club, show, user_id)
+
+
+async def add_tmdb_movie_to_club(db: Session, club: Club, tmdb_id: int, user_id: int) -> Show:
+    show = await upsert_show_from_tmdb(db, tmdb_id)
+    show.kind = "filme"
+    return _link_show_to_club(db, club, show, user_id)
 
 
 def add_manual_title(db: Session, club: Club, user_id: int, name: str, kind: str, image_url: str | None) -> Show:
@@ -411,7 +523,7 @@ def add_manual_title(db: Session, club: Club, user_id: int, name: str, kind: str
     if not title:
         raise HTTPException(status_code=400, detail="Informe o nome do título")
     show = Show(
-        tvmaze_id=_manual_tvmaze_id(db),
+        tvmaze_id=allocate_local_tvmaze_id(db),
         name=title[:255],
         kind=valid_kind(kind),
         image_url=(image_url or "").strip() or None,
@@ -427,7 +539,7 @@ def add_manual_title(db: Session, club: Club, user_id: int, name: str, kind: str
     return show
 
 
-def _manual_tvmaze_id(db: Session) -> int:
+def allocate_local_tvmaze_id(db: Session) -> int:
     for _ in range(12):
         candidate = -secrets.randbelow(2_000_000_000) - 1
         if db.scalar(select(Show.id).where(Show.tvmaze_id == candidate)) is None:
