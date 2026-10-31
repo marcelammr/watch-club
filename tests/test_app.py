@@ -66,6 +66,8 @@ def test_logged_in_shell_and_clubes_page():
     assert "Watch Club" in home.text
     assert ">WC<" not in home.text
     assert 'aria-label="Início"' in home.text
+    assert 'aria-label="Agenda"' in home.text
+    assert 'href="/agenda"' in home.text
     assert 'aria-label="Meus Clubes"' in home.text
     assert 'aria-label="Amigos"' in home.text
     assert 'aria-label="Configurações"' in home.text
@@ -74,7 +76,12 @@ def test_logged_in_shell_and_clubes_page():
     assert 'href="/sobre"' in home.text
     assert 'aria-label="Notificações"' in home.text
     assert 'href="/amigos"' in home.text
-    assert 'id="open-clubs"' in home.text
+    assert "Assistir juntos" in home.text
+    assert "é só o começo." in home.text
+    assert "Clube Nav" in home.text
+    assert 'href="/clubes"' in home.text
+    assert "Criar um clube" not in home.text
+    assert "Entrar com código" not in home.text
     assert 'id="account-popover"' in home.text
     assert "Editar perfil" in home.text
     assert 'action="/logout"' in home.text
@@ -83,6 +90,16 @@ def test_logged_in_shell_and_clubes_page():
     assert clubs.status_code == 200
     assert "Clube Nav" in clubs.text
     assert "Meus Clubes" in clubs.text
+    assert 'href="/clubs/novo"' in clubs.text
+    assert 'aria-label="Criar um clube"' in clubs.text
+    assert 'id="open-join"' in clubs.text
+    assert 'action="/clubs/join"' in clubs.text
+    assert 'name="q"' in clubs.text
+    found = member.get("/clubes", params={"q": "Nav"})
+    assert "Clube Nav" in found.text
+    miss = member.get("/clubes", params={"q": "zzzzinexistente"})
+    assert "Nenhum dos seus clubes corresponde" in miss.text
+    assert "club-cover-card" not in miss.text
     account = member.get("/conta")
     assert "Sair da sessão" in account.text
     guest_home = client.get("/")
@@ -498,10 +515,19 @@ def test_home_is_a_simple_club_hub():
     register_active(person, "hub_user", "hub.user@example.com", name="Marcela")
     home = person.get("/")
     assert "Olá, Marcela!" in home.text
+    assert "Assistir juntos" in home.text
+    assert "é só o começo." in home.text
     assert "Meus Clubes" in home.text
-    assert "Criar um clube" in home.text
-    assert "Entrar com código" in home.text
+    assert "Criar um clube" not in home.text
+    assert "Entrar com código" not in home.text
+    assert "Você ainda não participa de nenhum clube." in home.text
+    clubes = person.get("/clubes")
+    assert "Criar um clube" in clubes.text
+    assert "Entrar com código" in clubes.text
+    assert 'name="q"' in clubes.text
     assert "Adicionar série" not in home.text
+    assert "Entrar · Criar conta" not in home.text
+    assert "Começar" not in home.text
     form = person.get("/clubs/novo")
     assert form.status_code == 200
     assert "Informações e regras" in form.text

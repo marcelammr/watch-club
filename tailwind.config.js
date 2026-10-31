@@ -64,6 +64,7 @@ module.exports = {
       fontFamily: {
         sans: ['"Work Sans"', "ui-sans-serif", "system-ui", "sans-serif"],
         display: ['"Fugaz One"', "ui-sans-serif", "system-ui", "sans-serif"],
+        hero: ['Hero', '"Work Sans"', "ui-sans-serif", "system-ui", "sans-serif"],
       },
     },
   },

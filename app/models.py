@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -97,6 +97,7 @@ class Club(Base):
         back_populates="club", cascade="all, delete-orphan"
     )
     schedules: Mapped[list["ClubSchedule"]] = relationship(back_populates="club")
+    schedule_series: Mapped[list["ClubScheduleSeries"]] = relationship(back_populates="club")
     messages: Mapped[list["ClubMessage"]] = relationship(back_populates="club")
     catalog_categories: Mapped[list["ClubCatalogCategory"]] = relationship(back_populates="club")
     content_tags: Mapped[list["ClubContentTag"]] = relationship(back_populates="club")
@@ -242,13 +243,36 @@ class ClubEpisodeWatch(Base):
     marked_by: Mapped[User | None] = relationship()
 
 
+class ClubScheduleSeries(Base):
+    __tablename__ = "club_schedule_series"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), nullable=False, index=True)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    interval: Mapped[str] = mapped_column(String(16), nullable=False)
+    weekday: Mapped[int] = mapped_column(Integer, nullable=False)
+    time_local: Mapped[str] = mapped_column(String(5), nullable=False)
+    until_date: Mapped[date] = mapped_column(Date, nullable=False)
+    title: Mapped[str] = mapped_column(String(80), default="", nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    club: Mapped[Club] = relationship(back_populates="schedule_series")
+    created_by: Mapped[User] = relationship()
+    occurrences: Mapped[list["ClubSchedule"]] = relationship(back_populates="series")
+
+
 class ClubSchedule(Base):
     __tablename__ = "club_schedules"
     __table_args__ = (Index("ix_club_schedules_club_starts", "club_id", "starts_at"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), nullable=False, index=True)
-    show_id: Mapped[int] = mapped_column(ForeignKey("shows.id"), nullable=False)
+    series_id: Mapped[int | None] = mapped_column(
+        ForeignKey("club_schedule_series.id"), nullable=True, index=True
+    )
+    show_id: Mapped[int | None] = mapped_column(ForeignKey("shows.id"), nullable=True)
+    title: Mapped[str] = mapped_column(String(80), default="", nullable=False)
     starts_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     season_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     episode_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -257,7 +281,8 @@ class ClubSchedule(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     club: Mapped[Club] = relationship(back_populates="schedules")
-    show: Mapped[Show] = relationship()
+    series: Mapped[ClubScheduleSeries | None] = relationship(back_populates="occurrences")
+    show: Mapped[Show | None] = relationship()
     created_by: Mapped[User] = relationship()
 
 

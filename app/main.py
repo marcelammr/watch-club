@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from urllib.parse import quote
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
@@ -163,11 +163,30 @@ from app.progress import mark_episode_watched, pick_season, progress_snapshot, u
 from app.schedules import (
     cancel_schedule,
     create_schedule,
+    end_schedule_series,
+    format_clock,
     format_episode_line,
+    format_recurrence_line,
+    format_schedule_detail,
     format_schedule_when,
     format_week_line,
+    group_schedules_by_day,
+    list_member_upcoming_schedules,
+    list_member_week_schedules,
     list_upcoming_schedules,
     list_week_schedules,
+    local_today,
+    monday_of,
+    format_week_span,
+    meeting_title,
+    parse_iso_date,
+    parse_meeting_title,
+    parse_optional_show_id,
+    program_title,
+    set_schedule_program,
+    update_schedule_when,
+    utc_to_local,
+    WEEKDAYS,
 )
 from app.search import (
     SEARCH_MIN_CHARS,
@@ -254,10 +273,16 @@ templates.env.globals["member_role"] = member_role
 templates.env.globals["parse_support_perms"] = parse_support_perms
 templates.env.filters["when"] = lambda value: value.strftime("%d/%m/%Y %H:%M") if value else ""
 templates.env.filters["schedule_when"] = format_schedule_when
+templates.env.filters["schedule_detail"] = format_schedule_detail
+templates.env.filters["schedule_clock"] = format_clock
+templates.env.filters["schedule_date"] = lambda value: utc_to_local(value).date().isoformat() if value else ""
 templates.env.globals["schedule_episode_line"] = lambda item: format_episode_line(
     item.season_number, item.episode_number
 )
 templates.env.globals["schedule_week_line"] = format_week_line
+templates.env.globals["schedule_program_title"] = program_title
+templates.env.globals["schedule_meeting_title"] = meeting_title
+templates.env.globals["schedule_recurrence_line"] = format_recurrence_line
 templates.env.filters["genres"] = parse_genres
 templates.env.filters["premiere_year"] = premiere_year
 templates.env.filters["avg_pt"] = lambda value: f"{value:.1f}".replace(".", ",") if value is not None else ""
@@ -504,15 +529,85 @@ def home(request: Request):
         db.close()
 
 
+@app.get("/agenda", response_class=HTMLResponse)
+def personal_agenda(request: Request):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        clubs = _user_clubs(db, user.id)
+        club_ids = {club.id for club in clubs}
+        raw_club = (request.query_params.get("clube") or "").strip()
+        club_id = int(raw_club) if raw_club.isdigit() else None
+        if club_id not in club_ids:
+            club_id = None
+        today = local_today()
+        now = utcnow()
+        week_start = monday_of(parse_iso_date(request.query_params.get("semana")) or today)
+        items = list_member_upcoming_schedules(db, user.id, club_id)
+        week_items = list_member_week_schedules(db, user.id, week_start, club_id)
+        events_by_day: dict[date, list] = {}
+        for item in week_items:
+            day = utc_to_local(item.starts_at).date()
+            events_by_day.setdefault(day, []).append(item)
+        days = []
+        for offset in range(7):
+            day = week_start + timedelta(days=offset)
+            days.append(
+                {
+                    "iso": day.isoformat(),
+                    "num": day.day,
+                    "weekday": WEEKDAYS[offset],
+                    "is_today": day == today,
+                    "events": events_by_day.get(day, []),
+                }
+            )
+        return templates.TemplateResponse(
+            request,
+            "agenda.html",
+            {
+                "user": user,
+                "clubs": clubs,
+                "club_id": club_id,
+                "groups": group_schedules_by_day(items, today),
+                "upcoming": items,
+                "next_item": items[0] if items else None,
+                "days": days,
+                "week_label": format_week_span(week_start),
+                "week_iso": week_start.isoformat(),
+                "prev_week": (week_start - timedelta(days=7)).isoformat(),
+                "next_week": (week_start + timedelta(days=7)).isoformat(),
+                "today": today,
+                "now": now,
+            },
+        )
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
 @app.get("/clubes", response_class=HTMLResponse)
 def clubs_index(request: Request):
     db = db_session()
     try:
         user = login_required(request, db)
+        query = (request.query_params.get("q") or "").strip()
+        clubs = _user_clubs(db, user.id)
+        if query:
+            needle = query.casefold()
+            clubs = [club for club in clubs if needle in club.name.casefold()]
         return templates.TemplateResponse(
             request,
             "clubs_list.html",
-            {"user": user, "clubs": _user_clubs(db, user.id)},
+            {
+                "user": user,
+                "clubs": clubs,
+                "query": query,
+                "error": request.query_params.get("error"),
+                "ok": request.query_params.get("ok"),
+            },
         )
     except HTTPException as exc:
         if exc.status_code == 401:
@@ -1777,12 +1872,15 @@ async def add_show(
 def add_club_schedule(
     request: Request,
     club_id: int,
-    show_id: int = Form(...),
     date: str = Form(...),
     time: str = Form(...),
+    show_id: str = Form(""),
     season_number: str = Form(""),
     episode_number: str = Form(""),
     notes: str = Form(""),
+    repeat: str = Form("none"),
+    until: str = Form(""),
+    title: str = Form(""),
 ):
     db = db_session()
     try:
@@ -1792,12 +1890,15 @@ def add_club_schedule(
             db,
             club_id,
             user.id,
-            show_id,
+            parse_optional_show_id(show_id),
             date,
             time,
             season_number,
             episode_number,
             notes,
+            repeat,
+            until,
+            parse_meeting_title(title),
         )
         return RedirectResponse(f"/clubs/{club_id}?aba=agendamentos", status_code=303)
     except HTTPException as exc:
@@ -1815,13 +1916,12 @@ def add_club_schedule(
         db.close()
 
 
-@app.post("/clubs/{club_id}/agendamentos/{schedule_id}/cancelar")
-def cancel_club_schedule(request: Request, club_id: int, schedule_id: int):
+def _schedule_write_redirect(request: Request, club_id: int, action) -> RedirectResponse:
     db = db_session()
     try:
         user = login_required(request, db)
         require_club_perm(db, club_id, user.id, PERM_SCHEDULES)
-        cancel_schedule(db, club_id, schedule_id)
+        action(db, user)
         return RedirectResponse(f"/clubs/{club_id}?aba=agendamentos", status_code=303)
     except HTTPException as exc:
         if exc.status_code == 401:
@@ -1836,6 +1936,54 @@ def cancel_club_schedule(request: Request, club_id: int, schedule_id: int):
         raise
     finally:
         db.close()
+
+
+@app.post("/clubs/{club_id}/agendamentos/{schedule_id}/cancelar")
+def cancel_club_schedule(request: Request, club_id: int, schedule_id: int):
+    return _schedule_write_redirect(
+        request, club_id, lambda db, _user: cancel_schedule(db, club_id, schedule_id)
+    )
+
+
+@app.post("/clubs/{club_id}/agendamentos/{schedule_id}/programa")
+def set_club_schedule_program(
+    request: Request,
+    club_id: int,
+    schedule_id: int,
+    show_id: str = Form(""),
+    season_number: str = Form(""),
+    episode_number: str = Form(""),
+):
+    return _schedule_write_redirect(
+        request,
+        club_id,
+        lambda db, _user: set_schedule_program(
+            db, club_id, schedule_id, parse_optional_show_id(show_id), season_number, episode_number
+        ),
+    )
+
+
+@app.post("/clubs/{club_id}/agendamentos/series/{series_id}/encerrar")
+def end_club_schedule_series(request: Request, club_id: int, series_id: int):
+    return _schedule_write_redirect(
+        request, club_id, lambda db, _user: end_schedule_series(db, club_id, series_id)
+    )
+
+
+@app.post("/clubs/{club_id}/agendamentos/{schedule_id}")
+def edit_club_schedule(
+    request: Request,
+    club_id: int,
+    schedule_id: int,
+    date: str = Form(...),
+    time: str = Form(...),
+    notes: str = Form(""),
+):
+    return _schedule_write_redirect(
+        request,
+        club_id,
+        lambda db, _user: update_schedule_when(db, club_id, schedule_id, date, time, notes),
+    )
 
 
 @app.post("/clubs/{club_id}/titulos")
@@ -2103,6 +2251,7 @@ def api_command(request: Request):
                 "heading": "Navegação",
                 "items": [
                     {"label": "Início", "href": "/"},
+                    {"label": "Agenda", "href": "/agenda"},
                     {"label": "Meus Clubes", "href": "/clubes"},
                     {"label": "Configurações", "href": "/conta"},
                     {"label": "Criar um clube", "href": "/clubs/novo"},

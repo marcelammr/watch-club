@@ -275,7 +275,81 @@ def migrate_schema() -> None:
         if "watch_status" not in link_cols:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE club_shows ADD COLUMN watch_status VARCHAR(20) DEFAULT 'watching'"))
+    _migrate_club_schedules()
     _seed_catalog_categories()
+
+
+def _migrate_club_schedules() -> None:
+    inspector = inspect(engine)
+    if "club_schedules" not in inspector.get_table_names():
+        return
+    cols = {column["name"] for column in inspector.get_columns("club_schedules")}
+    with engine.begin() as connection:
+        if "series_id" not in cols:
+            connection.execute(text("ALTER TABLE club_schedules ADD COLUMN series_id INTEGER"))
+        if "title" not in cols:
+            connection.execute(text("ALTER TABLE club_schedules ADD COLUMN title VARCHAR(80) DEFAULT ''"))
+    inspector.clear_cache()
+    if "club_schedule_series" in inspector.get_table_names():
+        series_cols = {column["name"] for column in inspector.get_columns("club_schedule_series")}
+        if "title" not in series_cols:
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE club_schedule_series ADD COLUMN title VARCHAR(80) DEFAULT ''")
+                )
+    with engine.begin() as connection:
+        info = connection.execute(text("PRAGMA table_info(club_schedules)")).fetchall()
+        show_info = next((row for row in info if row[1] == "show_id"), None)
+        if show_info is None or int(show_info[3] or 0) == 0:
+            return
+        connection.execute(text("PRAGMA foreign_keys=OFF"))
+        connection.execute(
+            text(
+                """
+                CREATE TABLE club_schedules_new (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    club_id INTEGER NOT NULL,
+                    series_id INTEGER,
+                    show_id INTEGER,
+                    title VARCHAR(80) NOT NULL DEFAULT '',
+                    starts_at DATETIME NOT NULL,
+                    season_number INTEGER,
+                    episode_number INTEGER,
+                    notes TEXT NOT NULL DEFAULT '',
+                    created_by_id INTEGER NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(club_id) REFERENCES clubs (id),
+                    FOREIGN KEY(series_id) REFERENCES club_schedule_series (id),
+                    FOREIGN KEY(show_id) REFERENCES shows (id),
+                    FOREIGN KEY(created_by_id) REFERENCES users (id)
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO club_schedules_new (
+                    id, club_id, series_id, show_id, title, starts_at, season_number,
+                    episode_number, notes, created_by_id, created_at
+                )
+                SELECT
+                    id, club_id, series_id, show_id, COALESCE(title, ''), starts_at, season_number,
+                    episode_number, notes, created_by_id, created_at
+                FROM club_schedules
+                """
+            )
+        )
+        connection.execute(text("DROP TABLE club_schedules"))
+        connection.execute(text("ALTER TABLE club_schedules_new RENAME TO club_schedules"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_club_schedules_club_id ON club_schedules (club_id)"))
+        connection.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_club_schedules_club_starts ON club_schedules (club_id, starts_at)")
+        )
+        connection.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_club_schedules_series_id ON club_schedules (series_id)")
+        )
+        connection.execute(text("PRAGMA foreign_keys=ON"))
 
 
 def _seed_catalog_categories() -> None:

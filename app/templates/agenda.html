@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}Agenda · Watch Club{% endblock %}
+{% block page_heading %}Agenda{% endblock %}
+{% block body_class %}planner-page{% endblock %}
+{% block content %}
+{% set club_q = ('&clube=' ~ club_id) if club_id else '' %}
+{% set club_only = ('?clube=' ~ club_id) if club_id else '' %}
+
+<section class="planner">
+  <header class="planner-toolbar">
+    <h1 class="planner-title">Agenda</h1>
+    <div class="planner-toolbar-row">
+      <p class="planner-period">{{ week_label }}</p>
+      <div class="planner-nav">
+        {% if clubs|length > 1 %}
+        <form class="planner-filter" action="/agenda" method="get">
+          <input type="hidden" name="semana" value="{{ week_iso }}">
+          <label class="sr-only" for="planner-clube">Filtrar por clube</label>
+          <select id="planner-clube" name="clube" onchange="this.form.submit()">
+            <option value="">Todos os clubes</option>
+            {% for club in clubs %}
+              <option value="{{ club.id }}" {% if club_id == club.id %}selected{% endif %}>{{ club.name }}</option>
+            {% endfor %}
+          </select>
+          <noscript><button class="btn btn-ghost" type="submit">Filtrar</button></noscript>
+        </form>
+        {% endif %}
+        <div class="planner-nav-week" role="group" aria-label="Navegação da semana">
+          <a class="planner-today" href="/agenda{{ club_only }}">Hoje</a>
+          <a class="planner-week-shift" href="/agenda?semana={{ prev_week }}{{ club_q }}" aria-label="Semana anterior">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+          </a>
+          <a class="planner-week-shift" href="/agenda?semana={{ next_week }}{{ club_q }}" aria-label="Próxima semana">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="planner-week" role="list" aria-label="Semana de {{ week_label }}">
+    {% for cell in days %}
+      <section class="planner-day{% if cell.is_today %} is-today{% endif %}" role="listitem" aria-label="{{ cell.weekday }} {{ cell.num }}">
+        <p class="planner-day-name">{{ cell.weekday }}</p>
+        <p class="planner-day-num">{{ cell.num }}</p>
+        <div class="planner-day-events">
+          {% if cell.events %}
+            {% set item = cell.events[0] %}
+            {% set meeting = schedule_meeting_title(item) %}
+            {% set program = schedule_program_title(item) %}
+            {% set recurrence = schedule_recurrence_line(item.series) %}
+            {% set episode_line = schedule_episode_line(item) %}
+            <button
+              type="button"
+              class="planner-chip js-event-open{% if item.starts_at < now %} is-past{% endif %}"
+              data-title="{{ meeting|e }}"
+              data-when="{{ item.starts_at|schedule_detail }}"
+              data-clock="{{ item.starts_at|schedule_clock }}"
+              data-club="{{ item.club.name|e }}"
+              data-club-href="/clubs/{{ item.club.id }}?aba=agendamentos"
+              data-recurrence="{{ recurrence|e }}"
+              data-program="{{ program|e }}"
+              {% if item.show %}data-program-href="/clubs/{{ item.club.id }}/shows/{{ item.show.id }}"{% endif %}
+              data-episode="{{ episode_line|e }}"
+              data-notes="{{ item.notes|e }}"
+            >
+              <span class="planner-chip-time">{{ item.starts_at|schedule_clock }}</span>
+              <span class="planner-chip-dot" aria-hidden="true">·</span>
+              <span class="planner-chip-title">{{ meeting }}</span>
+            </button>
+            {% if cell.events|length > 1 %}
+              <p class="planner-more">+{{ cell.events|length - 1 }} encontro{% if cell.events|length - 1 != 1 %}s{% endif %}</p>
+            {% endif %}
+          {% endif %}
+        </div>
+      </section>
+    {% endfor %}
+  </div>
+
+  <section class="planner-upcoming" aria-labelledby="planner-upcoming-title">
+    <h2 id="planner-upcoming-title" class="planner-section-title">Próximos encontros</h2>
+    {% if groups %}
+      <div class="planner-agenda">
+        {% for group in groups %}
+          <section class="planner-group{% if group.is_today %} is-today{% endif %}{% if group.is_tomorrow %} is-tomorrow{% endif %}" aria-labelledby="planner-day-{{ group.iso }}">
+            <h3 id="planner-day-{{ group.iso }}" class="planner-group-title">{{ group.heading }}</h3>
+            <ul class="planner-list">
+              {% for item in group.events %}
+                {% set meeting = schedule_meeting_title(item) %}
+                {% set program = schedule_program_title(item) %}
+                {% set recurrence = schedule_recurrence_line(item.series) %}
+                <li>
+                  <article class="planner-event{% if next_item and item.id == next_item.id %} is-next{% endif %}">
+                    <time class="planner-time" datetime="{{ item.starts_at.isoformat() }}">{{ item.starts_at|schedule_clock }}</time>
+                    <div class="planner-copy">
+                      <h4 class="planner-meeting">{{ meeting }}</h4>
+                      {% if recurrence %}
+                        <p class="planner-meta">↻ {{ recurrence }}</p>
+                      {% endif %}
+                      <p class="planner-program{% if not item.show %} is-pending{% endif %}">
+                        {% if item.show %}
+                          <a href="/clubs/{{ item.club.id }}/shows/{{ item.show.id }}">{{ program }}</a>
+                        {% else %}
+                          {{ program }}
+                        {% endif %}
+                      </p>
+                      {% set episode_line = schedule_episode_line(item) %}
+                      {% if item.show and episode_line %}
+                        <p class="planner-meta">{{ episode_line }}</p>
+                      {% endif %}
+                      <p class="planner-club">
+                        <a href="/clubs/{{ item.club.id }}?aba=agendamentos">
+                          <span class="planner-club-mark" style="background: {{ item.club.cover_color or '#3a2348' }}">
+                            {% if item.club.icon_image %}
+                              <img src="{{ club_icon_url(item.club.icon_image) }}" alt="">
+                            {% endif %}
+                          </span>
+                          {{ item.club.name }}
+                        </a>
+                      </p>
+                      {% if item.notes %}
+                        <p class="planner-notes">{{ item.notes }}</p>
+                      {% endif %}
+                    </div>
+                  </article>
+                </li>
+              {% endfor %}
+            </ul>
+          </section>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="planner-empty">
+        <p class="muted">Nenhum encontro marcado por enquanto.</p>
+        <p class="muted">Os agendamentos dos seus clubes aparecem aqui.</p>
+        {% if clubs %}
+          <a class="btn btn-ghost" href="/clubes">Meus Clubes</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </section>
+</section>
+
+<dialog class="leave-dialog" id="planner-event-dialog" aria-labelledby="planner-event-title">
+  <h2 id="planner-event-title"></h2>
+  <p class="planner-detail-when muted"></p>
+  <p class="planner-detail-recurrence muted" hidden></p>
+  <p class="planner-detail-program"></p>
+  <p class="planner-detail-episode muted" hidden></p>
+  <p class="planner-detail-club"></p>
+  <p class="planner-detail-notes muted" hidden></p>
+  <div class="leave-dialog-actions">
+    <button type="button" class="btn btn-ghost js-event-close">Fechar</button>
+    <a class="btn btn-secondary planner-detail-club-link" href="#">Ver clube</a>
+  </div>
+</dialog>
+<script>
+(function () {
+  const dialog = document.getElementById("planner-event-dialog");
+  if (!dialog) return;
+  const title = document.getElementById("planner-event-title");
+  const when = dialog.querySelector(".planner-detail-when");
+  const recurrence = dialog.querySelector(".planner-detail-recurrence");
+  const program = dialog.querySelector(".planner-detail-program");
+  const episode = dialog.querySelector(".planner-detail-episode");
+  const club = dialog.querySelector(".planner-detail-club");
+  const notes = dialog.querySelector(".planner-detail-notes");
+  const clubLink = dialog.querySelector(".planner-detail-club-link");
+  const fill = (node, value) => {
+    const text = value || "";
+    node.hidden = !text;
+    node.textContent = text;
+  };
+  document.querySelectorAll(".js-event-open").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      title.textContent = btn.dataset.title || "Encontro";
+      when.textContent = btn.dataset.when || btn.dataset.clock || "";
+      fill(recurrence, btn.dataset.recurrence ? "↻ " + btn.dataset.recurrence : "");
+      const programHref = btn.dataset.programHref;
+      const programLabel = btn.dataset.program || "Programa pendente";
+      if (programHref) {
+        program.hidden = false;
+        program.innerHTML = "";
+        const link = document.createElement("a");
+        link.href = programHref;
+        link.textContent = programLabel;
+        program.appendChild(link);
+      } else {
+        fill(program, programLabel);
+      }
+      fill(episode, btn.dataset.episode || "");
+      club.textContent = btn.dataset.club || "";
+      clubLink.href = btn.dataset.clubHref || "/clubes";
+      fill(notes, btn.dataset.notes || "");
+      dialog.showModal();
+    });
+  });
+  dialog.querySelectorAll(".js-event-close").forEach((btn) => {
+    btn.addEventListener("click", () => dialog.close());
+  });
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+})();
+</script>
+{% endblock %}

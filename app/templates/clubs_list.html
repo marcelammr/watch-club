@@ -2,6 +2,24 @@
 {% block title %}Meus Clubes · Watch Club{% endblock %}
 {% block page_heading %}Meus Clubes{% endblock %}
 {% block content %}
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+
+<div class="clubes-toolbar">
+  <form class="clubes-search" action="/clubes" method="get" role="search">
+    <label class="sr-only" for="clubes-q">Pesquisar meus clubes</label>
+    <input id="clubes-q" type="search" name="q" value="{{ query }}" placeholder="Pesquisar meus clubes" maxlength="120">
+    <button class="btn btn-ghost" type="submit">Pesquisar</button>
+  </form>
+  <div class="clubes-toolbar-actions">
+    <a class="btn btn-ghost clubes-create" href="/clubs/novo" aria-label="Criar um clube">
+      <span aria-hidden="true">+</span>
+      <span class="clubes-create-tip">Criar um clube</span>
+    </a>
+    <button type="button" class="btn btn-secondary" id="open-join">Entrar com código</button>
+  </div>
+</div>
+
 {% if clubs %}
   <div class="club-cover-grid">
     {% for club in clubs %}
@@ -15,10 +33,33 @@
       </a>
     {% endfor %}
   </div>
+{% elif query %}
+  <p class="muted">Nenhum dos seus clubes corresponde a “{{ query }}”.</p>
 {% else %}
   <p class="muted">Você ainda não participa de nenhum clube.</p>
 {% endif %}
-<p class="clubes-extra">
-  <a class="btn btn-primary" href="/clubs/novo">Criar um clube</a>
-</p>
+
+<dialog id="join-modal" class="home-modal">
+  <div class="home-modal-card narrow-modal">
+    <div class="avatar-modal-head">
+      <h2>Entrar com código</h2>
+      <button type="button" class="ghost" id="close-join">Fechar</button>
+    </div>
+    <form action="/clubs/join" method="post">
+      <input type="hidden" name="next" value="/clubes">
+      <label>Código <input name="join_code" required maxlength="8" placeholder="A1B2C3D4"></label>
+      <button class="btn btn-primary" type="submit">Entrar no clube</button>
+    </form>
+  </div>
+</dialog>
+<script>
+  const joinModal = document.getElementById("join-modal");
+  const openJoin = document.getElementById("open-join");
+  const closeJoin = document.getElementById("close-join");
+  if (joinModal && openJoin && closeJoin) {
+    openJoin.addEventListener("click", () => joinModal.showModal());
+    closeJoin.addEventListener("click", () => joinModal.close());
+    joinModal.addEventListener("click", (event) => { if (event.target === joinModal) joinModal.close(); });
+  }
+</script>
 {% endblock %}

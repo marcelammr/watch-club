@@ -254,25 +254,61 @@
         </div>
         <div class="schedule-list">
           {% for item in schedules %}
+            {% set meeting = schedule_meeting_title(item) %}
+            {% set program = schedule_program_title(item) %}
+            {% set recurrence = schedule_recurrence_line(item.series) %}
             <article class="schedule-card">
+              <h3>{{ meeting }}</h3>
               <p class="schedule-when">{{ item.starts_at|schedule_when }}</p>
-              <h3>{{ item.show.name }}</h3>
+              {% if recurrence %}
+                <p class="schedule-recurrence">↻ {{ recurrence }}</p>
+              {% endif %}
+              <p class="schedule-program{% if not item.show_id %} schedule-pending{% endif %}">{{ program }}</p>
               {% set episode_line = schedule_episode_line(item) %}
-              {% if episode_line %}
+              {% if item.show_id and episode_line %}
                 <p class="schedule-episode">{{ episode_line }}</p>
               {% endif %}
               {% if item.notes %}
                 <p class="schedule-notes">{{ item.notes }}</p>
               {% endif %}
               {% if can_schedules %}
-                <form
-                  class="schedule-cancel"
-                  action="/clubs/{{ club.id }}/agendamentos/{{ item.id }}/cancelar"
-                  method="post"
-                  onsubmit="return confirm('Cancelar o agendamento de “{{ item.show.name }}”?');"
-                >
-                  <button class="btn btn-ghost" type="submit">Cancelar agendamento</button>
-                </form>
+                <div class="schedule-actions">
+                  <button
+                    type="button"
+                    class="btn btn-ghost js-set-program"
+                    data-action="/clubs/{{ club.id }}/agendamentos/{{ item.id }}/programa"
+                    data-show-id="{{ item.show_id or '' }}"
+                    data-season="{{ item.season_number or '' }}"
+                    data-episode="{{ item.episode_number or '' }}"
+                    data-title="{{ 'Alterar programa' if item.show_id else 'Definir programa' }}"
+                  >{{ 'Alterar programa' if item.show_id else 'Definir programa' }}</button>
+                  <button
+                    type="button"
+                    class="btn btn-ghost js-edit-when"
+                    data-action="/clubs/{{ club.id }}/agendamentos/{{ item.id }}"
+                    data-date="{{ item.starts_at|schedule_date }}"
+                    data-time="{{ item.starts_at|schedule_clock }}"
+                    data-notes="{{ item.notes|e }}"
+                  >Alterar horário</button>
+                  <form
+                    class="schedule-cancel"
+                    action="/clubs/{{ club.id }}/agendamentos/{{ item.id }}/cancelar"
+                    method="post"
+                    onsubmit="return confirm('Cancelar este encontro? Os outros da recorrência, se houver, continuam.');"
+                  >
+                    <button class="btn btn-ghost" type="submit">Cancelar encontro</button>
+                  </form>
+                  {% if item.series and not item.series.ended_at %}
+                    <form
+                      class="schedule-cancel"
+                      action="/clubs/{{ club.id }}/agendamentos/series/{{ item.series.id }}/encerrar"
+                      method="post"
+                      onsubmit="return confirm('Encerrar os próximos encontros desta recorrência? Os encontros passados permanecem.');"
+                    >
+                      <button class="btn btn-ghost" type="submit">Encerrar recorrência</button>
+                    </form>
+                  {% endif %}
+                </div>
               {% endif %}
             </article>
           {% else %}
@@ -437,36 +473,87 @@
 {% if tab == 'agendamentos' and can_schedules %}
 <dialog class="leave-dialog schedule-dialog" id="add-schedule-dialog" aria-labelledby="add-schedule-dialog-title">
   <h2 id="add-schedule-dialog-title">Novo agendamento</h2>
+  <form action="/clubs/{{ club.id }}/agendamentos" method="post">
+    <label>Título do encontro
+      <input type="text" name="title" maxlength="80" placeholder="Opcional, ex.: Noite de Cinema">
+    </label>
+    <div class="schedule-form-row">
+      <label>Data <input type="date" name="date" required></label>
+      <label>Horário <input type="time" name="time" required></label>
+    </div>
+    <label>Repetir
+      <select name="repeat" class="js-schedule-repeat">
+        <option value="none">Não repetir</option>
+        <option value="weekly">Toda semana</option>
+        <option value="biweekly">A cada 2 semanas</option>
+      </select>
+    </label>
+    <label class="js-schedule-until" hidden>
+      Até
+      <input type="date" name="until">
+    </label>
+    <label>Programa
+      <select name="show_id">
+        <option value="">Nenhum — programa pendente</option>
+        {% for link in club.shows %}
+          <option value="{{ link.show.id }}">{{ link.show.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="schedule-form-row js-schedule-episode">
+      <label>Temporada <input type="number" name="season_number" min="1" max="999" inputmode="numeric" placeholder="Opcional"></label>
+      <label>Episódio <input type="number" name="episode_number" min="1" max="999" inputmode="numeric" placeholder="Opcional"></label>
+    </div>
+    <label>Observação <textarea name="notes" rows="2" maxlength="200" placeholder="Opcional"></textarea></label>
+    <div class="leave-dialog-actions">
+      <button type="button" class="btn btn-ghost js-add-schedule-cancel">Cancelar</button>
+      <button class="btn btn-primary" type="submit">Agendar</button>
+    </div>
+  </form>
+</dialog>
+<dialog class="leave-dialog schedule-dialog" id="program-schedule-dialog" aria-labelledby="program-schedule-dialog-title">
+  <h2 id="program-schedule-dialog-title">Definir programa</h2>
   {% if club.shows %}
-    <form action="/clubs/{{ club.id }}/agendamentos" method="post">
-      <label>Série
-        <select name="show_id" required>
+    <form method="post" class="js-program-form">
+      <label>Programa
+        <select name="show_id" class="js-program-show">
+          <option value="">Nenhum — programa pendente</option>
           {% for link in club.shows %}
             <option value="{{ link.show.id }}">{{ link.show.name }}</option>
           {% endfor %}
         </select>
       </label>
       <div class="schedule-form-row">
-        <label>Data <input type="date" name="date" required></label>
-        <label>Horário <input type="time" name="time" required></label>
+        <label>Temporada <input type="number" name="season_number" class="js-program-season" min="1" max="999" inputmode="numeric" placeholder="Opcional"></label>
+        <label>Episódio <input type="number" name="episode_number" class="js-program-episode" min="1" max="999" inputmode="numeric" placeholder="Opcional"></label>
       </div>
-      <div class="schedule-form-row">
-        <label>Temporada <input type="number" name="season_number" min="1" max="999" inputmode="numeric" placeholder="Opcional"></label>
-        <label>Episódio <input type="number" name="episode_number" min="1" max="999" inputmode="numeric" placeholder="Opcional"></label>
-      </div>
-      <label>Observação <textarea name="notes" rows="2" maxlength="200" placeholder="Opcional"></textarea></label>
       <div class="leave-dialog-actions">
-        <button type="button" class="btn btn-ghost js-add-schedule-cancel">Cancelar</button>
-        <button class="btn btn-primary" type="submit">Agendar</button>
+        <button type="button" class="btn btn-ghost js-program-cancel">Cancelar</button>
+        <button class="btn btn-primary" type="submit">Salvar</button>
       </div>
     </form>
   {% else %}
-    <p>Adicione um título na aba Assistindo antes de criar um agendamento.</p>
+    <p>Adicione um título na aba Assistindo para definir o programa.</p>
     <div class="leave-dialog-actions">
-      <button type="button" class="btn btn-ghost js-add-schedule-cancel">Fechar</button>
+      <button type="button" class="btn btn-ghost js-program-cancel">Fechar</button>
       <a class="btn btn-primary" href="/clubs/{{ club.id }}?aba=assistindo">Ir para Assistindo</a>
     </div>
   {% endif %}
+</dialog>
+<dialog class="leave-dialog schedule-dialog" id="when-schedule-dialog" aria-labelledby="when-schedule-dialog-title">
+  <h2 id="when-schedule-dialog-title">Alterar este encontro</h2>
+  <p class="muted">A alteração vale somente para este encontro.</p>
+  <form method="post" class="js-when-form">
+    <div class="schedule-form-row">
+      <label>Data <input type="date" name="date" class="js-when-date" required></label>
+      <label>Horário <input type="time" name="time" class="js-when-time" required></label>
+    </div>
+    <label>Observação <textarea name="notes" rows="2" maxlength="200" class="js-when-notes" placeholder="Opcional"></textarea></label>
+    <div class="leave-dialog-actions">
+      <button type="button" class="btn btn-ghost js-when-cancel">Cancelar</button>
+      <button class="btn btn-primary" type="submit">Salvar</button>
+    </div>
+  </form>
 </dialog>
 {% endif %}
 <dialog class="leave-dialog" id="add-title-dialog" aria-labelledby="add-title-dialog-title">
@@ -644,17 +731,73 @@
 
   {% if tab == 'agendamentos' and can_schedules %}
   (function () {
+    function wireDialog(dialog) {
+      if (!dialog) return;
+      dialog.addEventListener("click", (event) => {
+        if (event.target === dialog) dialog.close();
+      });
+    }
     const dialog = document.getElementById("add-schedule-dialog");
-    if (!dialog) return;
-    document.querySelectorAll(".js-add-schedule-open").forEach((btn) => {
-      btn.addEventListener("click", () => dialog.showModal());
-    });
-    dialog.querySelectorAll(".js-add-schedule-cancel").forEach((btn) => {
-      btn.addEventListener("click", () => dialog.close());
-    });
-    dialog.addEventListener("click", (event) => {
-      if (event.target === dialog) dialog.close();
-    });
+    if (dialog) {
+      wireDialog(dialog);
+      document.querySelectorAll(".js-add-schedule-open").forEach((btn) => {
+        btn.addEventListener("click", () => dialog.showModal());
+      });
+      dialog.querySelectorAll(".js-add-schedule-cancel").forEach((btn) => {
+        btn.addEventListener("click", () => dialog.close());
+      });
+      const repeat = dialog.querySelector(".js-schedule-repeat");
+      const untilWrap = dialog.querySelector(".js-schedule-until");
+      const untilInput = untilWrap ? untilWrap.querySelector("input") : null;
+      const syncUntil = () => {
+        const on = repeat && repeat.value !== "none";
+        if (untilWrap) untilWrap.hidden = !on;
+        if (untilInput) untilInput.required = Boolean(on);
+      };
+      if (repeat) repeat.addEventListener("change", syncUntil);
+      syncUntil();
+    }
+    const programDialog = document.getElementById("program-schedule-dialog");
+    const programForm = programDialog ? programDialog.querySelector(".js-program-form") : null;
+    if (programDialog) {
+      wireDialog(programDialog);
+      programDialog.querySelectorAll(".js-program-cancel").forEach((btn) => {
+        btn.addEventListener("click", () => programDialog.close());
+      });
+      document.querySelectorAll(".js-set-program").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          if (programForm) {
+            programForm.action = btn.dataset.action;
+            const show = programForm.querySelector(".js-program-show");
+            const season = programForm.querySelector(".js-program-season");
+            const episode = programForm.querySelector(".js-program-episode");
+            if (show) show.value = btn.dataset.showId || "";
+            if (season) season.value = btn.dataset.season || "";
+            if (episode) episode.value = btn.dataset.episode || "";
+          }
+          const heading = document.getElementById("program-schedule-dialog-title");
+          if (heading) heading.textContent = btn.dataset.title || "Definir programa";
+          programDialog.showModal();
+        });
+      });
+    }
+    const whenDialog = document.getElementById("when-schedule-dialog");
+    const whenForm = whenDialog ? whenDialog.querySelector(".js-when-form") : null;
+    if (whenDialog && whenForm) {
+      wireDialog(whenDialog);
+      whenDialog.querySelectorAll(".js-when-cancel").forEach((btn) => {
+        btn.addEventListener("click", () => whenDialog.close());
+      });
+      document.querySelectorAll(".js-edit-when").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          whenForm.action = btn.dataset.action;
+          whenForm.querySelector(".js-when-date").value = btn.dataset.date || "";
+          whenForm.querySelector(".js-when-time").value = btn.dataset.time || "";
+          whenForm.querySelector(".js-when-notes").value = btn.dataset.notes || "";
+          whenDialog.showModal();
+        });
+      });
+    }
   })();
   {% endif %}
 

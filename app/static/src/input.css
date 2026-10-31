@@ -1,3 +1,25 @@
+@font-face {
+  font-family: "Hero";
+  src: url("/static/fonts/hero/Hero-Light.otf") format("opentype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Hero";
+  src: url("/static/fonts/hero/Hero-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Hero";
+  src: url("/static/fonts/hero/Hero-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -37,7 +59,8 @@
     --sidebar-border: oklch(0.922 0.005 325.62);
     --sidebar-ring: oklch(0.711 0.019 323.02);
     --rose: #ff5d8f;
-    --btn-radius: var(--radius);
+    --chrome: #1c1330;
+    --btn-radius: 999px;
     --btn-primary: #b892ff;
     --btn-primary-fg: #1f1b24;
     --btn-primary-hover: color-mix(in srgb, #b892ff 86%, #1f1b24);
@@ -45,42 +68,43 @@
   }
 
   .dark {
-    --background: #1f1b24;
+    --background: #241040;
+    --chrome: #1c132f;
     --foreground: #f7f0ff;
-    --card: #26222c;
+    --card: #24103c;
     --card-foreground: #f7f0ff;
-    --popover: #2a2530;
+    --popover: #2a1448;
     --popover-foreground: #f7f0ff;
     --primary: #b892ff;
     --primary-foreground: #1f1b24;
-    --secondary: #2a2530;
+    --secondary: #24103c;
     --secondary-foreground: #f7f0ff;
-    --muted: #2a2530;
-    --muted-foreground: color-mix(in srgb, #f7f0ff 62%, #1f1b24);
-    --accent: color-mix(in srgb, #6c63ff 22%, #1f1b24);
+    --muted: #221038;
+    --muted-foreground: color-mix(in srgb, #f7f0ff 70%, #241040);
+    --accent: color-mix(in srgb, #b892ff 12%, #241040);
     --accent-foreground: #f7f0ff;
     --destructive: oklch(0.704 0.191 22.216);
     --rose: #ff5d8f;
-    --border: color-mix(in srgb, #f7f0ff 10%, transparent);
-    --input: color-mix(in srgb, #f7f0ff 14%, transparent);
+    --border: color-mix(in srgb, #f7f0ff 11%, transparent);
+    --input: color-mix(in srgb, #f7f0ff 13%, transparent);
     --ring: #b892ff;
     --chart-1: #b892ff;
-    --chart-2: color-mix(in srgb, #f7f0ff 62%, #1f1b24);
+    --chart-2: color-mix(in srgb, #f7f0ff 70%, #241040);
     --chart-3: #6c63ff;
-    --chart-4: color-mix(in srgb, #6c63ff 55%, #1f1b24);
-    --chart-5: #26222c;
-    --sidebar: #26222c;
+    --chart-4: color-mix(in srgb, #6c63ff 55%, #241040);
+    --chart-5: #1c132f;
+    --sidebar: #1c132f;
     --sidebar-foreground: #f7f0ff;
     --sidebar-primary: #b892ff;
     --sidebar-primary-foreground: #1f1b24;
-    --sidebar-accent: color-mix(in srgb, #6c63ff 28%, #1f1b24);
+    --sidebar-accent: color-mix(in srgb, #b892ff 14%, #1c132f);
     --sidebar-accent-foreground: #f7f0ff;
-    --sidebar-border: color-mix(in srgb, #f7f0ff 10%, transparent);
+    --sidebar-border: color-mix(in srgb, #f7f0ff 8%, transparent);
     --sidebar-ring: #b892ff;
-    --btn-radius: var(--radius);
+    --btn-radius: 999px;
     --btn-primary: #b892ff;
     --btn-primary-fg: #1f1b24;
-    --btn-primary-hover: color-mix(in srgb, #c9a8ff 92%, #ffffff);
+    --btn-primary-hover: color-mix(in srgb, #c9a8ff 88%, #241040);
     --btn-focus: #b892ff;
   }
 
@@ -89,27 +113,17 @@
   }
   html.dark {
     color-scheme: dark;
-  }
-  html.dark::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    z-index: 50;
-    pointer-events: none;
-    opacity: 0.03;
-    mix-blend-mode: overlay;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    background-repeat: repeat;
-    background-size: 180px 180px;
+    background-color: #1c132f;
   }
   body {
-    @apply m-0 min-h-screen bg-background font-sans text-foreground;
+    @apply m-0 min-h-screen font-sans text-[0.98rem] leading-relaxed text-foreground;
+    -webkit-font-smoothing: antialiased;
   }
   a {
     @apply text-primary no-underline;
   }
   label {
-    @apply block my-3;
+    @apply my-3 block text-[0.92rem] font-medium;
   }
   header input,
   main input,
@@ -117,8 +131,18 @@
   main textarea,
   header select,
   main select {
-    @apply mt-1.5 block w-full rounded-md border border-input bg-background px-[0.7rem] py-[0.6rem] text-foreground;
+    @apply mt-1.5 block w-full rounded-[0.85rem] border border-input bg-card px-3 py-[0.65rem] text-[0.95rem] font-normal text-foreground;
     caret-color: var(--ring);
+  }
+  header input:focus-visible,
+  main input:focus-visible,
+  header textarea:focus-visible,
+  main textarea:focus-visible,
+  header select:focus-visible,
+  main select:focus-visible {
+    outline: 2px solid var(--btn-focus);
+    outline-offset: 1px;
+    border-color: var(--ring);
   }
   header input[readonly],
   main input[readonly] {
@@ -127,7 +151,7 @@
   header button,
   main button,
   .btn {
-    @apply mt-2 inline-block cursor-pointer rounded-full border-0 bg-primary px-4 py-[0.55rem] font-bold text-primary-foreground;
+    @apply mt-2 inline-block cursor-pointer rounded-full border-0 bg-primary px-4 py-[0.55rem] font-hero font-bold text-primary-foreground;
   }
 }
 
@@ -142,13 +166,14 @@
     justify-content: center;
     gap: 0.4rem;
     margin: 0;
-    padding: 0.55rem 1rem;
+    padding: 0.52rem 1.15rem;
     border-width: 1px;
     border-style: solid;
     border-radius: var(--btn-radius);
-    font-family: inherit;
-    font-size: 0.95rem;
-    font-weight: 600;
+    font-family: Hero, "Work Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.92rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
     line-height: 1.2;
     text-decoration: none;
     cursor: pointer;
@@ -200,33 +225,39 @@
       transform: none;
     }
   }
+  .btn.btn-primary,
+  .btn.btn-secondary,
+  .btn.btn-ghost {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
   .btn.btn-primary {
-    border-color: transparent;
-    background: var(--btn-primary);
+    border-color: color-mix(in srgb, #f7f0ff 22%, var(--btn-primary));
+    background: color-mix(in srgb, var(--btn-primary) 82%, transparent);
     color: var(--btn-primary-fg);
   }
   .btn.btn-primary:hover {
-    background: var(--btn-primary-hover);
+    background: color-mix(in srgb, var(--btn-primary-hover) 90%, transparent);
     color: var(--btn-primary-fg);
   }
   .btn.btn-secondary {
-    border-color: var(--border);
-    background: var(--secondary);
+    border-color: color-mix(in srgb, #f7f0ff 16%, transparent);
+    background: color-mix(in srgb, #f7f0ff 10%, transparent);
     color: var(--secondary-foreground);
   }
   .btn.btn-secondary:hover {
-    background: var(--muted);
+    background: color-mix(in srgb, #f7f0ff 16%, transparent);
     color: var(--foreground);
   }
   .btn.btn-ghost {
-    border-color: color-mix(in srgb, var(--foreground) 18%, transparent);
-    background: color-mix(in srgb, var(--foreground) 7%, transparent);
+    border-color: color-mix(in srgb, #f7f0ff 16%, transparent);
+    background: color-mix(in srgb, #f7f0ff 8%, transparent);
     color: var(--foreground);
     font-weight: 500;
   }
   .btn.btn-ghost:hover {
-    border-color: color-mix(in srgb, var(--foreground) 28%, transparent);
-    background: var(--accent);
+    border-color: color-mix(in srgb, #f7f0ff 28%, transparent);
+    background: color-mix(in srgb, #f7f0ff 14%, transparent);
     color: var(--foreground);
   }
   .btn.btn-danger {
@@ -245,7 +276,9 @@
     border-color: transparent;
     background: transparent;
     color: var(--muted-foreground);
+    font-family: inherit;
     font-weight: 400;
+    letter-spacing: 0;
   }
   .btn.btn-icon:hover {
     background: var(--accent);
@@ -274,7 +307,7 @@
     @apply flex min-w-0 flex-1 items-center px-2 text-sidebar-foreground no-underline;
   }
   .sidebar-brand-full {
-    @apply truncate font-display text-[1.05rem] font-normal tracking-wide;
+    @apply truncate font-display text-[1.05rem] font-normal tracking-[0.04em];
   }
   .app-nav {
     @apply flex flex-col gap-1 px-2 py-2;
@@ -283,7 +316,7 @@
     @apply mt-auto border-t border-sidebar-border;
   }
   .app-nav-link {
-    @apply flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sidebar-foreground no-underline;
+    @apply flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-sidebar-foreground no-underline;
   }
   .app-nav-link:hover,
   .app-nav-link.is-on {
@@ -293,7 +326,7 @@
     @apply shrink-0;
   }
   .app-nav-label {
-    @apply overflow-hidden whitespace-nowrap text-[0.95rem] font-medium;
+    @apply overflow-hidden whitespace-nowrap font-hero text-[0.95rem] font-normal;
   }
   .sidebar-dim {
     @apply pointer-events-none fixed inset-0 z-30 hidden bg-black/50;
@@ -305,14 +338,15 @@
     @apply flex min-w-0 flex-1 flex-col;
   }
   .top {
-    @apply flex items-center justify-between border-b border-border px-6 py-4;
+    @apply flex items-center justify-between px-5 py-3.5;
+    background: linear-gradient(180deg, rgb(8 6 16 / 0.82) 0%, rgb(10 8 20 / 0.48) 62%, rgb(16 12 28 / 0) 100%);
   }
   .top-start,
   .top-end {
     @apply flex items-center gap-3;
   }
   .page-heading {
-    @apply m-0 font-display text-lg font-normal text-foreground;
+    @apply m-0 font-hero text-[1.12rem] font-bold text-foreground;
   }
   .top nav {
     @apply flex items-center gap-4;
@@ -334,7 +368,7 @@
     @apply whitespace-nowrap font-display font-normal tracking-wide text-foreground;
   }
   main {
-    @apply mx-auto max-w-[980px] px-5 pb-16 pt-8;
+    @apply mx-auto max-w-[980px] px-5 pb-16 pt-7;
   }
   .friends-section {
     @apply mb-8;
@@ -343,19 +377,62 @@
     @apply border-t border-border pt-8;
   }
   .friends-heading {
-    @apply mb-3 mt-0 text-base font-semibold tracking-wide text-muted-foreground;
+    @apply mb-3 mt-0 font-hero text-[0.82rem] font-light uppercase tracking-[0.12em] text-muted-foreground;
   }
   .clubes-extra {
     @apply mt-8;
+  }
+  .clubes-toolbar {
+    @apply mb-6 flex flex-wrap items-end justify-between gap-3;
+  }
+  .clubes-search {
+    @apply m-0 flex min-w-[12rem] flex-1 items-end gap-2;
+  }
+  .clubes-search label {
+    @apply m-0;
+  }
+  .clubes-search input {
+    @apply mt-0 max-w-[22rem];
+  }
+  .clubes-toolbar-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .clubes-create {
+    @apply relative m-0 inline-flex h-10 w-10 items-center justify-center p-0 font-hero text-[1.35rem] font-normal leading-none;
+    border-radius: 0.85rem;
+  }
+  .clubes-create:focus-visible {
+    outline: 2px solid var(--btn-focus);
+    outline-offset: 2px;
+  }
+  .clubes-create-tip {
+    @apply pointer-events-none absolute whitespace-nowrap rounded-md px-2.5 py-1 font-sans text-[0.78rem] font-medium;
+    left: 50%;
+    bottom: calc(100% + 0.45rem);
+    transform: translateX(-50%);
+    background: color-mix(in srgb, #120c1c 78%, transparent);
+    border: 1px solid color-mix(in srgb, #f7f0ff 16%, transparent);
+    color: var(--foreground);
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  .clubes-create:hover .clubes-create-tip,
+  .clubes-create:focus-visible .clubes-create-tip {
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .clubes-create-tip {
+      transition: none;
+    }
   }
   .hero {
     @apply py-12;
   }
   .hero h1 {
-    @apply mb-3 mt-0 font-display text-[2.4rem] font-normal;
+    @apply mb-3 mt-0 font-hero text-[2.15rem] font-bold leading-[1.12] text-foreground;
   }
   .card {
-    @apply my-4 mb-8 rounded-2xl border border-border bg-card p-5 text-card-foreground;
+    @apply my-4 mb-8 rounded-2xl border border-border bg-card p-6 text-card-foreground;
   }
   .narrow {
     @apply mx-auto max-w-[420px];
@@ -405,13 +482,13 @@
     outline-offset: 2px;
   }
   .muted {
-    @apply text-muted-foreground;
+    @apply text-[0.95rem] text-muted-foreground;
   }
   .error {
-    @apply text-destructive;
+    @apply text-[0.95rem] font-medium text-destructive;
   }
   .ok {
-    @apply text-chart-2;
+    @apply text-[0.95rem] font-medium text-chart-2;
   }
   .club-row {
     @apply items-center justify-between;
@@ -527,7 +604,7 @@
   .show-synopsis h2,
   .show-episodes h2,
   .show-news h2 {
-    @apply mb-3 mt-0 text-lg font-semibold;
+    @apply mb-3 mt-0 font-hero text-lg font-bold;
   }
   .show-synopsis p {
     @apply m-0 max-w-[38rem] text-[0.98rem] leading-relaxed text-foreground;
@@ -565,7 +642,7 @@
     @apply m-0 cursor-pointer rounded-md border-0 bg-transparent p-0;
   }
   .account-popover {
-    @apply absolute right-0 top-[calc(100%+0.5rem)] z-30 w-72 rounded-2xl border border-border bg-card p-3 text-card-foreground shadow-lg;
+    @apply absolute right-0 top-[calc(100%+0.5rem)] z-30 w-72 rounded-2xl border border-border bg-popover p-3.5 text-popover-foreground shadow-lg;
   }
   .account-popover-head {
     @apply mb-3 flex items-start gap-3;
@@ -759,7 +836,7 @@
     @apply min-w-[200px] flex-1 border-0 p-0;
   }
   .profile-name {
-    @apply mb-0.5 mt-0 font-display text-[1.7rem] font-normal;
+    @apply mb-0.5 mt-0 font-hero text-[1.7rem] font-bold leading-tight;
   }
   .profile-nick {
     @apply mb-1.5 mt-0 text-muted-foreground;
@@ -786,42 +863,120 @@
   .home .account-trigger {
     @apply relative gap-0 text-foreground;
   }
+  .home {
+    --home-inset: clamp(0.5rem, 3.5vw, 2.25rem);
+  }
   .home main {
-    @apply max-w-[1120px] px-7 pb-20 pt-6;
+    @apply mx-0 w-full max-w-none min-w-0 overflow-x-clip px-7 pb-20 pt-6;
   }
   .home-hero {
-    @apply max-w-xl py-12 pt-14;
+    @apply max-w-[40rem] py-10 pt-8 text-left;
+    padding-inline-start: var(--home-inset);
+  }
+  .home-hero-break {
+    display: block;
+  }
+  .home-hello-line {
+    @apply mb-5 mt-0 font-hero text-[0.95rem] font-light text-muted-foreground;
   }
   .home-kicker {
-    @apply mb-3.5 mt-0 text-[0.78rem] uppercase tracking-widest text-primary;
+    @apply mb-3.5 mt-0 font-display text-[0.78rem] font-normal uppercase tracking-[0.18em] text-primary;
   }
   .home-hero h1 {
-    @apply mb-4 mt-0 font-display text-[clamp(2.1rem,5vw,3.3rem)] font-normal leading-tight;
+    @apply mb-4 mt-0 font-hero text-[clamp(2.05rem,5.3vw,3.5rem)] font-bold leading-[1.12];
   }
   .home-hero p {
-    @apply mb-7 mt-0 text-[1.12rem] leading-relaxed text-muted-foreground;
+    @apply mb-0 mt-0 max-w-[34rem] text-[1.05rem] leading-relaxed text-muted-foreground;
   }
-  .home-hello {
-    @apply pb-6 pt-12;
+  .home-clubs {
+    @apply mt-20 min-w-0 text-left;
+    padding-inline-start: var(--home-inset);
   }
-  .home-hello h1 {
-    @apply m-0 font-display text-[clamp(2.1rem,5vw,3.1rem)] font-normal;
+  .home-clubs-head {
+    @apply mb-5 flex items-center justify-start;
   }
-  .home-launch {
-    @apply mt-7 grid max-w-xl grid-cols-2 gap-4;
+  .home-clubs-title {
+    @apply m-0 font-hero text-[1.35rem] font-bold;
   }
-  button.home-tile,
-  a.home-tile {
-    @apply m-0 flex min-h-[5rem] cursor-pointer items-center justify-center rounded-[22px] border border-border bg-card px-5 py-[1.1rem] text-center text-[1.15rem] font-bold text-foreground;
-    font-family: inherit;
+  .home-clubs-link {
+    @apply inline-flex items-center gap-2 rounded-md text-foreground no-underline;
+    min-height: 2.5rem;
   }
-  button.home-tile:first-child,
-  a.home-tile:first-child {
-    @apply col-span-2 min-h-[5.6rem];
+  .home-clubs-link:hover,
+  .home-clubs-link:focus-visible {
+    @apply text-primary;
   }
-  button.home-tile:hover,
-  a.home-tile:hover {
-    @apply border-primary bg-card text-primary;
+  .home-clubs-link:focus-visible {
+    outline: 2px solid var(--btn-focus);
+    outline-offset: 3px;
+  }
+  .home-clubs-arrow {
+    @apply shrink-0 opacity-80;
+  }
+  .home-clubs-frame {
+    @apply min-w-0;
+  }
+  .home-clubs-rail {
+    @apply flex min-w-0 gap-4 overflow-x-auto pb-2 pt-1;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  .home-club-card {
+    @apply relative z-[1] flex w-[7.75rem] shrink-0 flex-col gap-2 text-foreground;
+    scroll-snap-align: start;
+  }
+  .home-club-cover {
+    @apply block aspect-square overflow-hidden rounded-[14px];
+    box-shadow: 0 12px 28px rgb(8 4 18 / 0.32);
+  }
+  .home-club-cover img {
+    @apply block h-full w-full object-cover object-center;
+  }
+  .home-club-card strong {
+    @apply truncate font-hero text-[0.95rem] font-bold;
+  }
+  .home-club-card:focus-visible {
+    outline: 2px solid var(--btn-focus);
+    outline-offset: 4px;
+    border-radius: 16px;
+  }
+  .home-club-card:hover strong,
+  .home-club-card:focus-visible strong {
+    @apply text-primary;
+  }
+  .home-clubs-nav {
+    @apply mt-4 hidden justify-end gap-2;
+  }
+  .home-clubs-shift {
+    @apply m-0 inline-flex h-10 w-10 items-center justify-center rounded-full p-0 text-foreground;
+    border: 1px solid color-mix(in srgb, #f7f0ff 16%, transparent);
+    background: color-mix(in srgb, #f7f0ff 8%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .home-clubs-shift:hover:not(:disabled) {
+    @apply border-primary text-primary;
+  }
+  .home-clubs-shift:disabled {
+    @apply cursor-default opacity-35;
+  }
+  .home-clubs-empty {
+    @apply flex min-h-[12rem] flex-col items-start justify-center gap-5 rounded-[1.35rem] border border-dashed border-border px-6 py-8;
+  }
+  .home-clubs-empty .muted {
+    @apply m-0 max-w-md text-[1.02rem];
+  }
+  .home-clubs-empty-actions {
+    @apply flex flex-wrap gap-3;
+  }
+  @media (min-width: 721px) {
+    .home-clubs-nav {
+      @apply flex;
+    }
+    .home-club-card {
+      @apply w-[8.75rem];
+    }
   }
   .home-modal {
     @apply border-0 bg-transparent p-0;
@@ -847,7 +1002,7 @@
     @apply block overflow-hidden rounded-2xl bg-primary;
   }
   .club-cover {
-    @apply aspect-[16/10];
+    @apply aspect-square;
   }
   .club-cover img,
   .club-cover-banner img {
@@ -917,7 +1072,7 @@
     @apply mb-3 mt-0 max-w-xl text-muted-foreground;
   }
   .watch-heading {
-    @apply mb-1.5 mt-7 text-[1.05rem] font-semibold uppercase tracking-wide text-muted-foreground;
+    @apply mb-1.5 mt-7 font-hero text-[0.78rem] font-light uppercase tracking-[0.14em] text-muted-foreground;
   }
   .watch-toolbar {
     @apply mb-6 flex items-center gap-2;
@@ -990,7 +1145,7 @@
     @apply flex min-w-0 flex-1 flex-col gap-1.5;
   }
   .watch-copy h3 {
-    @apply m-0 min-w-0 overflow-hidden text-ellipsis text-[1.45rem] font-semibold leading-tight;
+    @apply m-0 min-w-0 overflow-hidden text-ellipsis font-hero text-[1.32rem] font-bold leading-tight;
   }
   .watch-head {
     @apply flex min-w-0 items-start justify-between gap-2;
@@ -1022,7 +1177,7 @@
     background: var(--accent);
   }
   .action-menu-panel {
-    @apply absolute right-0 z-30 mt-1 min-w-[13.5rem] rounded-2xl border border-border bg-card p-1.5 shadow-lg;
+    @apply absolute right-0 z-30 mt-1 min-w-[13.5rem] rounded-2xl border border-border bg-popover p-1.5 shadow-lg;
   }
   .action-menu-panel[hidden] {
     display: none;
@@ -1143,7 +1298,7 @@
     @apply flex min-w-0 items-center justify-start gap-2;
   }
   .show-info-copy h1 {
-    @apply m-0 min-w-0 text-[1.55rem] font-semibold leading-tight;
+    @apply m-0 min-w-0 font-hero text-[1.55rem] font-bold leading-tight;
     overflow-wrap: anywhere;
   }
   .show-hero-tools {
@@ -1400,7 +1555,7 @@
     @apply min-h-0;
   }
   body.club-room .top {
-    @apply relative z-[25] shrink-0 bg-background;
+    @apply relative z-[25] shrink-0;
   }
   body.club-room .app-main main {
     @apply m-0 flex min-h-0 w-full max-w-none flex-1 p-0;
@@ -1440,13 +1595,13 @@
     @apply flex flex-col gap-1 px-3 pb-4 pt-2;
   }
   .club-side-link {
-    @apply rounded-[10px] px-3 py-[0.55rem] font-bold text-foreground;
+    @apply rounded-xl px-3 py-[0.55rem] font-hero text-[0.95rem] font-normal text-foreground;
   }
   .club-side-link.is-on {
-    @apply bg-sidebar-accent text-sidebar-accent-foreground;
+    @apply bg-sidebar-accent font-bold text-sidebar-accent-foreground;
   }
   .club-side-link.is-quiet {
-    @apply mt-2 w-full cursor-pointer border-0 bg-transparent text-left text-[0.92rem] font-medium text-muted-foreground;
+    @apply mt-2 w-full cursor-pointer border-0 bg-transparent text-left font-sans text-[0.92rem] font-medium text-muted-foreground;
   }
   .club-members-summary {
     @apply mt-1 mb-2 w-full cursor-pointer rounded-[10px] border-0 bg-transparent px-0 py-1 text-left text-[0.92rem] font-medium text-muted-foreground;
@@ -1607,14 +1762,40 @@
     @apply mb-1 mt-0 text-[0.92rem] font-medium text-muted-foreground;
   }
   .schedule-episode,
-  .schedule-notes {
+  .schedule-notes,
+  .schedule-recurrence,
+  .schedule-program {
     @apply m-0 mt-1 text-[0.95rem] text-muted-foreground;
+  }
+  .schedule-pending {
+    @apply font-medium text-muted-foreground;
+  }
+  .schedule-actions {
+    @apply mt-3 flex flex-wrap items-center gap-x-3 gap-y-1;
+  }
+  .schedule-actions .btn {
+    border-color: transparent;
+    background: transparent;
+    padding: 0.15rem 0;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+  }
+  .schedule-actions .btn:hover,
+  .schedule-actions .btn:focus-visible {
+    border-color: transparent;
+    background: transparent;
+    color: var(--foreground);
+    text-decoration: underline;
   }
   .schedule-dialog {
     @apply w-[min(28rem,calc(100vw-2rem))];
   }
   .schedule-form-row {
     @apply grid grid-cols-2 gap-3;
+  }
+  .schedule-actions .schedule-cancel {
+    @apply m-0;
   }
   .schedule-cancel {
     @apply mt-3;
@@ -1632,6 +1813,246 @@
     background: transparent;
     color: var(--foreground);
     text-decoration: underline;
+  }
+  .planner-page main {
+    @apply mx-0 w-full min-w-0 max-w-none pb-16 pt-4;
+    padding-inline: clamp(1.15rem, 2.6vw, 2.4rem);
+  }
+  .planner-page .page-heading {
+    @apply sr-only;
+  }
+  .planner {
+    @apply mx-0 w-full max-w-none;
+  }
+  .planner-toolbar {
+    @apply mb-3.5 flex flex-col gap-2;
+  }
+  .planner-title {
+    @apply mb-0 mt-0 font-hero text-[1.7rem] font-bold leading-tight;
+  }
+  .planner-toolbar-row {
+    @apply flex flex-wrap items-center justify-between gap-x-4 gap-y-2;
+  }
+  .planner-period {
+    @apply m-0 font-hero text-[0.95rem] font-normal text-muted-foreground;
+  }
+  .planner-nav {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .planner-filter {
+    @apply m-0;
+  }
+  .planner-filter select {
+    @apply mt-0 w-auto min-w-[10rem];
+  }
+  .planner-nav-week {
+    @apply flex items-center overflow-hidden rounded-full;
+    border: 1px solid color-mix(in srgb, #f7f0ff 16%, transparent);
+    background: color-mix(in srgb, #f7f0ff 8%, transparent);
+    backdrop-filter: blur(8px);
+  }
+  .planner-today,
+  .planner-week-shift {
+    @apply m-0 inline-flex h-10 shrink-0 items-center justify-center text-[0.88rem] font-medium text-foreground no-underline;
+    border: 0;
+    background: transparent;
+  }
+  .planner-today {
+    @apply px-3.5;
+    border-right: 1px solid color-mix(in srgb, #f7f0ff 12%, transparent);
+  }
+  .planner-week-shift {
+    @apply w-10;
+  }
+  .planner-week-shift + .planner-week-shift {
+    border-left: 1px solid color-mix(in srgb, #f7f0ff 12%, transparent);
+  }
+  .planner-today:hover,
+  .planner-today:focus-visible,
+  .planner-week-shift:hover,
+  .planner-week-shift:focus-visible {
+    @apply text-primary;
+  }
+  .planner-today:focus-visible,
+  .planner-week-shift:focus-visible,
+  .planner-chip:focus-visible {
+    outline: 2px solid var(--btn-focus);
+    outline-offset: 2px;
+  }
+  .planner-week {
+    @apply mb-8 grid grid-cols-7 overflow-hidden rounded-2xl;
+    border: 1px solid color-mix(in srgb, #f7f0ff 14%, transparent);
+    background: color-mix(in srgb, #f7f0ff 6%, transparent);
+    backdrop-filter: blur(8px);
+  }
+  .planner-day {
+    @apply min-w-0 px-2.5 py-2.5;
+  }
+  .planner-day + .planner-day {
+    border-left: 1px solid color-mix(in srgb, #f7f0ff 10%, transparent);
+  }
+  .planner-day.is-today {
+    background: color-mix(in srgb, var(--primary) 9%, transparent);
+  }
+  .planner-day-name {
+    @apply m-0 font-hero text-[0.66rem] font-normal uppercase tracking-[0.14em] text-muted-foreground;
+  }
+  .planner-day-num {
+    @apply mb-1.5 mt-1 inline-flex h-[1.625rem] min-w-[1.65rem] items-center justify-center rounded-full px-1.5 font-hero text-[1rem] font-bold leading-none text-foreground;
+  }
+  .planner-day.is-today .planner-day-num {
+    background: color-mix(in srgb, var(--primary) 88%, #1f1b24);
+    color: var(--primary-foreground);
+  }
+  .planner-day-events {
+    @apply min-h-[1.2rem];
+  }
+  .planner-chip {
+    @apply flex w-full min-w-0 cursor-pointer items-baseline gap-1 overflow-hidden rounded-md border-0 px-1 py-0.5 text-left;
+    background: color-mix(in srgb, var(--primary) 16%, transparent);
+    color: var(--foreground);
+  }
+  .planner-chip-time {
+    @apply shrink-0 font-hero text-[0.7rem] font-bold;
+  }
+  .planner-chip-dot {
+    @apply shrink-0 text-[0.7rem] text-muted-foreground;
+  }
+  .planner-chip-title {
+    @apply min-w-0 truncate font-sans text-[0.72rem] font-medium;
+  }
+  .planner-chip.is-past {
+    opacity: 0.58;
+  }
+  .planner-more {
+    @apply mb-0 mt-1 px-0.5 text-[0.68rem] text-muted-foreground;
+  }
+  .planner-upcoming {
+    @apply w-full pt-1;
+  }
+  .planner-section-title {
+    @apply mb-3.5 mt-0 font-hero text-[0.78rem] font-bold uppercase tracking-[0.14em] text-muted-foreground;
+  }
+  .planner-agenda {
+    @apply w-full max-w-[46rem];
+  }
+  .planner-group {
+    @apply mb-4;
+  }
+  .planner-group-title {
+    @apply mb-1.5 mt-0 font-hero text-[0.74rem] font-bold uppercase tracking-[0.12em] text-muted-foreground;
+  }
+  .planner-group.is-today .planner-group-title {
+    @apply text-primary;
+  }
+  .planner-list {
+    @apply m-0 flex list-none flex-col gap-2 p-0;
+  }
+  .planner-event {
+    @apply grid items-start gap-x-4 gap-y-0.5 rounded-2xl px-4 py-2.5;
+    grid-template-columns: 3.35rem minmax(0, 1fr);
+    border: 1px solid color-mix(in srgb, #f7f0ff 12%, transparent);
+    background: color-mix(in srgb, #f7f0ff 7%, transparent);
+    backdrop-filter: blur(8px);
+    border-left: 3px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  }
+  .planner-event.is-next {
+    border-color: color-mix(in srgb, var(--primary) 38%, transparent);
+    border-left-color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
+  }
+  .planner-time {
+    @apply pt-0.5 font-hero text-[0.92rem] font-bold leading-none;
+    color: color-mix(in srgb, var(--foreground) 82%, var(--muted-foreground));
+  }
+  .planner-copy {
+    @apply min-w-0;
+  }
+  .planner-meeting {
+    @apply m-0 font-hero text-[1.08rem] font-bold leading-snug text-foreground;
+  }
+  .planner-program {
+    @apply mb-0 mt-0.5 text-[0.88rem] text-foreground;
+  }
+  .planner-program.is-pending,
+  .planner-pending {
+    color: color-mix(in srgb, var(--foreground) 72%, var(--muted-foreground));
+  }
+  .planner-program a,
+  .planner-detail-program a {
+    @apply text-foreground no-underline;
+  }
+  .planner-program a:hover,
+  .planner-program a:focus-visible,
+  .planner-detail-program a:hover,
+  .planner-detail-program a:focus-visible {
+    @apply text-primary;
+  }
+  .planner-meta,
+  .planner-notes {
+    @apply mb-0 mt-0.5 text-[0.8rem];
+    color: color-mix(in srgb, var(--foreground) 68%, var(--muted-foreground));
+  }
+  .planner-club {
+    @apply mb-0 mt-1.5 text-[0.8rem];
+  }
+  .planner-club a {
+    @apply inline-flex max-w-full items-center gap-1.5 no-underline;
+    color: color-mix(in srgb, var(--foreground) 64%, var(--muted-foreground));
+  }
+  .planner-club a:hover,
+  .planner-club a:focus-visible {
+    @apply text-foreground;
+  }
+  .planner-club-mark {
+    @apply relative inline-block h-3.5 w-3.5 shrink-0 overflow-hidden rounded-full;
+  }
+  .planner-club-mark img {
+    @apply block h-full w-full object-cover;
+  }
+  .planner-empty {
+    @apply flex max-w-[46rem] flex-col items-start gap-3 rounded-2xl px-5 py-7;
+    border: 1px dashed color-mix(in srgb, #f7f0ff 16%, transparent);
+  }
+  .planner-detail-program {
+    @apply my-2;
+  }
+  @media (max-width: 900px) {
+    .planner-day {
+      @apply px-1.5 py-2;
+    }
+    .planner-chip-title,
+    .planner-chip-dot {
+      display: none;
+    }
+    .planner-more {
+      @apply mt-0.5 truncate;
+    }
+    .planner-agenda,
+    .planner-empty {
+      @apply max-w-none;
+    }
+  }
+  @media (max-width: 720px) {
+    .planner-today,
+    .planner-week-shift {
+      @apply h-9;
+    }
+    .planner-week-shift {
+      @apply w-9;
+    }
+    .planner-day-name {
+      @apply tracking-wide;
+    }
+    .planner-day-num {
+      @apply h-6 min-w-[1.4rem] text-[0.95rem];
+    }
+    .planner-chip {
+      @apply justify-center px-0;
+    }
+    .planner-event {
+      grid-template-columns: 3.1rem minmax(0, 1fr);
+    }
   }
   .week-schedule {
     @apply mb-6 rounded-2xl border border-border bg-card px-4 py-3.5;
@@ -1934,11 +2355,11 @@
     color: var(--club-sub-color, #6c63ff);
   }
   .club-role.is-admin {
-    background: color-mix(in srgb, var(--club-admin-color, #b892ff) 22%, #1f1b24);
+    background: color-mix(in srgb, var(--club-admin-color, #b892ff) 22%, var(--chrome));
     color: var(--club-admin-color, #b892ff);
   }
   .club-role.is-support {
-    background: color-mix(in srgb, var(--club-sub-color, #6c63ff) 22%, #1f1b24);
+    background: color-mix(in srgb, var(--club-sub-color, #6c63ff) 22%, var(--chrome));
     color: var(--club-sub-color, #6c63ff);
   }
   .tag-live-preview {
@@ -2008,7 +2429,7 @@
     @apply flex min-h-0 flex-col overflow-auto border-r border-border bg-sidebar px-3 py-5;
   }
   .club-settings-kicker {
-    @apply mb-1 mt-5 px-2.5 text-[0.68rem] font-bold uppercase tracking-[0.16em] text-muted-foreground;
+    @apply mb-1 mt-5 px-2.5 font-hero text-[0.68rem] font-bold uppercase tracking-[0.16em] text-muted-foreground;
   }
   .club-settings-kicker:first-child {
     @apply mt-0;
@@ -2020,13 +2441,13 @@
     @apply flex flex-col gap-0.5;
   }
   .club-settings-link {
-    @apply relative mt-0 flex w-full cursor-pointer items-center justify-between rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-sm font-medium text-muted-foreground;
+    @apply relative mt-0 flex w-full cursor-pointer items-center justify-between rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left font-hero text-sm font-normal text-muted-foreground;
   }
   .club-settings-link:hover {
     @apply bg-muted text-foreground;
   }
   .club-settings-link.is-on {
-    @apply bg-muted font-semibold text-foreground;
+    @apply bg-muted font-bold text-foreground;
     box-shadow: inset 2px 0 0 #b892ff;
   }
   .club-settings-chevron {
@@ -2052,7 +2473,7 @@
     font-size: 0.88rem;
   }
   .club-settings-panel h1 {
-    @apply mt-0 font-display text-[1.7rem] font-normal;
+    @apply mt-0 font-hero text-[1.55rem] font-bold leading-tight;
   }
   .club-settings-lead {
     @apply mb-6 mt-0 max-w-[36rem] text-sm text-muted-foreground;
@@ -2317,4 +2738,19 @@
   .watch-copy h3 {
     font-size: 1.15rem;
   }
+}
+
+html.dark,
+html.dark body {
+  background-color: #1c132f;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.12'/%3E%3C/svg%3E"),
+    radial-gradient(80% 55% at 50% 38%, rgb(48 18 92 / 0.22) 0%, transparent 62%),
+    radial-gradient(75% 100% at 0% 50%, rgb(8 5 16 / 0.62) 0%, transparent 48%),
+    radial-gradient(75% 100% at 100% 50%, rgb(8 5 16 / 0.62) 0%, transparent 48%),
+    radial-gradient(120% 75% at 50% 115%, rgb(6 4 14 / 0.72) 0%, transparent 55%),
+    linear-gradient(180deg, #1c132f 0%, #201038 12%, #271148 34%, #2b0e51 58%, #261244 100%);
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+  background-size: 180px 180px, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+  background-attachment: fixed;
 }

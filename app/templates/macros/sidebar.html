@@ -21,6 +21,8 @@
 {% macro nav_icon(name) %}
 {% if name == 'home' %}
   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5"/><path d="M6.5 10.5V20h11V10.5"/></svg>
+{% elif name == 'agenda' %}
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v3"/><path d="M17 4v3"/><rect x="4" y="6" width="16" height="14" rx="2"/><path d="M4 11h16"/></svg>
 {% elif name == 'clubs' %}
   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="7" height="14" rx="1.5"/><rect x="13.5" y="8" width="7" height="11" rx="1.5"/></svg>
 {% elif name == 'info' %}
@@ -49,6 +51,7 @@
   </div>
   <nav class="app-nav" aria-label="Principal">
     {{ nav_link('/', 'Início', 'home', path == '/') }}
+    {{ nav_link('/agenda', 'Agenda', 'agenda', path == '/agenda' or path.startswith('/agenda')) }}
     {{ nav_link('/clubes', 'Meus Clubes', 'clubs', path == '/clubes' or path.startswith('/clubs/novo')) }}
     {{ nav_link('/amigos', 'Amigos', 'friends', path == '/amigos' or path.startswith('/mensagens/')) }}
   </nav>
