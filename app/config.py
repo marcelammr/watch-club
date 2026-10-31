@@ -6,7 +6,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
+
+
+def required_secret_key() -> str:
+    value = (os.getenv("SECRET_KEY") or "").strip()
+    if not value:
+        raise RuntimeError("SECRET_KEY é obrigatória. Defina a variável de ambiente antes de iniciar o Watch Club.")
+    return value
+
+
+SECRET_KEY = required_secret_key()
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'watch_club.db'}")
 NEWS_TTL_SECONDS = 6 * 60 * 60
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:8000")
