@@ -103,7 +103,7 @@ from app.discovery import (
 from app.covers import COVER_COLORS, COVER_PRESETS, cover_image_url, save_cover_image, valid_cover_color
 from app.markup import format_chat
 from app import config as app_config
-from app.config import BASE_DIR, BIO_MAX, EMAIL_DEV_SHOW_LINK, SECRET_KEY
+from app.config import BASE_DIR, BIO_MAX, EMAIL_DEV_SHOW_LINK, SECRET_KEY, SESSION_HTTPS_ONLY
 from app.db import Base, close_exclusive_session, engine, exclusive_write_session, get_db
 from app.invites import (
     MSG_OAUTH_CLOSED,
@@ -198,7 +198,12 @@ for _avatar in AVATARS:
 
 
 app = FastAPI(title="Watch Club", description="Séries assistidas com amigos")
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SECRET_KEY,
+    same_site="lax",
+    https_only=SESSION_HTTPS_ONLY,
+)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "app" / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
 _STYLE_CSS = BASE_DIR / "app" / "static" / "style.css"

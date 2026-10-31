@@ -16,6 +16,13 @@ def required_secret_key() -> str:
 
 
 SECRET_KEY = required_secret_key()
+
+
+def session_https_only() -> bool:
+    return os.getenv("SESSION_HTTPS_ONLY", "false").lower() in {"1", "true", "yes"}
+
+
+SESSION_HTTPS_ONLY = session_https_only()
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'watch_club.db'}")
 NEWS_TTL_SECONDS = 6 * 60 * 60
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:8000")
