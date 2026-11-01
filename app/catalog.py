@@ -24,6 +24,8 @@ from app.models import (
     NewsItem,
     Season,
     Show,
+    User,
+    UserShowFavorite,
 )
 from app.db import close_exclusive_session, exclusive_write_session
 from app.roles import (
@@ -63,12 +65,30 @@ NEWS_FEED_KIND_MAP = {
 }
 NEWS_FAVORITES_TIPO = "favoritos"
 NEWS_PAGE_LIMIT = 36
+PROFILE_FAVORITE_PREVIEW = 6
+PROFILE_CLUB_PREVIEW = 6
 HOME_NEWS_LIMIT = 8
 WATCHING = "watching"
 WATCHED = "watched"
 SOURCE_TVMAZE = "tvmaze"
 SOURCE_TMDB = "tmdb"
 SOURCE_MANUAL = "manual"
+
+
+def profile_row_preview(items: list, limit: int) -> tuple[list, int]:
+    total = len(items)
+    if total > limit:
+        visible = limit - 1
+        return items[:visible], total - visible
+    return items, 0
+
+
+def profile_favorite_preview(favorites: list) -> tuple[list, int]:
+    return profile_row_preview(favorites, PROFILE_FAVORITE_PREVIEW)
+
+
+def profile_club_preview(clubs: list) -> tuple[list, int]:
+    return profile_row_preview(clubs, PROFILE_CLUB_PREVIEW)
 
 
 def show_source(show: Show) -> str:
@@ -599,13 +619,27 @@ def refresh_feed_news(db: Session, force: bool = False) -> None:
     db.commit()
 
 
-def list_feed_news(db: Session, query: str = "", tipo: str = "", limit: int = NEWS_PAGE_LIMIT) -> list[FeedNews]:
+def list_feed_news(
+    db: Session,
+    query: str = "",
+    tipo: str = "",
+    limit: int = NEWS_PAGE_LIMIT,
+    favorite_names: list[str] | None = None,
+) -> list[FeedNews]:
     if limit < 1:
         limit = NEWS_PAGE_LIMIT
     stmt = select(FeedNews)
     kinds = NEWS_FEED_KIND_MAP.get(tipo or "")
     if kinds:
         stmt = stmt.where(FeedNews.feed_kind.in_(kinds))
+    names = [name.strip() for name in (favorite_names or []) if (name or "").strip()]
+    if tipo == NEWS_FAVORITES_TIPO:
+        if len(names) < 1:
+            return []
+        clauses = [FeedNews.title.ilike(f"%{name}%") for name in names[:40] if len(name) >= 2]
+        if not clauses:
+            return []
+        stmt = stmt.where(or_(*clauses))
     needle = (query or "").strip()
     if needle:
         pattern = f"%{needle}%"
@@ -738,7 +772,7 @@ def club_messages(db: Session, club_id: int, limit: int = 80) -> list[ClubMessag
     items = list(
         db.scalars(
             select(ClubMessage)
-            .options(selectinload(ClubMessage.user))
+            .options(selectinload(ClubMessage.user), selectinload(ClubMessage.show))
             .where(ClubMessage.club_id == club_id)
             .order_by(ClubMessage.id.desc())
             .limit(limit)
@@ -748,15 +782,87 @@ def club_messages(db: Session, club_id: int, limit: int = 80) -> list[ClubMessag
     return items
 
 
-def post_club_message(db: Session, club_id: int, user_id: int, body: str) -> ClubMessage:
+def post_club_message(
+    db: Session,
+    club_id: int,
+    user_id: int,
+    body: str,
+    show_id: int | None = None,
+) -> ClubMessage:
     text = (body or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Escreva uma mensagem")
-    message = ClubMessage(club_id=club_id, user_id=user_id, body=text[:2000])
+    message = ClubMessage(club_id=club_id, user_id=user_id, body=text[:2000], show_id=show_id)
     db.add(message)
     db.commit()
     db.refresh(message)
     return message
+
+
+async def ensure_catalog_show(
+    db: Session,
+    provider: str,
+    external_id: int,
+    kind: str | None = None,
+) -> Show:
+    source = (provider or "").strip().lower()
+    if source == SOURCE_TMDB:
+        show = await upsert_show_from_tmdb(db, external_id)
+        show.kind = "filme"
+    elif source == SOURCE_TVMAZE:
+        show = await upsert_show_from_tvmaze(db, external_id)
+        if kind:
+            show.kind = valid_kind(kind)
+    else:
+        raise HTTPException(status_code=400, detail="Obra inválida")
+    db.commit()
+    db.refresh(show)
+    return show
+
+
+def annotate_search_results(db: Session, user_id: int, results: list[dict]) -> list[dict]:
+    tvmaze_ids = []
+    tmdb_ids = []
+    for item in results:
+        provider = (item.get("provider") or "tvmaze").strip().lower()
+        external = item.get("external_id") or item.get("tvmaze_id") or item.get("tmdb_id")
+        try:
+            value = int(external)
+        except (TypeError, ValueError):
+            continue
+        if provider == SOURCE_TMDB and value > 0:
+            tmdb_ids.append(value)
+        elif value > 0:
+            tvmaze_ids.append(value)
+    shows: list[Show] = []
+    if tvmaze_ids:
+        shows.extend(db.scalars(select(Show).where(Show.tvmaze_id.in_(tvmaze_ids))))
+    if tmdb_ids:
+        shows.extend(db.scalars(select(Show).where(Show.tmdb_id.in_(tmdb_ids))))
+    by_tvmaze = {show.tvmaze_id: show for show in shows if show.tvmaze_id and show.tvmaze_id > 0}
+    by_tmdb = {show.tmdb_id: show for show in shows if show.tmdb_id}
+    fav_ids = favorite_show_ids(db, user_id)
+    annotated = []
+    for item in results:
+        row = dict(item)
+        provider = (row.get("provider") or "tvmaze").strip().lower()
+        try:
+            value = int(row.get("external_id") or row.get("tvmaze_id") or row.get("tmdb_id") or 0)
+        except (TypeError, ValueError):
+            value = 0
+        show = by_tmdb.get(value) if provider == SOURCE_TMDB else by_tvmaze.get(value)
+        row["show_id"] = show.id if show else None
+        row["is_favorite"] = bool(show and show.id in fav_ids)
+        annotated.append(row)
+    return annotated
+
+
+def suggest_show_to_club(db: Session, club_id: int, user: User, show: Show) -> ClubMessage:
+    require_club_member(db, club_id, user.id)
+    title = (show.name or "um programa").strip() or "um programa"
+    who = (user.name or user.username or "Alguém").strip()
+    body = f"{who} indicou {title} para os próximos encontros."
+    return post_club_message(db, club_id, user.id, body, show_id=show.id)
 
 
 def encode_genres(values: list[str] | None) -> str:
@@ -864,6 +970,111 @@ async def fill_missing_genres(db: Session, shows: list[Show]) -> None:
         if isinstance(result, Exception):
             continue
         show.genres = encode_genres(result)
+
+
+def load_show_or_404(db: Session, show_id: int) -> Show:
+    show = db.get(Show, show_id)
+    if not show:
+        raise HTTPException(status_code=404, detail="Série não encontrada")
+    return show
+
+
+def favorite_row(db: Session, user_id: int, show_id: int) -> UserShowFavorite | None:
+    return db.scalar(
+        select(UserShowFavorite).where(
+            UserShowFavorite.user_id == user_id,
+            UserShowFavorite.show_id == show_id,
+        )
+    )
+
+
+def is_show_favorite(db: Session, user_id: int, show_id: int) -> bool:
+    return favorite_row(db, user_id, show_id) is not None
+
+
+def favorite_show_ids(db: Session, user_id: int) -> set[int]:
+    return set(db.scalars(select(UserShowFavorite.show_id).where(UserShowFavorite.user_id == user_id)))
+
+
+def list_user_favorites(db: Session, user_id: int) -> list[Show]:
+    rows = list(
+        db.scalars(
+            select(UserShowFavorite)
+            .where(UserShowFavorite.user_id == user_id)
+            .options(selectinload(UserShowFavorite.show))
+            .order_by(UserShowFavorite.created_at.desc(), UserShowFavorite.id.desc())
+        ).unique()
+    )
+    return [row.show for row in rows if row.show is not None]
+
+
+def favorite_show_names(db: Session, user_id: int) -> list[str]:
+    return [
+        name
+        for name in db.scalars(
+            select(Show.name)
+            .join(UserShowFavorite, UserShowFavorite.show_id == Show.id)
+            .where(UserShowFavorite.user_id == user_id)
+        )
+        if (name or "").strip()
+    ]
+
+
+def count_user_favorites(db: Session, user_id: int) -> int:
+    return (
+        db.scalar(
+            select(func.count())
+            .select_from(UserShowFavorite)
+            .where(UserShowFavorite.user_id == user_id)
+        )
+        or 0
+    )
+
+
+def toggle_show_favorite(db: Session, user_id: int, show_id: int) -> bool:
+    load_show_or_404(db, show_id)
+    row = favorite_row(db, user_id, show_id)
+    if row:
+        db.delete(row)
+        db.commit()
+        return False
+    db.add(UserShowFavorite(user_id=user_id, show_id=show_id))
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return True
+    return True
+
+
+async def favorite_catalog_result(
+    db: Session,
+    user_id: int,
+    provider: str,
+    external_id: int,
+    kind: str | None = None,
+) -> Show:
+    source = (provider or "").strip().lower()
+    if source == SOURCE_TMDB:
+        show = await upsert_show_from_tmdb(db, external_id)
+        show.kind = "filme"
+    elif source == SOURCE_TVMAZE:
+        show = await upsert_show_from_tvmaze(db, external_id)
+        if kind:
+            show.kind = valid_kind(kind)
+    else:
+        raise HTTPException(status_code=400, detail="Obra inválida")
+    db.flush()
+    if favorite_row(db, user_id, show.id) is None:
+        db.add(UserShowFavorite(user_id=user_id, show_id=show.id))
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        show = load_show_or_404(db, show.id)
+    else:
+        db.refresh(show)
+    return show
 
 
 def load_show(db: Session, show_id: int) -> Show:

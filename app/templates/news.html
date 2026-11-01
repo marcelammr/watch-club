@@ -108,8 +108,10 @@
     {% endif %}
   {% else %}
     <p class="muted news-empty">
-      {% if tipo == 'favoritos' %}
-        As notícias das obras que você marcar como favoritas vão aparecer aqui. Essa área ainda está sendo preparada.
+      {% if tipo == 'favoritos' and not has_favorites|default(false) %}
+        Favorite programas no seu perfil para personalizar este filtro.
+      {% elif tipo == 'favoritos' %}
+        Nenhuma notícia encontrada para suas obras favoritas.
       {% elif query or tipo %}
         Nenhuma notícia encontrada para essa busca.
       {% else %}

@@ -179,7 +179,7 @@ def test_news_search_and_kind_filters():
 
     fav = owner.get("/noticias?tipo=favoritos")
     assert "Meus favoritos" in fav.text
-    assert "ainda está sendo preparada" in fav.text
+    assert "Favorite programas no seu perfil" in fav.text
     assert "Trailer da série Alpha" not in fav.text
 
 
@@ -489,7 +489,7 @@ def test_news_text_variant_and_image_priority_in_pages():
     assert "home-news-card is-text" in home.text
     fav = owner.get("/noticias?tipo=favoritos")
     assert "Meus favoritos" in fav.text
-    assert "ainda está sendo preparada" in fav.text
+    assert "Favorite programas no seu perfil" in fav.text
     found = owner.get("/noticias?q=Destaque")
     assert "Destaque com imagem da série" in found.text
     assert "Anime com cartaz" not in found.text

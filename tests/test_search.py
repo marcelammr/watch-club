@@ -169,6 +169,10 @@ def test_club_search_fallback_and_typeahead_markup():
     assert 'name="external_id" value="169"' in page.text
     assert "2013 · Série" in page.text
     assert "Adicionar ao clube" in page.text
+    assert "search-result-btn" in page.text
+    assert "fav-btn" in page.text
+    assert 'data-can-titles="1"' in page.text
+    assert "/favoritos" in page.text or "/shows/" in page.text
     assert "Masters of Sex" in page.text
     assert "watch-search" in page.text
     assert short.status_code == 200

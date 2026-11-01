@@ -5,6 +5,7 @@
 {% from "macros/emoji.html" import emoji_picker %}
 {% from "macros/club_tag.html" import club_tag_chip, club_person_name %}
 {% from "macros/star_form.html" import club_star_form %}
+{% from "macros/favorite.html" import favorite_button %}
 {% block title %}{{ club.name }} · Watch Club{% endblock %}
 {% block body_class %}club-room club-ui{% endblock %}
 {% block top_start %}
@@ -58,6 +59,7 @@
   </div>
 {% endblock %}
 {% block content %}
+{% set favorite_ids = favorite_ids or [] %}
 {% macro catalog_row(link, flag_label, flag_class, next_status, next_label) %}
   {% set info = ratings.get(link.show.id, {"average": None, "count": 0, "mine": None, "filled": 0}) %}
   {% set tags = link.show.genres|genres %}
@@ -72,6 +74,7 @@
     <div class="watch-copy">
       <div class="watch-head">
         <h3><a class="watch-title" href="/clubs/{{ club.id }}/shows/{{ link.show.id }}">{{ link.show.name }}</a></h3>
+        {{ favorite_button(link.show, link.show.id in favorite_ids, "/clubs/" ~ club.id ~ "?aba=assistindo") }}
         <div class="action-menu js-action-menu">
           <button
             type="button"
@@ -210,6 +213,19 @@
                   </p>
                 {% endif %}
                 <p class="chat-body">{{ item.body|chat_format }}</p>
+                {% if item.show %}
+                  <a class="chat-show-card" href="/shows/{{ item.show.id }}">
+                    {% if item.show.image_url %}
+                      <img src="{{ item.show.image_url }}" alt="">
+                    {% else %}
+                      <span class="chat-show-fallback" aria-hidden="true">🎬</span>
+                    {% endif %}
+                    <span>
+                      <strong>{{ item.show.name }}</strong>
+                      <span class="muted">Ver programa</span>
+                    </span>
+                  </a>
+                {% endif %}
               </div>
             </article>
           {% else %}
@@ -379,7 +395,7 @@
       </section>
     {% else %}
       <section class="watch-panel">
-        <div class="js-title-search" data-club-id="{{ club.id }}" data-min-chars="{{ search_min_chars }}">
+        <div class="js-title-search" data-club-id="{{ club.id }}" data-min-chars="{{ search_min_chars }}" data-can-titles="{{ 1 if can_titles else 0 }}">
         <div class="watch-toolbar">
           <form class="watch-search" method="get" role="search">
             <input type="hidden" name="aba" value="assistindo">
@@ -405,15 +421,45 @@
                 <strong>{{ item.name }}</strong>
                 <span class="muted">{{ year }} · {{ CONTENT_KINDS.get(item.kind, 'Série') }}</span>
                 <p>{{ item.summary[:220] if item.summary else "" }}{% if item.summary and item.summary|length > 220 %}…{% endif %}</p>
-                <form action="/clubs/{{ club.id }}/shows" method="post">
-                  <input type="hidden" name="provider" value="{{ item.provider or 'tvmaze' }}">
-                  <input type="hidden" name="external_id" value="{{ item.external_id or item.tvmaze_id }}">
-                  {% if item.provider != 'tmdb' %}
-                    <input type="hidden" name="tvmaze_id" value="{{ item.tvmaze_id }}">
+                <div class="search-result-actions">
+                  {% if can_titles %}
+                    <form action="/clubs/{{ club.id }}/shows" method="post">
+                      <input type="hidden" name="provider" value="{{ item.provider or 'tvmaze' }}">
+                      <input type="hidden" name="external_id" value="{{ item.external_id or item.tvmaze_id }}">
+                      {% if item.provider != 'tmdb' %}
+                        <input type="hidden" name="tvmaze_id" value="{{ item.tvmaze_id }}">
+                      {% endif %}
+                      <input type="hidden" name="kind" value="{{ item.kind or 'serie' }}">
+                      <button class="search-result-btn" type="submit">Adicionar ao clube</button>
+                    </form>
+                  {% else %}
+                    <form action="/clubs/{{ club.id }}/indicar" method="post">
+                      <input type="hidden" name="provider" value="{{ item.provider or 'tvmaze' }}">
+                      <input type="hidden" name="external_id" value="{{ item.external_id or item.tvmaze_id }}">
+                      {% if item.provider != 'tmdb' %}
+                        <input type="hidden" name="tvmaze_id" value="{{ item.tvmaze_id }}">
+                      {% endif %}
+                      <input type="hidden" name="kind" value="{{ item.kind or 'serie' }}">
+                      <input type="hidden" name="next" value="/clubs/{{ club.id }}?aba=chat">
+                      <button class="search-result-btn" type="submit">Indicar ao clube</button>
+                    </form>
                   {% endif %}
-                  <input type="hidden" name="kind" value="{{ item.kind or 'serie' }}">
-                  <button class="btn btn-primary" type="submit">Adicionar ao clube</button>
-                </form>
+                  {% if item.show_id %}
+                    {{ favorite_button({'id': item.show_id, 'name': item.name}, item.is_favorite, "/clubs/" ~ club.id ~ "?aba=assistindo") }}
+                  {% else %}
+                    <form class="fav-form" action="/favoritos" method="post">
+                      <input type="hidden" name="provider" value="{{ item.provider or 'tvmaze' }}">
+                      <input type="hidden" name="external_id" value="{{ item.external_id or item.tvmaze_id }}">
+                      <input type="hidden" name="kind" value="{{ item.kind or 'serie' }}">
+                      <input type="hidden" name="next" value="/clubs/{{ club.id }}?aba=assistindo">
+                      <button class="fav-btn" type="submit" aria-pressed="false" aria-label="Favoritar {{ item.name }}" title="Favoritar">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <path d="M12 21s-6.7-4.35-9.33-8.22C.8 10.1 1.2 6.7 3.7 5.12A5.1 5.1 0 0 1 12 6.3a5.1 5.1 0 0 1 8.3-1.18c2.5 1.58 2.9 4.98 1.03 7.66C18.7 16.65 12 21 12 21z"/>
+                        </svg>
+                      </button>
+                    </form>
+                  {% endif %}
+                </div>
               </div>
             </li>
           {% endfor %}
@@ -1015,6 +1061,7 @@
     if (!input || !status || !list) return;
 
     const clubId = root.dataset.clubId || "";
+    const canTitles = root.dataset.canTitles === "1";
     const minChars = Number(root.dataset.minChars || 2);
     const kinds = {{ CONTENT_KINDS | tojson }};
     const debounceMs = 300;
@@ -1063,18 +1110,49 @@
         const tvmazeField = provider === "tvmaze"
           ? `<input type="hidden" name="tvmaze_id" value="${externalId}">`
           : "";
+        const clubAction = canTitles
+          ? `<form action="/clubs/${escapeHtml(clubId)}/shows" method="post">
+                  <input type="hidden" name="provider" value="${provider}">
+                  <input type="hidden" name="external_id" value="${externalId}">
+                  ${tvmazeField}
+                  <input type="hidden" name="kind" value="${escapeHtml(item.kind || "serie")}">
+                  <button class="search-result-btn" type="submit">Adicionar ao clube</button>
+                </form>`
+          : `<form action="/clubs/${escapeHtml(clubId)}/indicar" method="post">
+                  <input type="hidden" name="provider" value="${provider}">
+                  <input type="hidden" name="external_id" value="${externalId}">
+                  ${tvmazeField}
+                  <input type="hidden" name="kind" value="${escapeHtml(item.kind || "serie")}">
+                  <input type="hidden" name="next" value="/clubs/${escapeHtml(clubId)}?aba=chat">
+                  <button class="search-result-btn" type="submit">Indicar ao clube</button>
+                </form>`;
+        const isFav = Boolean(item.is_favorite);
+        const showId = item.show_id ? String(item.show_id) : "";
+        const heart = showId
+          ? `<form class="fav-form" action="/shows/${escapeHtml(showId)}/favorito" method="post">
+                  <input type="hidden" name="next" value="/clubs/${escapeHtml(clubId)}?aba=assistindo">
+                  <button class="fav-btn${isFav ? " is-on" : ""}" type="submit" aria-pressed="${isFav ? "true" : "false"}" aria-label="${isFav ? "Remover" : "Favoritar"} ${name}" title="${isFav ? "Remover dos favoritos" : "Favoritar"}">
+                    <svg viewBox="0 0 24 24" width="18" height="18" ${isFav ? 'aria-hidden="true"' : 'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"'}><path ${isFav ? 'fill="currentColor"' : ""} d="M12 21s-6.7-4.35-9.33-8.22C.8 10.1 1.2 6.7 3.7 5.12A5.1 5.1 0 0 1 12 6.3a5.1 5.1 0 0 1 8.3-1.18c2.5 1.58 2.9 4.98 1.03 7.66C18.7 16.65 12 21 12 21z"/></svg>
+                  </button>
+                </form>`
+          : `<form class="fav-form" action="/favoritos" method="post">
+                  <input type="hidden" name="provider" value="${provider}">
+                  <input type="hidden" name="external_id" value="${externalId}">
+                  <input type="hidden" name="kind" value="${escapeHtml(item.kind || "serie")}">
+                  <input type="hidden" name="next" value="/clubs/${escapeHtml(clubId)}?aba=assistindo">
+                  <button class="fav-btn" type="submit" aria-pressed="false" aria-label="Favoritar ${name}" title="Favoritar">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.7-4.35-9.33-8.22C.8 10.1 1.2 6.7 3.7 5.12A5.1 5.1 0 0 1 12 6.3a5.1 5.1 0 0 1 8.3-1.18c2.5 1.58 2.9 4.98 1.03 7.66C18.7 16.65 12 21 12 21z"/></svg>
+                  </button>
+                </form>`;
         return `<li>
               ${image}<div>
                 <strong>${name}</strong>
                 <span class="muted">${escapeHtml(year)} · ${kind}</span>
                 <p>${escapeHtml(clipped)}</p>
-                <form action="/clubs/${escapeHtml(clubId)}/shows" method="post">
-                  <input type="hidden" name="provider" value="${provider}">
-                  <input type="hidden" name="external_id" value="${externalId}">
-                  ${tvmazeField}
-                  <input type="hidden" name="kind" value="${escapeHtml(item.kind || "serie")}">
-                  <button class="btn btn-primary" type="submit">Adicionar ao clube</button>
-                </form>
+                <div class="search-result-actions">
+                  ${clubAction}
+                  ${heart}
+                </div>
               </div>
             </li>`;
       }).join("");

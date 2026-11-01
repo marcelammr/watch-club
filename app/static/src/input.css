@@ -525,6 +525,9 @@
   main {
     @apply mx-auto max-w-[980px] px-5 pb-16 pt-7;
   }
+  body.profile-page main {
+    @apply mx-auto w-full max-w-[50rem];
+  }
   .friends-section {
     @apply mb-8;
   }
@@ -673,6 +676,20 @@
   .results img,
   .seasons img {
     @apply h-auto w-[90px] rounded-lg object-cover;
+  }
+  .search-result-actions {
+    @apply mt-2 flex flex-wrap items-center gap-2;
+  }
+  .search-result-btn {
+    @apply m-0 inline-flex h-8 items-center rounded-md border border-border bg-transparent px-2.5 text-[0.82rem] font-medium text-foreground;
+  }
+  .search-result-btn:hover,
+  .search-result-btn:focus-visible {
+    @apply border-primary text-primary;
+  }
+  .search-result-btn:focus-visible {
+    outline: 2px solid var(--btn-focus);
+    outline-offset: 2px;
   }
   main:has(.show-page) {
     width: 100%;
@@ -949,6 +966,29 @@
   p.bio-box {
     @apply min-h-0 whitespace-pre-wrap;
   }
+  .profile-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.9rem 0 0;
+    padding: 0.38rem 0.85rem;
+    border: 1px solid color-mix(in srgb, #c4b5fd 32%, transparent);
+    border-radius: 0.5rem;
+    background: color-mix(in srgb, #f7f0ff 8%, transparent);
+    color: var(--foreground);
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.2;
+    text-decoration: none;
+  }
+  .profile-edit-btn:hover {
+    border-color: color-mix(in srgb, #c4b5fd 48%, transparent);
+    background: color-mix(in srgb, #f7f0ff 14%, transparent);
+  }
+  .profile-edit-btn:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
   .bio-count {
     @apply mb-0 mt-2;
   }
@@ -981,6 +1021,12 @@
   .profile-head {
     @apply flex items-start gap-3.5;
   }
+  .profile-page .profile-head {
+    @apply items-start gap-5 p-7;
+  }
+  .profile-page .profile-head [data-size="lg"] > span {
+    @apply h-28 w-28;
+  }
   .person-row {
     @apply border-b border-border py-3 text-foreground;
   }
@@ -1004,6 +1050,89 @@
   }
   .profile-club-context-role {
     @apply text-[0.88rem] text-muted-foreground;
+  }
+  .fav-form {
+    @apply m-0 inline-flex;
+  }
+  .fav-btn {
+    @apply m-0 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground;
+  }
+  .fav-btn:hover,
+  .fav-btn:focus-visible {
+    @apply text-primary;
+  }
+  .fav-btn.is-on {
+    @apply text-primary;
+  }
+  .profile-shelf {
+    @apply mb-8;
+  }
+  .profile-shelf-head {
+    @apply mb-3 flex items-baseline gap-2;
+  }
+  .profile-shelf-title {
+    @apply m-0 cursor-pointer border-0 bg-transparent p-0 text-left text-lg font-semibold text-foreground;
+  }
+  .profile-shelf-title:hover,
+  .profile-shelf-title:focus-visible {
+    @apply text-primary;
+  }
+  .profile-posters,
+  .profile-clubs {
+    @apply m-0 flex list-none flex-nowrap items-center gap-2.5 overflow-hidden p-0;
+  }
+  .profile-clubs {
+    @apply gap-3.5;
+  }
+  .profile-fav-grid {
+    @apply m-0 flex list-none flex-wrap items-center gap-2 p-0;
+  }
+  .profile-poster {
+    @apply block overflow-hidden rounded-lg bg-card no-underline;
+  }
+  .profile-poster img,
+  .profile-poster-fallback {
+    @apply block aspect-[2/3] w-[6.25rem] object-cover;
+  }
+  .profile-poster-fallback {
+    @apply grid place-items-center text-xl;
+  }
+  .profile-more {
+    @apply m-0 inline-flex h-[9.4rem] w-[6.25rem] items-center justify-center rounded-lg border border-border bg-transparent text-sm font-medium text-muted-foreground;
+  }
+  .profile-more.is-round {
+    @apply h-[3.75rem] w-[3.75rem] rounded-full;
+  }
+  .profile-club-mark {
+    @apply h-[3.75rem] w-[3.75rem];
+  }
+  .profile-club-full {
+    @apply min-h-0 flex-1 overflow-auto px-4 pb-4;
+  }
+  .profile-club-full-copy {
+    @apply flex min-w-0 items-center gap-2.5;
+  }
+  .profile-shelf-dialog {
+    @apply w-[min(34rem,calc(100vw-2rem))];
+  }
+  .profile-shelf-dialog .profile-fav-grid {
+    @apply min-h-0 flex-1 gap-2.5 overflow-auto px-4 pb-4;
+  }
+  .profile-shelf-dialog .js-fav-search {
+    @apply mx-4 mb-2;
+  }
+  .profile-shelf-dialog .js-fav-search input {
+    @apply mt-0;
+  }
+  .catalog-show {
+    @apply flex items-start gap-4;
+  }
+  .catalog-show-poster,
+  .catalog-show-fallback {
+    @apply aspect-[2/3] w-28 shrink-0 rounded-xl object-cover;
+  }
+  .catalog-show-fallback {
+    @apply grid place-items-center bg-card text-3xl;
   }
   .home .top {
     @apply px-7;
@@ -1589,6 +1718,9 @@
   }
   .watch-head {
     @apply flex min-w-0 items-start justify-between gap-2;
+  }
+  .watch-head h3 {
+    @apply min-w-0 flex-1;
   }
   .watch-title {
     @apply block overflow-hidden text-ellipsis whitespace-nowrap text-inherit no-underline;
@@ -2322,13 +2454,13 @@
   }
   .planner-week {
     @apply mx-auto mb-8 grid grid-cols-7 overflow-hidden rounded-2xl;
-    width: min(100%, 68rem);
+    width: min(100%, 86rem);
     border: 1px solid color-mix(in srgb, #f7f0ff 14%, transparent);
     background: color-mix(in srgb, #f7f0ff 6%, transparent);
     backdrop-filter: blur(8px);
   }
   .planner-day {
-    @apply min-w-0 px-2.5 py-2.5;
+    @apply min-w-0 px-3 py-3.5;
   }
   .planner-day + .planner-day {
     border-left: 1px solid color-mix(in srgb, #f7f0ff 10%, transparent);
@@ -2347,10 +2479,10 @@
     color: var(--primary-foreground);
   }
   .planner-day-events {
-    @apply min-h-[1.2rem];
+    @apply min-h-[1.55rem];
   }
   .planner-chip {
-    @apply flex w-full min-w-0 cursor-pointer items-baseline gap-1 overflow-hidden rounded-md border-0 px-1 py-0.5 text-left;
+    @apply flex w-full min-w-0 cursor-pointer items-baseline gap-1 overflow-hidden rounded-md border-0 px-1.5 py-1 text-left;
     background: color-mix(in srgb, var(--primary) 16%, transparent);
     color: var(--foreground);
   }
@@ -2379,39 +2511,33 @@
     @apply w-full max-w-[46rem];
   }
   .planner-group {
-    @apply mb-4;
+    @apply mb-2;
+  }
+  .planner-group + .planner-group {
+    @apply mt-6;
   }
   .planner-group-title {
-    @apply mb-1.5 mt-0 font-hero text-[0.74rem] font-bold uppercase tracking-[0.12em] text-muted-foreground;
+    @apply mb-0 mt-0 font-hero text-[0.74rem] font-bold uppercase tracking-[0.12em] text-muted-foreground;
   }
   .planner-group.is-today .planner-group-title {
     @apply text-primary;
   }
   .planner-list {
-    @apply m-0 flex list-none flex-col gap-2 p-0;
+    @apply m-0 flex list-none flex-col p-0;
   }
   .planner-event {
-    @apply grid items-start gap-x-4 gap-y-0.5 rounded-2xl px-4 py-2.5;
+    @apply grid items-start gap-x-4 gap-y-0.5;
     grid-template-columns: 3.35rem minmax(0, 1fr);
-    border: 1px solid color-mix(in srgb, #f7f0ff 12%, transparent);
-    background: color-mix(in srgb, #f7f0ff 7%, transparent);
-    backdrop-filter: blur(8px);
-    border-left: 3px solid color-mix(in srgb, var(--primary) 55%, transparent);
-  }
-  .planner-event.is-next {
-    border-color: color-mix(in srgb, var(--primary) 38%, transparent);
-    border-left-color: var(--primary);
-    background: color-mix(in srgb, var(--primary) 10%, transparent);
   }
   .planner-time {
-    @apply pt-0.5 font-hero text-[0.92rem] font-bold leading-none;
+    @apply pt-1 font-hero text-[0.92rem] font-bold leading-none;
     color: color-mix(in srgb, var(--foreground) 82%, var(--muted-foreground));
   }
   .planner-copy {
     @apply min-w-0;
   }
   .planner-meeting {
-    @apply m-0 font-hero text-[1.08rem] font-bold leading-snug text-foreground;
+    @apply m-0 text-[1.35rem] font-semibold leading-tight text-foreground;
   }
   .planner-program {
     @apply mb-0 mt-0.5 text-[0.88rem] text-foreground;
@@ -2421,11 +2547,14 @@
     color: color-mix(in srgb, var(--foreground) 72%, var(--muted-foreground));
   }
   .planner-program a,
+  .planner-upcoming .schedule-program a,
   .planner-detail-program a {
     @apply text-foreground no-underline;
   }
   .planner-program a:hover,
   .planner-program a:focus-visible,
+  .planner-upcoming .schedule-program a:hover,
+  .planner-upcoming .schedule-program a:focus-visible,
   .planner-detail-program a:hover,
   .planner-detail-program a:focus-visible {
     @apply text-primary;
@@ -2493,7 +2622,10 @@
       @apply justify-center px-0;
     }
     .planner-event {
-      grid-template-columns: 3.1rem minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .planner-time {
+      @apply pt-0;
     }
   }
   .week-schedule {
@@ -2564,6 +2696,26 @@
   }
   .chat-body {
     @apply m-0 whitespace-pre-wrap leading-snug;
+  }
+  .chat-show-card {
+    @apply mt-2 inline-flex max-w-full items-center gap-2.5 rounded-xl border border-border bg-card px-2 py-2 no-underline text-foreground;
+  }
+  .chat-show-card:hover,
+  .chat-show-card:focus-visible {
+    @apply border-primary;
+  }
+  .chat-show-card img,
+  .chat-show-fallback {
+    @apply h-14 w-10 shrink-0 rounded-md object-cover;
+  }
+  .chat-show-fallback {
+    @apply grid place-items-center bg-muted text-sm;
+  }
+  .chat-show-card span {
+    @apply flex min-w-0 flex-col gap-0.5;
+  }
+  .chat-show-card strong {
+    @apply truncate text-sm;
   }
   .chat-spoiler {
     @apply m-0 cursor-pointer rounded-sm border-0 px-1 py-0 text-transparent;
@@ -3050,6 +3202,14 @@
   }
   .club-mark .club-icon-fallback {
     @apply text-[0.7rem] font-bold leading-none text-primary-foreground;
+  }
+  .profile-clubs .club-mark,
+  .profile-clubs .profile-more.is-round {
+    height: 3.75rem;
+    width: 3.75rem;
+  }
+  .profile-clubs .club-icon-fallback {
+    font-size: 0.95rem;
   }
   .club-switch-name {
     @apply min-w-0 flex-1 truncate;

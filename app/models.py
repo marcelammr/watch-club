@@ -32,6 +32,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     memberships: Mapped[list["ClubMember"]] = relationship(back_populates="user")
+    show_favorites: Mapped[list["UserShowFavorite"]] = relationship(back_populates="user")
     email_tokens: Mapped[list["EmailToken"]] = relationship(back_populates="user")
     messages: Mapped[list["ClubMessage"]] = relationship(back_populates="user")
 
@@ -172,6 +173,7 @@ class Show(Base):
     episodes: Mapped[list["Episode"]] = relationship(back_populates="show", cascade="all, delete-orphan")
     news: Mapped[list["NewsItem"]] = relationship(back_populates="show", cascade="all, delete-orphan")
     clubs: Mapped[list["ClubShow"]] = relationship(back_populates="show")
+    favorited_by: Mapped[list["UserShowFavorite"]] = relationship(back_populates="show")
 
 
 class Season(Base):
@@ -222,6 +224,22 @@ class ClubShow(Base):
 
     club: Mapped[Club] = relationship(back_populates="shows")
     show: Mapped[Show] = relationship(back_populates="clubs")
+
+
+class UserShowFavorite(Base):
+    __tablename__ = "user_show_favorites"
+    __table_args__ = (
+        UniqueConstraint("user_id", "show_id"),
+        Index("ix_user_show_favorites_user_created", "user_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    show_id: Mapped[int] = mapped_column(ForeignKey("shows.id"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+
+    user: Mapped[User] = relationship(back_populates="show_favorites")
+    show: Mapped[Show] = relationship(back_populates="favorited_by")
 
 
 class ClubWatchRound(Base):
@@ -321,11 +339,13 @@ class ClubMessage(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), nullable=False, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    show_id: Mapped[int | None] = mapped_column(ForeignKey("shows.id"), nullable=True, index=True)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     club: Mapped[Club] = relationship(back_populates="messages")
     user: Mapped[User] = relationship(back_populates="messages")
+    show: Mapped[Show | None] = relationship()
 
 
 class Friendship(Base):

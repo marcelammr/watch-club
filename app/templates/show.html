@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "macros/star_form.html" import club_star_form %}
+{% from "macros/favorite.html" import favorite_button %}
 {% block title %}{{ show.name }} · Watch Club{% endblock %}
 {% block page_heading %}{{ show.name }}{% endblock %}
 {% block content %}
@@ -36,6 +37,7 @@
       <div class="show-info-copy">
         <div class="show-title-row">
           <h1>{{ show.name }}</h1>
+          {{ favorite_button(show, is_favorite|default(false), "/clubs/" ~ club_id ~ "/shows/" ~ show.id) }}
         </div>
         {% if year or tags %}
           <p class="show-hero-facts muted">

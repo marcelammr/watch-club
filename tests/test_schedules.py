@@ -400,6 +400,11 @@ def test_personal_agenda_aggregates_clubs_hides_past_and_filters():
     assert "já passou" not in page.text.split("planner-upcoming", 1)[-1]
     assert "+ Novo agendamento" not in page.text
     assert "Cancelar agendamento" not in page.text
+    assert "Definir programa" not in page.text
+    assert "Alterar horário" not in page.text
+    assert "Encerrar recorrência" not in page.text
+    assert "planner-group" in page.text
+    assert "planner-event" in page.text
     assert "Todos os clubes" in page.text
     assert "Black Mirror" in page.text
     assert "Sherlock" in page.text

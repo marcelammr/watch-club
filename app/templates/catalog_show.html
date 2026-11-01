@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "macros/favorite.html" import favorite_button %}
+{% block title %}{{ show.name }} · Watch Club{% endblock %}
+{% block page_heading %}{{ show.name }}{% endblock %}
+{% block content %}
+{% set year = show.premiered|premiere_year %}
+<p class="crumb"><a href="/">Início</a> / {{ show.name }}</p>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<section class="card catalog-show">
+  {% if show.image_url %}
+    <img class="catalog-show-poster" src="{{ show.image_url }}" alt="{{ show.name }}">
+  {% else %}
+    <span class="catalog-show-fallback" aria-hidden="true">🎬</span>
+  {% endif %}
+  <div>
+    <div class="show-title-row">
+      <h1>{{ show.name }}</h1>
+      {{ favorite_button(show, is_favorite, "/shows/" ~ show.id) }}
+    </div>
+    {% if year %}
+      <p class="muted">{{ year }}</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

@@ -285,6 +285,8 @@ def migrate_schema() -> None:
     _migrate_club_schedules()
     _backfill_series_show_ids()
     _seed_catalog_categories()
+    _ensure_user_show_favorites()
+    _ensure_club_message_show_id()
 
 
 def _migrate_club_schedules() -> None:
@@ -389,6 +391,60 @@ def _backfill_series_show_ids() -> None:
                       AND s2.show_id IS NOT NULL
                   )
                 """
+            )
+        )
+
+
+def _ensure_club_message_show_id() -> None:
+    inspector = inspect(engine)
+    if "club_messages" not in inspector.get_table_names():
+        return
+    cols = {column["name"] for column in inspector.get_columns("club_messages")}
+    if "show_id" in cols:
+        return
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE club_messages ADD COLUMN show_id INTEGER"))
+        connection.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_club_messages_show_id ON club_messages (show_id)")
+        )
+
+
+def _ensure_user_show_favorites() -> None:
+    inspector = inspect(engine)
+    if "user_show_favorites" in inspector.get_table_names():
+        return
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE user_show_favorites (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    show_id INTEGER NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    FOREIGN KEY(user_id) REFERENCES users (id),
+                    FOREIGN KEY(show_id) REFERENCES shows (id),
+                    UNIQUE (user_id, show_id)
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_user_show_favorites_user_id "
+                "ON user_show_favorites (user_id)"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_user_show_favorites_show_id "
+                "ON user_show_favorites (show_id)"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_user_show_favorites_user_created "
+                "ON user_show_favorites (user_id, created_at)"
             )
         )
 

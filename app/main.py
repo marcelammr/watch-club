@@ -38,8 +38,11 @@ from app.catalog import (
     NEWS_FEED_FILTERS,
     NEWS_FEED_KIND_MAP,
     NEWS_PAGE_LIMIT,
+    profile_club_preview,
+    profile_favorite_preview,
     add_club_member,
     add_manual_title,
+    annotate_search_results,
     add_show_to_club,
     add_tmdb_movie_to_club,
     accept_join_request,
@@ -49,8 +52,13 @@ from app.catalog import (
     club_messages,
     create_join_request,
     club_rating_stats,
+    ensure_catalog_show,
+    favorite_catalog_result,
+    favorite_show_ids,
+    favorite_show_names,
     fill_missing_genres,
     is_club_admin,
+    is_show_favorite,
     leave_club as remove_club_membership,
     load_show,
     parse_genres,
@@ -60,6 +68,7 @@ from app.catalog import (
     compose_news_layout,
     pack_news_rest,
     list_feed_news,
+    list_user_favorites,
     pick_home_news,
     pending_join_request,
     post_club_message,
@@ -74,6 +83,8 @@ from app.catalog import (
     set_club_show_rating,
     set_watch_status,
     support_count,
+    suggest_show_to_club,
+    toggle_show_favorite,
     can_refresh_catalog,
     show_source,
     upsert_show_from_tmdb,
@@ -640,13 +651,17 @@ def news_page(request: Request):
         user = login_required(request, db)
         query = (request.query_params.get("q") or "").strip()
         tipo = (request.query_params.get("tipo") or "").strip()
-        if tipo == NEWS_FAVORITES_TIPO:
-            items = []
-        else:
-            if tipo not in NEWS_FEED_KIND_MAP and tipo != "":
-                tipo = ""
-            refresh_feed_news(db)
-            items = list_feed_news(db, query=query, tipo=tipo, limit=NEWS_PAGE_LIMIT)
+        if tipo not in NEWS_FEED_KIND_MAP and tipo not in {"", NEWS_FAVORITES_TIPO}:
+            tipo = ""
+        refresh_feed_news(db)
+        fav_names = favorite_show_names(db, user.id) if tipo == NEWS_FAVORITES_TIPO else None
+        items = list_feed_news(
+            db,
+            query=query,
+            tipo=tipo,
+            limit=NEWS_PAGE_LIMIT,
+            favorite_names=fav_names,
+        )
         featured, secondary, rest = compose_news_layout(items)
         rest_cells = pack_news_rest(rest)
         return templates.TemplateResponse(
@@ -661,6 +676,7 @@ def news_page(request: Request):
                 "rest": rest,
                 "rest_cells": rest_cells,
                 "has_news": bool(items),
+                "has_favorites": bool(fav_names) if tipo == NEWS_FAVORITES_TIPO else False,
             },
         )
     except HTTPException as exc:
@@ -1483,7 +1499,9 @@ async def club_detail(
         if tab == "assistindo" and search_query:
             if search_ready(search_query):
                 try:
-                    results = await search_catalog(search_query)
+                    results = annotate_search_results(
+                        db, user.id, await search_catalog(search_query)
+                    )
                 except CatalogSearchError:
                     search_failed = True
             else:
@@ -1554,6 +1572,7 @@ async def club_detail(
                 "next_meeting_by_show": next_meeting_by_show,
                 "progress_by_show": progress_by_show,
                 "ratings": ratings,
+                "favorite_ids": favorite_show_ids(db, user.id) if tab == "assistindo" else set(),
                 "friend_ids": friend_id_set(db, user.id),
                 "online_count": online_count,
                 "join_requests": join_requests,
@@ -1993,7 +2012,7 @@ async def add_show(
     db = db_session()
     try:
         user = login_required(request, db)
-        club = require_club_member(db, club_id, user.id)
+        club = require_club_perm(db, club_id, user.id, PERM_TITLES)
         source = (provider or "").strip().lower()
         chosen_id = _positive_id(external_id)
         if not source:
@@ -2016,6 +2035,44 @@ async def add_show(
                 f"/clubs/{club_id}?aba=assistindo&error={quote(str(exc.detail))}",
                 status_code=303,
             )
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/clubs/{club_id}/indicar")
+async def indicate_show(
+    request: Request,
+    club_id: int,
+    provider: str = Form(""),
+    external_id: str = Form(""),
+    tvmaze_id: str = Form(""),
+    kind: str = Form("serie"),
+    next: str = Form(""),
+):
+    db = db_session()
+    dest = _safe_next(next, f"/clubs/{club_id}?aba=chat")
+    try:
+        user = login_required(request, db)
+        require_club_member(db, club_id, user.id)
+        source = (provider or "").strip().lower()
+        chosen_id = _positive_id(external_id)
+        if not source:
+            source = "tvmaze"
+            chosen_id = chosen_id or _positive_id(tvmaze_id)
+        if source not in {"tvmaze", "tmdb"} or chosen_id is None:
+            raise HTTPException(status_code=400, detail="Obra inválida")
+        show = await ensure_catalog_show(db, source, chosen_id, valid_kind(kind))
+        suggest_show_to_club(db, club_id, user, show)
+        return RedirectResponse(dest, status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 403:
+            return RedirectResponse(f"/clubs/{club_id}", status_code=303)
+        if exc.status_code == 400:
+            sep = "&" if "?" in dest else "?"
+            return RedirectResponse(f"{dest}{sep}error={quote(str(exc.detail))}", status_code=303)
         raise
     finally:
         db.close()
@@ -2247,6 +2304,81 @@ def remove_club_title(request: Request, club_id: int, show_id: int):
         db.close()
 
 
+@app.get("/shows/{show_id}", response_class=HTMLResponse)
+def catalog_show(request: Request, show_id: int):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        show = load_show(db, show_id)
+        return templates.TemplateResponse(
+            request,
+            "catalog_show.html",
+            {
+                "user": user,
+                "show": show,
+                "is_favorite": is_show_favorite(db, user.id, show.id),
+                "error": request.query_params.get("error"),
+            },
+        )
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/shows/{show_id}/favorito")
+def toggle_favorite(request: Request, show_id: int, next: str = Form("")):
+    db = db_session()
+    dest = _safe_next(next, f"/shows/{show_id}")
+    try:
+        user = login_required(request, db)
+        toggle_show_favorite(db, user.id, show_id)
+        return RedirectResponse(dest, status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 404:
+            return RedirectResponse(f"{dest}?error={quote(str(exc.detail))}" if "?" not in dest else dest, status_code=303)
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/favoritos")
+async def add_favorite(
+    request: Request,
+    provider: str = Form(""),
+    external_id: str = Form(""),
+    tvmaze_id: str = Form(""),
+    kind: str = Form("serie"),
+    next: str = Form(""),
+):
+    db = db_session()
+    dest = _safe_next(next, "/")
+    try:
+        user = login_required(request, db)
+        source = (provider or "").strip().lower()
+        chosen_id = _positive_id(external_id)
+        if not source:
+            source = "tvmaze"
+            chosen_id = chosen_id or _positive_id(tvmaze_id)
+        if source not in {"tvmaze", "tmdb"} or chosen_id is None:
+            raise HTTPException(status_code=400, detail="Obra inválida")
+        show = await favorite_catalog_result(db, user.id, source, chosen_id, valid_kind(kind))
+        return RedirectResponse(_safe_next(next, f"/shows/{show.id}"), status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 400:
+            sep = "&" if "?" in dest else "?"
+            return RedirectResponse(f"{dest}{sep}error={quote(str(exc.detail))}", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
 @app.get("/clubs/{club_id}/shows/{show_id}", response_class=HTMLResponse)
 def show_detail(request: Request, club_id: int, show_id: int):
     db = db_session()
@@ -2265,6 +2397,7 @@ def show_detail(request: Request, club_id: int, show_id: int):
             {
                 "user": user,
                 "club_id": club_id,
+                "is_favorite": is_show_favorite(db, user.id, show.id),
                 "show": show,
                 "seasons": seasons,
                 "progress": snapshot,
@@ -2430,16 +2563,20 @@ def api_command(request: Request):
 async def api_search(request: Request, q: str = Query("")):
     db = db_session()
     try:
-        login_required(request, db)
+        user = login_required(request, db)
+        query = normalize_search_query(q)
+        if not search_ready(query):
+            return []
+        try:
+            return annotate_search_results(db, user.id, await search_catalog(query))
+        except CatalogSearchError:
+            raise HTTPException(status_code=503, detail="Não foi possível pesquisar agora.")
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            raise
+        raise
     finally:
         db.close()
-    query = normalize_search_query(q)
-    if not search_ready(query):
-        return []
-    try:
-        return await search_catalog(query)
-    except CatalogSearchError:
-        raise HTTPException(status_code=503, detail="Não foi possível pesquisar agora.")
 
 
 @app.get("/api/username")
@@ -2643,7 +2780,10 @@ def public_profile(request: Request, username: str):
         if not person:
             raise HTTPException(status_code=404, detail="Perfil não encontrado")
         clubs = _user_clubs(db, person.id)
+        club_preview, club_more = profile_club_preview(clubs)
         mine = {club.id for club in _user_clubs(db, viewer.id)}
+        favorites = list_user_favorites(db, person.id)
+        favorite_preview, favorite_more = profile_favorite_preview(favorites)
         relation = relation_status(db, viewer.id, person.id)
         stamp_display_tags(db, [person])
         context_club, context_role, context_role_label = _club_profile_context(
@@ -2656,6 +2796,13 @@ def public_profile(request: Request, username: str):
                 "user": viewer,
                 "person": person,
                 "clubs": clubs,
+                "club_preview": club_preview,
+                "club_more": club_more,
+                "favorites": favorites,
+                "favorite_preview": favorite_preview,
+                "favorite_more": favorite_more,
+                "is_own_profile": viewer.id == person.id,
+                "search_min_chars": SEARCH_MIN_CHARS,
                 "mine": mine,
                 "requested_ids": requested_club_ids(db, viewer.id),
                 "status": presence_of(person),
