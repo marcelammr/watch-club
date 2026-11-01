@@ -115,13 +115,19 @@
         <p class="watch-synopsis">{{ link.show.summary[:180] }}{% if link.show.summary|length > 180 %}…{% endif %}</p>
       {% endif %}
       {% set progress = progress_by_show.get(link.show.id) %}
-      {% if progress and progress.has_regular %}
+      {% set meeting = next_meeting_by_show.get(link.show.id) if watch_list != 'finalizados' else none %}
+      {% if (progress and progress.has_regular) or meeting %}
         <div class="watch-progress">
-          <p>{{ progress.watched_count }} de {{ progress.total }} episódio{% if progress.total != 1 %}s{% endif %} assistidos</p>
-          {% if progress.complete %}
-            <p class="muted">Todos os episódios disponíveis foram assistidos.</p>
-          {% elif progress.next_label %}
-            <p class="muted watch-progress-next">Próximo: {{ progress.next_label }}</p>
+          {% if progress and progress.has_regular %}
+            <p>{{ progress.watched_count }} de {{ progress.total }} episódio{% if progress.total != 1 %}s{% endif %} assistidos</p>
+            {% if progress.complete %}
+              <p class="muted">Todos os episódios disponíveis foram assistidos.</p>
+            {% elif progress.next_label %}
+              <p class="muted watch-progress-next">Próximo episódio: {{ progress.next_label }}</p>
+            {% endif %}
+          {% endif %}
+          {% if meeting %}
+            <p class="muted watch-progress-meet">Próximo encontro: {{ meeting.starts_at|schedule_detail }}</p>
           {% endif %}
         </div>
       {% endif %}
@@ -247,10 +253,62 @@
     {% elif tab == 'agendamentos' %}
       <section class="schedule-panel">
         <div class="schedule-toolbar">
-          <h2 class="schedule-heading">Próximos agendamentos</h2>
-          {% if can_schedules %}
-            <button type="button" class="btn btn-secondary js-add-schedule-open">+ Novo agendamento</button>
-          {% endif %}
+          <div>
+            <h2 class="schedule-heading">Próximos agendamentos</h2>
+            {% if week_label %}<p class="planner-period">{{ week_label }}</p>{% endif %}
+          </div>
+          <div class="planner-nav">
+            <div class="planner-nav-week" role="group" aria-label="Navegação da semana">
+              <a class="planner-today" href="/clubs/{{ club.id }}?aba=agendamentos">Hoje</a>
+              <a class="planner-week-shift" href="/clubs/{{ club.id }}?aba=agendamentos&amp;semana={{ prev_week }}" aria-label="Semana anterior">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+              </a>
+              <a class="planner-week-shift" href="/clubs/{{ club.id }}?aba=agendamentos&amp;semana={{ next_week }}" aria-label="Próxima semana">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+              </a>
+            </div>
+            {% if can_schedules %}
+              <button type="button" class="btn btn-secondary js-add-schedule-open">+ Novo agendamento</button>
+            {% endif %}
+          </div>
+        </div>
+        <div class="planner-week club-planner-week" role="list" aria-label="Semana de {{ week_label }}">
+          {% for cell in planner_days %}
+            <section class="planner-day{% if cell.is_today %} is-today{% endif %}" role="listitem" aria-label="{{ cell.weekday }} {{ cell.num }}">
+              <p class="planner-day-name">{{ cell.weekday }}</p>
+              <p class="planner-day-num">{{ cell.num }}</p>
+              <div class="planner-day-events">
+                {% if cell.events %}
+                  {% set item = cell.events[0] %}
+                  {% set meeting = schedule_meeting_title(item) %}
+                  {% set program = schedule_program_title(item) %}
+                  {% set recurrence = schedule_recurrence_line(item.series) %}
+                  {% set episode_line = schedule_episode_line(item) %}
+                  <button
+                    type="button"
+                    class="planner-chip js-event-open{% if item.starts_at < now %} is-past{% endif %}"
+                    data-title="{{ meeting|e }}"
+                    data-when="{{ item.starts_at|schedule_detail }}"
+                    data-clock="{{ item.starts_at|schedule_clock }}"
+                    data-club="{{ club.name|e }}"
+                    data-club-href="/clubs/{{ club.id }}?aba=agendamentos"
+                    data-recurrence="{{ recurrence|e }}"
+                    data-program="{{ program|e }}"
+                    {% if item.show %}data-program-href="/clubs/{{ club.id }}/shows/{{ item.show.id }}"{% endif %}
+                    data-episode="{{ episode_line|e }}"
+                    data-notes="{{ item.notes|e }}"
+                  >
+                    <span class="planner-chip-time">{{ item.starts_at|schedule_clock }}</span>
+                    <span class="planner-chip-dot" aria-hidden="true">·</span>
+                    <span class="planner-chip-title">{{ meeting }}</span>
+                  </button>
+                  {% if cell.events|length > 1 %}
+                    <p class="planner-more">+{{ cell.events|length - 1 }} encontro{% if cell.events|length - 1 != 1 %}s{% endif %}</p>
+                  {% endif %}
+                {% endif %}
+              </div>
+            </section>
+          {% endfor %}
         </div>
         <div class="schedule-list">
           {% for item in schedules %}
@@ -362,24 +420,24 @@
         </ul>
         </div>
 
-        {% if week_schedules %}
-          <section class="week-schedule" aria-labelledby="week-schedule-title">
-            <div class="week-schedule-head">
-              <h2 id="week-schedule-title" class="schedule-heading">Programação da semana</h2>
-              <a class="week-schedule-link" href="/clubs/{{ club.id }}?aba=agendamentos">Ver agenda completa</a>
-            </div>
-            <ul class="week-schedule-list">
-              {% for item in week_schedules %}
-                <li>{{ schedule_week_line(item) }}</li>
-              {% endfor %}
-            </ul>
-          </section>
-        {% endif %}
-
         <nav class="watch-tabs" aria-label="Lista de títulos">
           <a class="watch-tab {% if watch_list != 'finalizados' %}is-on{% endif %}" href="/clubs/{{ club.id }}?aba=assistindo&lista=assistindo">Assistindo</a>
           <a class="watch-tab {% if watch_list == 'finalizados' %}is-on{% endif %}" href="/clubs/{{ club.id }}?aba=assistindo&lista=finalizados">Finalizados</a>
         </nav>
+
+        {% if next_club_schedule %}
+          {% set next_meeting = schedule_meeting_title(next_club_schedule, '') %}
+          <section class="week-schedule club-next-meet" aria-labelledby="club-next-meet-title">
+            <div class="week-schedule-head">
+              <h2 id="club-next-meet-title" class="schedule-heading">Próximo encontro</h2>
+              <a class="week-schedule-link" href="/clubs/{{ club.id }}?aba=agendamentos">Ver agenda</a>
+            </div>
+            <p class="club-next-when">{% if next_meeting %}{{ next_meeting }} — {% endif %}{{ next_club_schedule.starts_at|schedule_detail }}</p>
+            {% if next_club_schedule.show %}
+              <p class="club-next-program muted">{{ next_club_schedule.show.name }}</p>
+            {% endif %}
+          </section>
+        {% endif %}
 
         {% if watch_list == 'finalizados' %}
           <div class="watch-list">
@@ -470,6 +528,20 @@
     <p class="members-manage"><a class="btn btn-secondary" href="/clubs/{{ club.id }}/config#cargos">Gerenciar cargos</a></p>
   {% endif %}
 </dialog>
+{% if tab == 'agendamentos' %}
+<dialog class="leave-dialog" id="planner-event-dialog" aria-labelledby="planner-event-title">
+  <h2 id="planner-event-title"></h2>
+  <p class="planner-detail-when muted"></p>
+  <p class="planner-detail-recurrence muted" hidden></p>
+  <p class="planner-detail-program"></p>
+  <p class="planner-detail-episode muted" hidden></p>
+  <p class="planner-detail-club" hidden></p>
+  <p class="planner-detail-notes muted" hidden></p>
+  <div class="leave-dialog-actions">
+    <button type="button" class="btn btn-ghost js-event-close">Fechar</button>
+  </div>
+</dialog>
+{% endif %}
 {% if tab == 'agendamentos' and can_schedules %}
 <dialog class="leave-dialog schedule-dialog" id="add-schedule-dialog" aria-labelledby="add-schedule-dialog-title">
   <h2 id="add-schedule-dialog-title">Novo agendamento</h2>
@@ -494,7 +566,7 @@
     </label>
     <label>Programa
       <select name="show_id">
-        <option value="">Nenhum — programa pendente</option>
+        <option value="">Nenhum — programa não definido</option>
         {% for link in club.shows %}
           <option value="{{ link.show.id }}">{{ link.show.name }}</option>
         {% endfor %}
@@ -517,7 +589,7 @@
     <form method="post" class="js-program-form">
       <label>Programa
         <select name="show_id" class="js-program-show">
-          <option value="">Nenhum — programa pendente</option>
+          <option value="">Nenhum — programa não definido</option>
           {% for link in club.shows %}
             <option value="{{ link.show.id }}">{{ link.show.name }}</option>
           {% endfor %}
@@ -618,6 +690,8 @@
       if (event.key !== "Escape" || !isOpen()) return;
       const account = document.getElementById("account-popover");
       if (account && !account.hidden) return;
+      const bell = document.getElementById("bell-popover");
+      if (bell && !bell.hidden) return;
       const clubSwitch = document.getElementById("club-switch-popover");
       if (clubSwitch && !clubSwitch.hidden) return;
       if (document.querySelector(".js-emoji-picker.is-open")) return;
@@ -728,6 +802,52 @@
       }
     });
   })();
+
+  {% if tab == 'agendamentos' %}
+  (function () {
+    const dialog = document.getElementById("planner-event-dialog");
+    if (!dialog) return;
+    const title = document.getElementById("planner-event-title");
+    const when = dialog.querySelector(".planner-detail-when");
+    const recurrence = dialog.querySelector(".planner-detail-recurrence");
+    const program = dialog.querySelector(".planner-detail-program");
+    const episode = dialog.querySelector(".planner-detail-episode");
+    const notes = dialog.querySelector(".planner-detail-notes");
+    const fill = (node, value) => {
+      const text = value || "";
+      node.hidden = !text;
+      node.textContent = text;
+    };
+    document.querySelectorAll(".js-event-open").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        title.textContent = btn.dataset.title || "Encontro";
+        when.textContent = btn.dataset.when || btn.dataset.clock || "";
+        fill(recurrence, btn.dataset.recurrence ? "↻ " + btn.dataset.recurrence : "");
+        const programHref = btn.dataset.programHref;
+        const programLabel = btn.dataset.program || "Programa não definido";
+        if (programHref) {
+          program.hidden = false;
+          program.innerHTML = "";
+          const link = document.createElement("a");
+          link.href = programHref;
+          link.textContent = programLabel;
+          program.appendChild(link);
+        } else {
+          fill(program, programLabel);
+        }
+        fill(episode, btn.dataset.episode || "");
+        fill(notes, btn.dataset.notes || "");
+        dialog.showModal();
+      });
+    });
+    dialog.querySelectorAll(".js-event-close").forEach((btn) => {
+      btn.addEventListener("click", () => dialog.close());
+    });
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+  })();
+  {% endif %}
 
   {% if tab == 'agendamentos' and can_schedules %}
   (function () {

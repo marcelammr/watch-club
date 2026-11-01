@@ -204,6 +204,13 @@ def migrate_schema() -> None:
                 connection.execute(
                     text("UPDATE clubs SET sub_name_color = '#6C63FF' WHERE sub_name_color IS NULL OR sub_name_color = ''")
                 )
+    inspector = inspect(engine)
+    if "notifications" in inspector.get_table_names():
+        notice_cols = {column["name"] for column in inspector.get_columns("notifications")}
+        if "related_id" not in notice_cols:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE notifications ADD COLUMN related_id INTEGER"))
+
     member_cols = set()
     if "club_members" in inspector.get_table_names():
         member_cols = {column["name"] for column in inspector.get_columns("club_members")}
@@ -276,6 +283,7 @@ def migrate_schema() -> None:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE club_shows ADD COLUMN watch_status VARCHAR(20) DEFAULT 'watching'"))
     _migrate_club_schedules()
+    _backfill_series_show_ids()
     _seed_catalog_categories()
 
 
@@ -350,6 +358,39 @@ def _migrate_club_schedules() -> None:
             text("CREATE INDEX IF NOT EXISTS ix_club_schedules_series_id ON club_schedules (series_id)")
         )
         connection.execute(text("PRAGMA foreign_keys=ON"))
+
+
+def _backfill_series_show_ids() -> None:
+    inspector = inspect(engine)
+    if "club_schedules" not in inspector.get_table_names():
+        return
+    cols = {column["name"] for column in inspector.get_columns("club_schedules")}
+    if "series_id" not in cols or "show_id" not in cols:
+        return
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                UPDATE club_schedules
+                SET show_id = (
+                    SELECT s2.show_id
+                    FROM club_schedules AS s2
+                    WHERE s2.series_id = club_schedules.series_id
+                      AND s2.show_id IS NOT NULL
+                    ORDER BY s2.starts_at ASC, s2.id ASC
+                    LIMIT 1
+                )
+                WHERE series_id IS NOT NULL
+                  AND show_id IS NULL
+                  AND EXISTS (
+                    SELECT 1
+                    FROM club_schedules AS s2
+                    WHERE s2.series_id = club_schedules.series_id
+                      AND s2.show_id IS NOT NULL
+                  )
+                """
+            )
+        )
 
 
 def _seed_catalog_categories() -> None:

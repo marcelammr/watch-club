@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block body_class %}news-ui{% endblock %}
+{% block title %}Notícias · Watch Club{% endblock %}
+{% block page_heading %}Notícias{% endblock %}
+{% block content %}
+{% set q_param = ('&q=' ~ query|urlencode) if query else '' %}
+<section class="news-page">
+  <header class="news-toolbar">
+    <div class="news-toolbar-row">
+      <h1 class="news-title">Notícias</h1>
+      <form class="news-search" action="/noticias" method="get">
+        {% if tipo %}<input type="hidden" name="tipo" value="{{ tipo }}">{% endif %}
+        <label class="sr-only" for="news-q">Buscar notícias</label>
+        <input id="news-q" type="search" name="q" value="{{ query }}" placeholder="Buscar por título ou fonte" autocomplete="off">
+        <button class="btn btn-secondary" type="submit">Buscar</button>
+      </form>
+    </div>
+    <nav class="news-filters" aria-label="Filtrar notícias">
+      {% for slug, label in NEWS_FEED_FILTERS %}
+        <a class="news-chip{% if tipo == slug %} is-on{% endif %}" href="/noticias?tipo={{ slug }}{{ q_param }}"{% if tipo == slug %} aria-current="page"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+  </header>
+
+  {% if has_news %}
+    <section class="news-cover" aria-label="Destaques">
+      {% set feature_image = featured.image_url %}
+      {% set feature_when = featured.published_at|news_when %}
+      {% set feature_kind = FEED_KIND_LABELS.get(featured.feed_kind, '') %}
+      <a class="news-feature{% if not feature_image %} is-text{% endif %}" href="{{ featured.url }}" rel="noopener" target="_blank">
+        {% if feature_image %}
+        <span class="news-feature-media">
+          <img src="{{ feature_image }}" alt="" onerror="this.closest('a').classList.add('is-text'); this.remove();">
+        </span>
+        {% endif %}
+        <span class="news-feature-copy">
+          {% if feature_kind %}<span class="news-kicker">{{ feature_kind }}</span>{% endif %}
+          <strong>{{ featured.title }}</strong>
+          <span class="muted">
+            {% if featured.source %}{{ featured.source }}{% endif %}
+            {% if feature_when %}{% if featured.source %} · {% endif %}{{ feature_when }}{% endif %}
+          </span>
+        </span>
+      </a>
+      {% if secondary %}
+        <div class="news-side">
+          {% for item in secondary %}
+            {% set when = item.published_at|news_when %}
+            {% set thumb = item.image_url %}
+            <a class="news-side-item{% if not thumb %} is-text{% endif %}" href="{{ item.url }}" rel="noopener" target="_blank">
+              {% if thumb %}
+              <span class="news-thumb">
+                <img src="{{ thumb }}" alt="" width="140" height="96" onerror="this.closest('a').classList.add('is-text'); this.parentNode.remove();">
+              </span>
+              {% endif %}
+              <span class="news-side-copy">
+                <strong>{{ item.title }}</strong>
+                <span class="muted">
+                  {% if item.source %}{{ item.source }}{% endif %}
+                  {% if when %}{% if item.source %} · {% endif %}{{ when }}{% endif %}
+                </span>
+              </span>
+            </a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </section>
+
+    {% if rest_cells %}
+      <section class="news-grid" aria-label="Mais notícias">
+        {% for cell in rest_cells %}
+          {% if cell.kind == 'briefs' %}
+            <div class="news-briefs">
+              {% for item in cell.entries %}
+                {% set when = item.published_at|news_when %}
+                {% set kind_label = FEED_KIND_LABELS.get(item.feed_kind, '') %}
+                <a class="news-card is-text" href="{{ item.url }}" rel="noopener" target="_blank">
+                  {% if kind_label %}<span class="news-kicker">{{ kind_label }}</span>{% endif %}
+                  <strong>{{ item.title }}</strong>
+                  <span class="muted">
+                    {% if item.source %}{{ item.source }}{% endif %}
+                    {% if when %}{% if item.source %} · {% endif %}{{ when }}{% endif %}
+                  </span>
+                </a>
+              {% endfor %}
+            </div>
+          {% else %}
+            {% set item = cell.entries[0] %}
+            {% set when = item.published_at|news_when %}
+            {% set thumb = item.image_url %}
+            {% set kind_label = FEED_KIND_LABELS.get(item.feed_kind, '') %}
+            <a class="news-card" href="{{ item.url }}" rel="noopener" target="_blank">
+              {% if thumb %}
+              <span class="news-card-media">
+                <img src="{{ thumb }}" alt="" onerror="this.closest('a').classList.add('is-text'); this.parentNode.remove();">
+              </span>
+              {% endif %}
+              {% if kind_label %}<span class="news-kicker">{{ kind_label }}</span>{% endif %}
+              <strong>{{ item.title }}</strong>
+              <span class="muted">
+                {% if item.source %}{{ item.source }}{% endif %}
+                {% if when %}{% if item.source %} · {% endif %}{{ when }}{% endif %}
+              </span>
+            </a>
+          {% endif %}
+        {% endfor %}
+      </section>
+    {% endif %}
+  {% else %}
+    <p class="muted news-empty">
+      {% if tipo == 'favoritos' %}
+        As notícias das obras que você marcar como favoritas vão aparecer aqui. Essa área ainda está sendo preparada.
+      {% elif query or tipo %}
+        Nenhuma notícia encontrada para essa busca.
+      {% else %}
+        Ainda não há notícias recentes no momento.
+      {% endif %}
+    </p>
+  {% endif %}
+</section>
+{% endblock %}

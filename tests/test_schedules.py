@@ -4,23 +4,24 @@ from fastapi.testclient import TestClient
 from sqlalchemy import inspect, select
 
 from app.accounts import utcnow
+from app.catalog import WATCHED
 from app.db import SessionLocal, engine
 from app.main import app
 from app.models import Club, ClubMember, ClubSchedule, ClubScheduleSeries, ClubShow, User
 from app.roles import PERM_SCHEDULES, PERM_TAG, ROLE_SUPPORT, can
+from app.schema import migrate_schema
 from app.schedules import (
     MAX_OCCURRENCES,
     format_episode_compact,
     format_episode_line,
     format_recurrence_line,
+    format_schedule_detail,
     format_schedule_when,
-    format_week_line,
     meeting_title,
     local_today,
     occurrence_dates,
     utc_to_local,
     wall_to_utc,
-    week_range_utc,
 )
 from tests.test_app import register_active
 
@@ -58,6 +59,13 @@ def _add_title(http: TestClient, club_id: int, name: str) -> int:
         return db.scalar(select(ClubShow.show_id).where(ClubShow.club_id == club_id).order_by(ClubShow.id.desc()))
     finally:
         db.close()
+
+
+def _club_next_html(html: str) -> str:
+    marker = 'class="week-schedule club-next-meet"'
+    if marker not in html:
+        return ""
+    return html.split(marker, 1)[1].split('class="watch-list"', 1)[0]
 
 
 def test_schedule_schema_and_wall_clock():
@@ -121,6 +129,8 @@ def test_admin_creates_schedule_and_member_can_view():
     page = member.get(f"/clubs/{club_id}?aba=agendamentos")
     assert page.status_code == 200
     assert "Próximos agendamentos" in page.text
+    assert "club-planner-week" in page.text
+    assert "planner-week" in page.text
     assert "Black Mirror" in page.text
     assert "Temporada 2 · Episódio 3" in page.text
     assert "Sala da Ana" in page.text
@@ -224,10 +234,12 @@ def test_schedule_requires_club_show_and_hides_past():
     finally:
         db.close()
     page = owner.get(f"/clubs/{club_id}?aba=agendamentos")
-    assert "já foi" not in page.text
-    assert "Nenhum agendamento próximo." in page.text
+    listing = page.text.split('class="schedule-list"', 1)[-1]
+    assert "já foi" not in listing
+    assert "Nenhum agendamento próximo." in listing
     assistindo = owner.get(f"/clubs/{club_id}?aba=assistindo")
     assert "Próximos agendamentos" not in assistindo.text
+    assert "club-next-meet" not in assistindo.text
     assert "Programação da semana" not in assistindo.text
     assert "watch-search" in assistindo.text
 
@@ -282,49 +294,51 @@ def test_week_preview_shows_only_current_week():
     club_id, _code = _create_club(owner, "Clube Semana")
     this_show = _add_title(owner, club_id, "Black Mirror")
     next_show = _add_title(owner, club_id, "Sherlock")
-    now = utcnow()
-    _start, week_end = week_range_utc(now)
-    this_week_at = now + timedelta(hours=1)
-    if this_week_at >= week_end:
-        this_week_at = now
-    next_week_at = week_end + timedelta(hours=12)
+    first_at = wall_to_utc("2027-11-03", "20:00")
+    later_at = wall_to_utc("2027-11-10", "21:00")
     db = SessionLocal()
     try:
         user_id = db.scalar(select(User.id).where(User.username_key == "agenda_week"))
-        this_item = ClubSchedule(
-            club_id=club_id,
-            show_id=this_show,
-            starts_at=this_week_at,
-            season_number=2,
-            episode_number=3,
-            created_by_id=user_id,
+        db.add(
+            ClubSchedule(
+                club_id=club_id,
+                show_id=this_show,
+                title="Noite de série",
+                starts_at=first_at,
+                season_number=2,
+                episode_number=3,
+                created_by_id=user_id,
+            )
         )
-        db.add(this_item)
         db.add(
             ClubSchedule(
                 club_id=club_id,
                 show_id=next_show,
-                starts_at=next_week_at,
+                starts_at=later_at,
                 season_number=1,
                 episode_number=2,
                 created_by_id=user_id,
             )
         )
         db.commit()
-        db.refresh(this_item)
-        this_item.show
-        expected = format_week_line(this_item)
     finally:
         db.close()
+    expected = format_schedule_detail(first_at)
     assistindo = owner.get(f"/clubs/{club_id}?aba=assistindo")
-    assert "Programação da semana" in assistindo.text
-    assert expected in assistindo.text
-    assert "Ver agenda completa" in assistindo.text
-    assert f"/clubs/{club_id}?aba=agendamentos" in assistindo.text
-    assert "Sherlock" not in assistindo.text.split("watch-tabs", 1)[0]
+    notice = _club_next_html(assistindo.text)
+    assert "club-next-meet" in assistindo.text
+    assert "Próximo encontro" in notice
+    assert f"Noite de série — {expected}" in notice
+    assert "Black Mirror" in notice
+    assert "Sherlock" not in notice
+    assert "Ver agenda" in notice
+    assert f"/clubs/{club_id}?aba=agendamentos" in notice
     assert "Cancelar agendamento" not in assistindo.text
+    assert "Definir programa" not in assistindo.text
+    finalized = owner.get(f"/clubs/{club_id}?aba=assistindo&lista=finalizados")
+    assert expected in _club_next_html(finalized.text)
     chat = owner.get(f"/clubs/{club_id}?aba=chat")
-    assert "Programação da semana" not in chat.text
+    assert "club-next-meet" not in chat.text
     agenda = owner.get(f"/clubs/{club_id}?aba=agendamentos")
     assert "Black Mirror" in agenda.text
     assert "Sherlock" in agenda.text
@@ -372,7 +386,14 @@ def test_personal_agenda_aggregates_clubs_hides_past_and_filters():
     assert "Hoje" in page.text
     assert "Próximos encontros" in page.text
     assert "planner-week" in page.text
+    assert "planner-upcoming" in page.text
     assert page.text.count('role="listitem"') == 7
+    before_week, after_week = page.text.split('<div class="planner-week"', 1)
+    assert 'planner-toolbar' in before_week
+    assert "Agenda" in before_week
+    assert "Todos os clubes" in before_week
+    assert "planner-toolbar" not in after_week.split("planner-upcoming", 1)[0]
+    assert "Próximos encontros" in after_week
     assert "planner-month" not in page.text
     assert "vista=mes" not in page.text
     assert "Depois desta semana" not in page.text
@@ -570,9 +591,11 @@ def test_single_meeting_without_program():
     assert items[0].show_id is None
     assert items[0].series_id is None
     page = owner.get(f"/clubs/{club_id}?aba=agendamentos")
-    assert "Programa pendente" in page.text
+    assert "Programa não definido" in page.text
+    assert "Programa pendente" not in page.text
     agenda = owner.get("/agenda")
-    assert "Programa pendente" in agenda.text
+    assert "Programa não definido" in agenda.text
+    assert "Programa pendente" not in agenda.text
 
 
 def test_weekly_and_biweekly_recurrence_until_and_timezone():
@@ -613,13 +636,16 @@ def test_weekly_and_biweekly_recurrence_until_and_timezone():
     assert all(item.show_id is None for item in items)
     assert items[0].series_id is not None
     assert len({item.series_id for item in items}) == 1
-    page = owner.get(f"/clubs/{club_id}?aba=agendamentos")
-    assert "Programa pendente" in page.text
+    page = owner.get(f"/clubs/{club_id}", params={"aba": "agendamentos", "semana": "2027-11-02"})
+    assert "club-planner-week" in page.text
+    assert "Programa não definido" in page.text
     assert "Toda terça-feira às 20:00" in page.text
+    assert "20:00" in page.text
+    assert "planner-chip" in page.text
     agenda = owner.get("/agenda")
     assert agenda.text.count('role="listitem"') == 7
     assert agenda.text.count("20:00") >= 4
-    assert agenda.text.count("Programa pendente") >= 4
+    assert agenda.text.count("Programa não definido") >= 4
     assert "Toda terça-feira às 20:00" in agenda.text
     week_page = owner.get("/agenda", params={"semana": "2027-11-02"})
     assert "1–7 nov 2027" in week_page.text
@@ -672,9 +698,7 @@ def test_program_per_occurrence_and_permissions():
         follow_redirects=False,
     )
     items = _club_schedules(club_id)
-    assert items[0].show_id == show_a
-    assert items[1].show_id is None
-    assert items[2].show_id is None
+    assert [item.show_id for item in items] == [show_a, show_a, show_a]
     second_id, third_id = items[1].id, items[2].id
     owner.post(
         f"/clubs/{club_id}/agendamentos/{second_id}/programa",
@@ -690,10 +714,11 @@ def test_program_per_occurrence_and_permissions():
     assert updated[0].show_id == show_a
     assert updated[1].show_id == show_a
     assert updated[1].season_number is None
-    assert updated[2].show_id is None
+    assert updated[2].show_id == show_a
     page = owner.get(f"/clubs/{club_id}?aba=agendamentos")
+    listing = page.text.split('class="schedule-list"', 1)[-1]
     assert "Interestelar" in page.text
-    assert "Programa pendente" in page.text
+    assert "schedule-pending" not in listing
     assert "Alterar programa" in page.text
 
     member = TestClient(app)
@@ -705,7 +730,7 @@ def test_program_per_occurrence_and_permissions():
         follow_redirects=False,
     )
     assert blocked.status_code == 303
-    assert _club_schedules(club_id)[2].show_id is None
+    assert _club_schedules(club_id)[2].show_id == show_a
     member_page = member.get(f"/clubs/{club_id}?aba=agendamentos")
     assert "Definir programa" not in member_page.text
     assert "Alterar programa" not in member_page.text
@@ -862,9 +887,10 @@ def test_legacy_schedule_rows_remain_one_off():
     assert items[0].series_id is None
     assert items[0].show_id == show_id
     page = owner.get(f"/clubs/{club_id}?aba=agendamentos")
+    listing = page.text.split('class="schedule-list"', 1)[-1]
     assert "Dark" in page.text
     assert "legado" in page.text
-    assert "↻" not in page.text
+    assert "schedule-recurrence" not in listing
 
 
 def test_optional_meeting_title_on_series_and_one_off():
@@ -904,11 +930,11 @@ def test_optional_meeting_title_on_series_and_one_off():
         db.close()
     page = owner.get(f"/clubs/{club_id}?aba=agendamentos")
     assert page.text.count("Noite de Cinema") >= 3
-    assert "Programa pendente" in page.text
+    assert "Programa não definido" in page.text
     assert "None" not in page.text
     agenda = owner.get("/agenda", params={"semana": "2027-11-01"})
     assert "Noite de Cinema" in agenda.text
-    assert "Programa pendente" in agenda.text
+    assert "Programa não definido" in agenda.text
 
     one = owner.post(
         f"/clubs/{club_id}/agendamentos",
@@ -942,3 +968,344 @@ def test_optional_meeting_title_on_series_and_one_off():
     later = owner.get(f"/clubs/{club_id}?aba=agendamentos")
     assert "Sessão única" in later.text
     assert "Encontro" in later.text
+
+
+def _watch_row(html: str, show_name: str) -> str:
+    chunks = html.split('<article class="watch-row">')
+    for chunk in chunks[1:]:
+        body = chunk.split("</article>", 1)[0]
+        if f">{show_name}</a>" in body:
+            return body
+    return ""
+
+
+def test_watching_next_meeting_comes_from_agenda_per_show():
+    from tests.test_progress import _seed_title
+
+    owner = TestClient(app)
+    register_active(owner, "meet_watch", "meet.watch@example.com")
+    club_id, _code = _create_club(owner, "Clube Assistindo Agenda")
+    user_id = _user_id_by_key("meet_watch")
+    show_a, episode_ids = _seed_title(
+        club_id, user_id, 97101, "Masters of Sex", [(1, 1, "Pilot"), (1, 2, "Second")]
+    )
+    show_b, _ids_b = _seed_title(club_id, user_id, 97102, "Staged", [(1, 1, "Cessation")])
+    _seed_title(club_id, user_id, 97103, "Sem Agenda", [(1, 1, "Cold Open")])
+    show_done, _ids_d = _seed_title(
+        club_id,
+        user_id,
+        97104,
+        "Obra Finalizada",
+        [(1, 1, "The End")],
+        watch_status=WATCHED,
+    )
+    first_meet = wall_to_utc("2027-11-03", "20:00")
+    later_meet = wall_to_utc("2027-11-10", "20:00")
+    other_meet = wall_to_utc("2027-11-04", "21:00")
+    done_meet = wall_to_utc("2027-11-05", "22:00")
+    owner.post(
+        f"/clubs/{club_id}/agendamentos",
+        data={"show_id": str(show_a), "date": "2027-11-03", "time": "20:00"},
+        follow_redirects=False,
+    )
+    owner.post(
+        f"/clubs/{club_id}/agendamentos",
+        data={"show_id": str(show_a), "date": "2027-11-10", "time": "20:00"},
+        follow_redirects=False,
+    )
+    owner.post(
+        f"/clubs/{club_id}/agendamentos",
+        data={"show_id": str(show_b), "date": "2027-11-04", "time": "21:00"},
+        follow_redirects=False,
+    )
+    owner.post(
+        f"/clubs/{club_id}/agendamentos",
+        data={"show_id": str(show_done), "date": "2027-11-05", "time": "22:00"},
+        follow_redirects=False,
+    )
+    owner.post(
+        f"/clubs/{club_id}/shows/{show_a}/episodios/{episode_ids[0]}/visto",
+        follow_redirects=False,
+    )
+
+    page = owner.get(f"/clubs/{club_id}?aba=assistindo")
+    assert page.status_code == 200
+    row_a = _watch_row(page.text, "Masters of Sex")
+    row_b = _watch_row(page.text, "Staged")
+    row_c = _watch_row(page.text, "Sem Agenda")
+    assert "1 de 2 episódios assistidos" in row_a
+    assert "Próximo episódio: T1 E2 — Second" in row_a
+    assert f"Próximo encontro: {format_schedule_detail(first_meet)}" in row_a
+    assert format_schedule_detail(later_meet) not in row_a
+    assert format_schedule_detail(other_meet) not in row_a
+    assert "Próximo episódio: T1 E1 — Cessation" in row_b
+    assert f"Próximo encontro: {format_schedule_detail(other_meet)}" in row_b
+    assert format_schedule_detail(first_meet) not in row_b
+    assert "Próximo episódio: T1 E1 — Cold Open" in row_c
+    assert "Próximo encontro" not in row_c
+    assert "Próximo encontro: —" not in page.text
+
+    done_page = owner.get(f"/clubs/{club_id}?aba=assistindo&lista=finalizados")
+    row_done = _watch_row(done_page.text, "Obra Finalizada")
+    assert row_done
+    assert "Próximo encontro" not in row_done
+    assert format_schedule_detail(done_meet) not in row_done
+
+
+def test_watching_weekly_uses_next_future_occurrence():
+    from tests.test_progress import _seed_title
+
+    owner = TestClient(app)
+    register_active(owner, "meet_next_week", "meet.next.week@example.com")
+    club_id, _code = _create_club(owner, "Clube Semanal")
+    user_id = _user_id_by_key("meet_next_week")
+    show_id, _episode_ids = _seed_title(
+        club_id, user_id, 97105, "The Boys", [(1, 1, "The Name of the Game")]
+    )
+    start = local_today() - timedelta(days=7)
+    until = local_today() + timedelta(days=21)
+    created = owner.post(
+        f"/clubs/{club_id}/agendamentos",
+        data={
+            "show_id": str(show_id),
+            "date": start.isoformat(),
+            "time": "20:00",
+            "repeat": "weekly",
+            "until": until.isoformat(),
+        },
+        follow_redirects=False,
+    )
+    assert created.status_code == 303
+    items = _club_schedules(club_id)
+    assert all(item.show_id == show_id for item in items)
+    now = utcnow()
+    past = [item for item in items if item.starts_at < now]
+    future = [item for item in items if item.starts_at >= now]
+    assert past
+    assert future
+    expected = format_schedule_detail(future[0].starts_at)
+    stale = format_schedule_detail(past[-1].starts_at)
+    page = owner.get(f"/clubs/{club_id}?aba=assistindo")
+    row = _watch_row(page.text, "The Boys")
+    assert f"Próximo encontro: {expected}" in row
+    assert "Próximo episódio: T1 E1 — The Name of the Game" in row
+    if stale != expected:
+        assert f"Próximo encontro: {stale}" not in row
+
+
+def test_legacy_recurring_show_id_is_backfilled_onto_later_occurrences():
+    owner = TestClient(app)
+    register_active(owner, "meet_backfill", "meet.backfill@example.com")
+    club_id, _code = _create_club(owner, "Clube Legado Recorrente")
+    show_id = _add_title(owner, club_id, "Dark")
+    user_id = _user_id_by_key("meet_backfill")
+    db = SessionLocal()
+    try:
+        series = ClubScheduleSeries(
+            club_id=club_id,
+            created_by_id=user_id,
+            interval="weekly",
+            weekday=2,
+            time_local="20:00",
+            until_date=date(2027, 11, 17),
+            title="",
+        )
+        db.add(series)
+        db.flush()
+        db.add(
+            ClubSchedule(
+                club_id=club_id,
+                series_id=series.id,
+                show_id=show_id,
+                starts_at=wall_to_utc("2027-11-03", "20:00"),
+                created_by_id=user_id,
+            )
+        )
+        db.add(
+            ClubSchedule(
+                club_id=club_id,
+                series_id=series.id,
+                show_id=None,
+                starts_at=wall_to_utc("2027-11-10", "20:00"),
+                created_by_id=user_id,
+            )
+        )
+        db.commit()
+        series_id = series.id
+    finally:
+        db.close()
+    migrate_schema()
+    items = [
+        item
+        for item in _club_schedules(club_id)
+        if item.series_id == series_id
+    ]
+    assert [item.show_id for item in items] == [show_id, show_id]
+    page = owner.get(f"/clubs/{club_id}?aba=assistindo")
+    row = _watch_row(page.text, "Dark")
+    assert f"Próximo encontro: {format_schedule_detail(wall_to_utc('2027-11-03', '20:00'))}" in row
+
+
+def test_club_next_meeting_notice_is_visible_to_every_member():
+    from tests.test_progress import _seed_title
+
+    owner = TestClient(app)
+    register_active(owner, "meet_notice_adm", "meet.notice.adm@example.com")
+    club_id, code = _create_club(owner, "Clube Aviso Geral")
+    other_owner = TestClient(app)
+    register_active(other_owner, "meet_notice_other", "meet.notice.other@example.com")
+    other_club, _other_code = _create_club(other_owner, "Clube Alheio")
+    other_show = _add_title(other_owner, other_club, "Interestelar")
+    other_owner.post(
+        f"/clubs/{other_club}/agendamentos",
+        data={"show_id": str(other_show), "date": "2027-11-01", "time": "18:00"},
+        follow_redirects=False,
+    )
+
+    user_id = _user_id_by_key("meet_notice_adm")
+    show_id, episode_ids = _seed_title(
+        club_id, user_id, 97201, "Rivals", [(1, 1, "Episode 1"), (1, 2, "Episode 2")]
+    )
+    _seed_title(club_id, user_id, 97202, "Staged", [(1, 1, "Cessation")])
+    start = local_today() - timedelta(days=7)
+    until = local_today() + timedelta(days=21)
+    created = owner.post(
+        f"/clubs/{club_id}/agendamentos",
+        data={
+            "date": start.isoformat(),
+            "time": "20:00",
+            "repeat": "weekly",
+            "until": until.isoformat(),
+        },
+        follow_redirects=False,
+    )
+    assert created.status_code == 303
+    items = _club_schedules(club_id)
+    now = utcnow()
+    past = [item for item in items if item.starts_at < now]
+    future = [item for item in items if item.starts_at >= now]
+    assert past
+    assert future
+    expected = format_schedule_detail(future[0].starts_at)
+    stale = format_schedule_detail(past[-1].starts_at)
+
+    member = TestClient(app)
+    register_active(member, "meet_notice_mem", "meet.notice.mem@example.com")
+    member.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
+    helper = TestClient(app)
+    register_active(helper, "meet_notice_sub", "meet.notice.sub@example.com")
+    helper.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
+    helper_id = _user_id_by_key("meet_notice_sub")
+    owner.post(
+        f"/clubs/{club_id}/membros/{helper_id}/papel",
+        data={"role": "support", "support_perm": [PERM_TAG]},
+        follow_redirects=False,
+    )
+    owner.post(
+        f"/clubs/{club_id}/shows/{show_id}/episodios/{episode_ids[0]}/visto",
+        follow_redirects=False,
+    )
+
+    for client_http in (owner, member, helper):
+        page = client_http.get(f"/clubs/{club_id}?aba=assistindo")
+        notice = _club_next_html(page.text)
+        assert "Próximo encontro" in notice
+        assert expected in notice
+        assert "Programa pendente" not in notice
+        assert "Programa não definido" not in notice
+        assert "Interestelar" not in notice
+        if stale != expected:
+            assert stale not in notice
+        assert "+ Novo agendamento" not in page.text
+        assert "Definir programa" not in page.text
+        row_rivals = _watch_row(page.text, "Rivals")
+        row_staged = _watch_row(page.text, "Staged")
+        assert "1 de 2 episódios assistidos" in row_rivals
+        assert "Próximo episódio: T1 E2 — Episode 2" in row_rivals
+        assert "Próximo encontro:" not in row_rivals
+        assert "Programa não definido" not in row_rivals
+        assert "Programa não definido" not in row_staged
+        assert "Próximo episódio: T1 E1 — Cessation" in row_staged
+
+    linked = owner.post(
+        f"/clubs/{club_id}/agendamentos/{future[0].id}/programa",
+        data={"show_id": str(show_id)},
+        follow_redirects=False,
+    )
+    assert linked.status_code == 303
+    with_show = member.get(f"/clubs/{club_id}?aba=assistindo")
+    notice_show = _club_next_html(with_show.text)
+    assert "Rivals" in notice_show
+    assert "Programa não definido" not in notice_show
+    assert f"Próximo encontro: {expected}" in _watch_row(with_show.text, "Rivals")
+    assert "Próximo encontro:" not in _watch_row(with_show.text, "Staged")
+
+    empty = TestClient(app)
+    register_active(empty, "meet_notice_empty", "meet.notice.empty@example.com")
+    empty_club, _empty_code = _create_club(empty, "Clube Sem Agenda Futura")
+    blank = empty.get(f"/clubs/{empty_club}?aba=assistindo")
+    assert "club-next-meet" not in blank.text
+
+
+def test_club_agenda_calendar_is_visible_without_schedule_permission():
+    from tests.test_progress import _seed_title
+
+    owner = TestClient(app)
+    register_active(owner, "cal_adm", "cal.adm@example.com")
+    club_id, code = _create_club(owner, "Clube Calendário")
+    user_id = _user_id_by_key("cal_adm")
+    show_id, episode_ids = _seed_title(
+        club_id, user_id, 97301, "Rivals", [(1, 1, "Episode 1"), (1, 2, "Episode 2")]
+    )
+    owner.post(
+        f"/clubs/{club_id}/agendamentos",
+        data={
+            "show_id": str(show_id),
+            "date": "2027-11-03",
+            "time": "20:00",
+            "repeat": "weekly",
+            "until": "2027-11-17",
+        },
+        follow_redirects=False,
+    )
+    owner.post(
+        f"/clubs/{club_id}/shows/{show_id}/episodios/{episode_ids[0]}/visto",
+        follow_redirects=False,
+    )
+    member = TestClient(app)
+    register_active(member, "cal_mem", "cal.mem@example.com")
+    member.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
+    helper = TestClient(app)
+    register_active(helper, "cal_sub", "cal.sub@example.com")
+    helper.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
+    helper_id = _user_id_by_key("cal_sub")
+    owner.post(
+        f"/clubs/{club_id}/membros/{helper_id}/papel",
+        data={"role": "support", "support_perm": [PERM_TAG]},
+        follow_redirects=False,
+    )
+
+    week = owner.get(f"/clubs/{club_id}", params={"aba": "agendamentos", "semana": "2027-11-01"})
+    assert "club-planner-week" in week.text
+    assert "planner-chip" in week.text
+    assert "Rivals" in week.text
+    assert "Definir programa" in week.text or "Alterar programa" in week.text
+    assert "+ Novo agendamento" in week.text
+    assert "Programa pendente" not in week.text
+    member_week = member.get(f"/clubs/{club_id}", params={"aba": "agendamentos", "semana": "2027-11-01"})
+    assert "club-planner-week" in member_week.text
+    assert "planner-chip" in member_week.text
+    assert "Definir programa" not in member_week.text
+    assert "+ Novo agendamento" not in member_week.text
+    helper_week = helper.get(f"/clubs/{club_id}", params={"aba": "agendamentos", "semana": "2027-11-01"})
+    assert "club-planner-week" in helper_week.text
+    assert "Definir programa" not in helper_week.text
+    later = owner.get(f"/clubs/{club_id}", params={"aba": "agendamentos", "semana": "2027-11-08"})
+    assert "planner-chip" in later.text
+    watching = member.get(f"/clubs/{club_id}?aba=assistindo")
+    assert "club-next-meet" in watching.text
+    assert "club-planner-week" not in watching.text
+    assert "Próximo episódio: T1 E2 — Episode 2" in watching.text
+    assert f"Próximo encontro: {format_schedule_detail(wall_to_utc('2027-11-03', '20:00'))}" in _watch_row(
+        watching.text, "Rivals"
+    )

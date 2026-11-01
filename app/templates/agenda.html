@@ -177,7 +177,7 @@
       when.textContent = btn.dataset.when || btn.dataset.clock || "";
       fill(recurrence, btn.dataset.recurrence ? "↻ " + btn.dataset.recurrence : "");
       const programHref = btn.dataset.programHref;
-      const programLabel = btn.dataset.program || "Programa pendente";
+      const programLabel = btn.dataset.program || "Programa não definido";
       if (programHref) {
         program.hidden = false;
         program.innerHTML = "";

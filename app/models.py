@@ -119,7 +119,7 @@ class ClubMember(Base):
 
 class ClubJoinRequest(Base):
     __tablename__ = "club_join_requests"
-    __table_args__ = (UniqueConstraint("club_id", "user_id"),)
+    __table_args__ = (UniqueConstraint("club_id", "user_id"), {"sqlite_autoincrement": True})
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), nullable=False, index=True)
@@ -127,6 +127,23 @@ class ClubJoinRequest(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     user: Mapped[User] = relationship()
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    __table_args__ = (
+        Index("ix_notifications_user_created", "user_id", "created_at"),
+        Index("ix_notifications_user_read", "user_id", "read_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    type: Mapped[str] = mapped_column(String(32), nullable=False)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), nullable=False)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    related_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class Show(Base):
@@ -347,6 +364,20 @@ class NewsItem(Base):
     published_at: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
     show: Mapped[Show] = relationship(back_populates="news")
+
+
+class FeedNews(Base):
+    __tablename__ = "feed_news"
+    __table_args__ = (Index("ix_feed_news_url", "url", unique=True),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    url: Mapped[str] = mapped_column(String(800), nullable=False)
+    source: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    published_at: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(800), nullable=True)
+    feed_kind: Mapped[str] = mapped_column(String(24), default="", nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class CatalogCategory(Base):

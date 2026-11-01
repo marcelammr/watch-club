@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "macros/notifications.html" import notification_item %}
+{% block body_class %}notice-ui{% endblock %}
+{% block title %}Notificações · Watch Club{% endblock %}
+{% block page_heading %}Notificações{% endblock %}
+{% block content %}
+<section class="notice-page">
+  <div class="notice-page-head">
+    <h1>Notificações</h1>
+    {% if notification_unread %}
+      <form action="/notificacoes/lidas" method="post">
+        <input type="hidden" name="next" value="/notificacoes">
+        <button class="btn btn-ghost" type="submit">Marcar todas como lidas</button>
+      </form>
+    {% endif %}
+  </div>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+  {% if notifications %}
+    <div class="notice-list">
+      {% for item in notifications %}
+        {{ notification_item(item, '/notificacoes') }}
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted">Nenhuma notificação por enquanto.</p>
+  {% endif %}
+</section>
+{% endblock %}

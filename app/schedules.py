@@ -33,7 +33,7 @@ REPEAT_CHOICES = (REPEAT_NONE, REPEAT_WEEKLY, REPEAT_BIWEEKLY)
 REPEAT_STEPS = {REPEAT_WEEKLY: 7, REPEAT_BIWEEKLY: 14}
 MAX_OCCURRENCES = 52
 MAX_SPAN_DAYS = 366
-PROGRAM_PENDING = "Programa pendente"
+PROGRAM_PENDING = "Programa não definido"
 
 
 def parse_meeting_title(raw: str | None) -> str:
@@ -234,6 +234,14 @@ def list_upcoming_schedules(db: Session, club_id: int) -> list[ClubSchedule]:
     )
 
 
+def next_meetings_by_show(items: list[ClubSchedule]) -> dict[int, ClubSchedule]:
+    nearest: dict[int, ClubSchedule] = {}
+    for item in items:
+        if item.show_id and item.show_id not in nearest:
+            nearest[item.show_id] = item
+    return nearest
+
+
 def list_week_schedules(db: Session, club_id: int) -> list[ClubSchedule]:
     now = utcnow()
     _week_start, week_end = week_range_utc(now)
@@ -267,6 +275,29 @@ def local_today() -> date:
 
 def monday_of(day: date) -> date:
     return day - timedelta(days=day.weekday())
+
+
+def week_planner_days(
+    week_start: date, items: list[ClubSchedule], today: date | None = None
+) -> list[dict]:
+    today = today or local_today()
+    events_by_day: dict[date, list[ClubSchedule]] = {}
+    for item in items:
+        day = utc_to_local(item.starts_at).date()
+        events_by_day.setdefault(day, []).append(item)
+    days = []
+    for offset in range(7):
+        day = week_start + timedelta(days=offset)
+        days.append(
+            {
+                "iso": day.isoformat(),
+                "num": day.day,
+                "weekday": WEEKDAYS[offset],
+                "is_today": day == today,
+                "events": events_by_day.get(day, []),
+            }
+        )
+    return days
 
 
 def parse_iso_date(raw: str | None) -> date | None:
@@ -419,7 +450,7 @@ def create_schedule(
         item = ClubSchedule(
             club_id=club_id,
             series_id=series.id if series else None,
-            show_id=resolved_show if index == 0 else None,
+            show_id=resolved_show,
             title="" if series else title_text,
             starts_at=wall_to_utc(day.isoformat(), time_local),
             season_number=season_number if index == 0 else None,

@@ -115,7 +115,10 @@ def test_search_api_normalizes_ranks_and_skips_short_queries():
         _item("Masters of Sex", 20),
         _item("Masters", 40),
     ]
-    with patch("app.search.tvmaze.search_shows", AsyncMock(return_value=fake)) as mocked:
+    with (
+        patch("app.search.tmdb.configured", return_value=False),
+        patch("app.search.tvmaze.search_shows", AsyncMock(return_value=fake)) as mocked,
+    ):
         short = member.get("/api/shows/search", params={"q": "M"})
         empty = member.get("/api/shows/search", params={"q": "   "})
         spaced = member.get("/api/shows/search", params={"q": "   Masters    of   Sex   "})
@@ -130,7 +133,10 @@ def test_search_api_normalizes_ranks_and_skips_short_queries():
 def test_search_api_returns_generic_error_without_traceback():
     member = TestClient(app)
     register_active(member, "busca_erro", "busca.erro@example.com")
-    with patch("app.search.tvmaze.search_shows", AsyncMock(side_effect=RuntimeError("boom tvmaze"))):
+    with (
+        patch("app.search.tmdb.configured", return_value=False),
+        patch("app.search.tvmaze.search_shows", AsyncMock(side_effect=RuntimeError("boom tvmaze"))),
+    ):
         response = member.get("/api/shows/search", params={"q": "Masters"})
     assert response.status_code == 503
     assert response.json()["detail"] == "Não foi possível pesquisar agora."
@@ -142,7 +148,10 @@ def test_club_search_fallback_and_typeahead_markup():
     owner = TestClient(app)
     club_id = _club(owner, "busca_ui", "busca.ui@example.com", "Sala Busca")
     fake = [_item("Masters of Sex", 169, summary="A" * 240)]
-    with patch("app.search.tvmaze.search_shows", AsyncMock(return_value=fake)) as mocked:
+    with (
+        patch("app.search.tmdb.configured", return_value=False),
+        patch("app.search.tvmaze.search_shows", AsyncMock(return_value=fake)) as mocked,
+    ):
         page = owner.get(f"/clubs/{club_id}?aba=assistindo&q=  Masters   of   Sex ")
         short = owner.get(f"/clubs/{club_id}?aba=assistindo&q=M")
         blank = owner.get(f"/clubs/{club_id}?aba=assistindo")

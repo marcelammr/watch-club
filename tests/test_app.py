@@ -1,6 +1,6 @@
 from sqlalchemy import func, select
 from fastapi.testclient import TestClient
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from app.club_icons import stored_icon_path
 from app.db import SessionLocal
@@ -133,8 +133,6 @@ def test_command_api_guest_and_member():
 
 
 def test_search_api_uses_tvmaze():
-    from unittest.mock import AsyncMock
-
     member = TestClient(app)
     register_active(member, "busca_tvmaze", "busca.tvmaze@example.com")
     fake = [
@@ -147,7 +145,10 @@ def test_search_api_uses_tvmaze():
             "summary": "Um professor de química.",
         }
     ]
-    with patch("app.search.tvmaze.search_shows", AsyncMock(return_value=fake)):
+    with (
+        patch("app.search.tmdb.configured", return_value=False),
+        patch("app.search.tvmaze.search_shows", AsyncMock(return_value=fake)),
+    ):
         guest = client.get("/api/shows/search", params={"q": "breaking"})
         response = member.get("/api/shows/search", params={"q": "breaking"})
     assert guest.status_code == 401

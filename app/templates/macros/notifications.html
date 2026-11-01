@@ -1,0 +1,99 @@
+{% from "macros/avatar.html" import user_avatar %}
+
+{% macro notification_item(item, next_path='/notificacoes', compact=false, ajax=false) %}
+{% set note = item.notification %}
+{% set actor = item.actor %}
+{% set club = item.club %}
+<article class="notice-item{% if item.unread %} is-unread{% endif %}">
+  <a class="notice-main" href="/notificacoes/{{ note.id }}">
+    {% if note.type == 'join_request_accepted' %}
+      <span class="notice-copy">
+        {% if club %}
+          <span class="notice-title">Seu pedido para entrar em <strong>{{ club.name }}</strong> foi aceito.</span>
+        {% else %}
+          <span class="notice-title">Seu pedido de entrada foi aceito.</span>
+        {% endif %}
+        <span class="muted notice-when">{{ note.created_at|notice_when }}</span>
+      </span>
+    {% else %}
+      {% if actor %}
+        {{ user_avatar(actor, 'sm') }}
+      {% endif %}
+      <span class="notice-copy">
+        {% if actor and club %}
+          <span class="notice-title"><strong>{{ actor.name }}</strong> quer entrar em <strong>{{ club.name }}</strong></span>
+        {% elif actor %}
+          <span class="notice-title"><strong>{{ actor.name }}</strong> pediu para entrar em um clube</span>
+        {% else %}
+          <span class="notice-title">Pedido de entrada em clube</span>
+        {% endif %}
+        <span class="muted notice-when">{{ note.created_at|notice_when }}</span>
+        {% if item.state == 'joined' %}
+          <span class="notice-state">Entrada aprovada</span>
+        {% elif item.state == 'resolved' %}
+          <span class="notice-state">Solicitação resolvida</span>
+        {% endif %}
+      </span>
+    {% endif %}
+  </a>
+  {% if item.state == 'pending' and item.can_manage and club and actor %}
+    <div class="notice-actions">
+      <form class="{{ 'js-notice-action' if ajax else '' }}" action="/clubs/{{ club.id }}/solicitacoes/{{ actor.id }}/aceitar" method="post">
+        <input type="hidden" name="next" value="{{ next_path }}">
+        <button class="btn btn-primary" type="submit">Aceitar</button>
+      </form>
+      <form class="{{ 'js-notice-action' if ajax else '' }}" action="/clubs/{{ club.id }}/solicitacoes/{{ actor.id }}/recusar" method="post">
+        <input type="hidden" name="next" value="{{ next_path }}">
+        <button class="btn btn-secondary" type="submit">Recusar</button>
+      </form>
+    </div>
+  {% endif %}
+</article>
+{% endmacro %}
+
+{% macro bell_popover_inner(unread, items, current_path) %}
+<div class="bell-popover-head">
+  <strong>Notificações</strong>
+  {% if unread %}
+    <form action="/notificacoes/lidas" method="post">
+      <input type="hidden" name="next" value="{{ current_path }}">
+      <button class="btn btn-ghost" type="submit">Marcar todas como lidas</button>
+    </form>
+  {% endif %}
+</div>
+{% if items %}
+  <div class="notice-list notice-list-compact">
+    {% for item in items %}
+      {{ notification_item(item, current_path, true, true) }}
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="muted notice-empty">Nenhuma notificação por enquanto.</p>
+{% endif %}
+<a class="bell-popover-all js-notice-inbox-open" href="/notificacoes">Ver todas as notificações</a>
+{% endmacro %}
+
+{% macro notice_inbox_inner(unread, items, current_path) %}
+<div class="notice-inbox-head">
+  <h2 id="notice-inbox-title">Notificações</h2>
+  <div class="notice-inbox-tools">
+    {% if unread %}
+      <form class="js-notice-mark-all" action="/notificacoes/lidas" method="post">
+        <input type="hidden" name="next" value="{{ current_path }}">
+        <button class="btn btn-ghost" type="submit">Marcar todas como lidas</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+<div class="notice-inbox-body" tabindex="0">
+  {% if items %}
+    <div class="notice-list">
+      {% for item in items %}
+        {{ notification_item(item, current_path, false, true) }}
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted notice-empty">Nenhuma notificação por enquanto.</p>
+  {% endif %}
+</div>
+{% endmacro %}

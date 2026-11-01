@@ -24,6 +24,7 @@
     <div class="home-clubs-head">
       <h2 id="home-clubs-title" class="home-clubs-title">
         <a class="home-clubs-link" href="/clubes">
+          <span class="home-section-mark" aria-hidden="true"></span>
           Meus Clubes
           <svg class="home-clubs-arrow" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M5 12h14"/>
@@ -62,6 +63,45 @@
       </div>
     {% endif %}
   </section>
+
+  {% if home_news %}
+  <section class="home-news" aria-labelledby="home-news-title">
+    <div class="home-clubs-head">
+      <h2 id="home-news-title" class="home-clubs-title">
+        <a class="home-clubs-link" href="/noticias">
+          <span class="home-section-mark" aria-hidden="true"></span>
+          Últimas notícias
+          <svg class="home-clubs-arrow" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 12h14"/>
+            <path d="M13 6l6 6-6 6"/>
+          </svg>
+        </a>
+      </h2>
+    </div>
+    <ul class="home-news-list">
+      {% for item in home_news %}
+        {% set when = item.published_at|news_when_short %}
+        {% set thumb = item.image_url %}
+        <li>
+          <a class="home-news-card{% if not thumb %} is-text{% endif %}" href="{{ item.url }}" rel="noopener" target="_blank">
+            {% if thumb %}
+            <span class="home-news-media">
+              <img src="{{ thumb }}" alt="" onerror="this.closest('a').classList.add('is-text'); this.parentNode.remove();">
+            </span>
+            {% endif %}
+            <span class="home-news-copy">
+              <strong>{{ item.title }}</strong>
+              <span class="home-news-meta">
+                {% if item.source %}{{ item.source }}{% endif %}
+                {% if when %}{% if item.source %} · {% endif %}{{ when }}{% endif %}
+              </span>
+            </span>
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
 
   {% if clubs %}
   <script>

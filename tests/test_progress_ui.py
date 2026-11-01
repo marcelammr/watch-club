@@ -5,7 +5,7 @@ from app.catalog import WATCHED, WATCHING, encode_genres, premiere_year
 from app.db import SessionLocal
 from app.main import app
 from app.models import ClubEpisodeWatch, ClubMember, ClubShow, ClubWatchRound, Episode, NewsItem, User
-from app.services.news import format_news_when
+from app.services.news import format_news_when, format_news_when_short
 from app.roles import PERM_PROGRESS, PERM_SCHEDULES, PERM_TAG, ROLE_MEMBER, ROLE_SUPPORT
 from tests.test_app import register_active, star_button_values
 from tests.test_progress import _create_club, _seed_title, _user_id_by_key
@@ -49,7 +49,7 @@ def test_admin_marks_and_unmarks_episode_on_open_round():
     )
     page = owner.get(f"/clubs/{club_id}?aba=assistindo")
     assert "0 de 2 episódios assistidos" in page.text
-    assert "Próximo: T1 E1 — Pilot" in page.text
+    assert "Próximo episódio: T1 E1 — Pilot" in page.text
     assert "watch-title" in page.text
     assert f'href="/clubs/{club_id}/shows/{show_id}"' in page.text
     assert "js-action-menu-toggle" in page.text
@@ -88,7 +88,7 @@ def test_admin_marks_and_unmarks_episode_on_open_round():
 
     watching = owner.get(f"/clubs/{club_id}?aba=assistindo")
     assert "1 de 2 episódios assistidos" in watching.text
-    assert "Próximo: T1 E2 —" in watching.text
+    assert "Próximo episódio: T1 E2 —" in watching.text
 
     unmarked = owner.post(
         f"/clubs/{club_id}/shows/{show_id}/episodios/{episode_ids[0]}/desmarcar",
@@ -474,6 +474,11 @@ def test_news_when_formats_valid_dates_and_ignores_invalid():
     assert format_news_when("") == ""
     assert format_news_when("amanhã") == ""
     assert format_news_when("not-a-date") == ""
+    from datetime import datetime, timezone
+
+    current = datetime.now(timezone.utc).year
+    assert format_news_when_short(f"{current}-10-26") == "26 out"
+    assert format_news_when_short("2013-09-29") == "29 set 2013"
 
 
 def test_show_page_episode_grid_preview_and_news_layout():

@@ -6,7 +6,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -20,6 +20,7 @@ from app.models import (
     ClubShow,
     ClubShowRating,
     Episode,
+    FeedNews,
     NewsItem,
     Season,
     Show,
@@ -48,6 +49,21 @@ CONTENT_KINDS = {
     "programa": "Programa",
     "outro": "Outro",
 }
+NEWS_FEED_FILTERS = (
+    ("", "Tudo"),
+    ("anime", "Anime"),
+    ("filmes-series", "Filmes e Séries"),
+    ("tv", "TV"),
+    ("favoritos", "Meus favoritos"),
+)
+NEWS_FEED_KIND_MAP = {
+    "anime": ("anime",),
+    "filmes-series": ("filmes-series",),
+    "tv": ("tv",),
+}
+NEWS_FAVORITES_TIPO = "favoritos"
+NEWS_PAGE_LIMIT = 36
+HOME_NEWS_LIMIT = 8
 WATCHING = "watching"
 WATCHED = "watched"
 SOURCE_TVMAZE = "tvmaze"
@@ -265,10 +281,13 @@ def create_join_request(db: Session, club: Club, user_id: int) -> ClubJoinReques
     request = ClubJoinRequest(club_id=club.id, user_id=user_id)
     db.add(request)
     db.flush()
+    from app.notifications import notify_join_request
+
+    notify_join_request(db, club.id, user_id, request.id)
     return request
 
 
-def accept_join_request(db: Session, club_id: int, user_id: int, actor_id: int) -> None:
+def accept_join_request(db: Session, club_id: int, user_id: int, actor_id: int) -> int:
     from app.roles import PERM_JOINS
 
     require_club_perm(db, club_id, actor_id, PERM_JOINS)
@@ -278,17 +297,25 @@ def accept_join_request(db: Session, club_id: int, user_id: int, actor_id: int) 
         request = pending_join_request(write, club_id, user_id)
         if not request:
             raise HTTPException(status_code=404, detail="Solicitação não encontrada")
+        from app.notifications import notify_join_accepted
+
+        request_id = request.id
         _ensure_club_member(write, club_id, user_id)
         write.delete(request)
+        notify_join_accepted(write, club_id, user_id, actor_id)
         write.commit()
+        return request_id
     except IntegrityError:
         write.rollback()
         request = pending_join_request(write, club_id, user_id)
         if club_membership(write, club_id, user_id) and request:
+            request_id = request.id
             write.delete(request)
             write.commit()
-        elif not club_membership(write, club_id, user_id):
+            return request_id
+        if not club_membership(write, club_id, user_id):
             raise HTTPException(status_code=400, detail="Não foi possível aceitar a solicitação")
+        return 0
     except Exception:
         write.rollback()
         raise
@@ -296,14 +323,16 @@ def accept_join_request(db: Session, club_id: int, user_id: int, actor_id: int) 
         close_exclusive_session(write)
 
 
-def reject_join_request(db: Session, club_id: int, user_id: int, actor_id: int) -> None:
+def reject_join_request(db: Session, club_id: int, user_id: int, actor_id: int) -> int:
     from app.roles import PERM_JOINS
 
     require_club_perm(db, club_id, actor_id, PERM_JOINS)
     request = pending_join_request(db, club_id, user_id)
     if not request:
         raise HTTPException(status_code=404, detail="Solicitação não encontrada")
+    request_id = request.id
     db.delete(request)
+    return request_id
 
 
 def leave_club(db: Session, club_id: int, user_id: int) -> str:
@@ -477,6 +506,118 @@ async def upsert_show_from_tmdb(db: Session, tmdb_id: int) -> Show:
     return show
 
 
+def news_has_image(item) -> bool:
+    return bool((news_service._field(item, "image_url") or "").strip())
+
+
+def pick_home_news(items: list, limit: int = HOME_NEWS_LIMIT) -> list:
+    if limit < 1:
+        limit = HOME_NEWS_LIMIT
+    with_image = [item for item in items if news_has_image(item)]
+    without = [item for item in items if not news_has_image(item)]
+    picked = with_image[:limit]
+    if len(picked) < limit:
+        picked.extend(without[: limit - len(picked)])
+    return picked[:limit]
+
+
+def compose_news_layout(items: list) -> tuple:
+    if not items:
+        return None, [], []
+    featured = next((item for item in items if news_has_image(item)), items[0])
+    remaining = [item for item in items if item is not featured]
+    return featured, remaining[:3], remaining[3:]
+
+
+NEWS_BRIEF_GROUP = 3
+
+
+def pack_news_rest(items: list) -> list[dict]:
+    pending = list(items)
+    cells: list[dict] = []
+
+    def take_brief_group() -> list:
+        if not pending or news_has_image(pending[0]):
+            return []
+        group = [pending.pop(0)]
+        index = 0
+        while len(group) < NEWS_BRIEF_GROUP and index < len(pending):
+            if news_has_image(pending[index]):
+                index += 1
+                continue
+            group.append(pending.pop(index))
+        return group
+
+    while pending:
+        if news_has_image(pending[0]):
+            cells.append({"kind": "image", "entries": [pending.pop(0)]})
+            continue
+        cells.append({"kind": "briefs", "entries": take_brief_group()})
+    return cells
+
+
+def refresh_feed_news(db: Session, force: bool = False) -> None:
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    latest = db.scalar(select(func.max(FeedNews.fetched_at)))
+    if not force and latest and now - latest < timedelta(seconds=NEWS_TTL_SECONDS):
+        return
+    previous = list(db.scalars(select(FeedNews)))
+    images_by_title = {}
+    for row in previous:
+        key = news_service.news_title_key(row.title or "")
+        if key and (row.image_url or "").strip():
+            images_by_title[key] = row.image_url
+    try:
+        items = news_service.fetch_general_news(resolve_images=False)
+    except Exception as exc:
+        print(f"[watch-club] feed geral de notícias indisponível: {exc.__class__.__name__}")
+        return
+    if not items:
+        return
+    for item in items:
+        if item.get("image_url"):
+            continue
+        key = news_service.news_title_key(item.get("title") or "")
+        if key and key in images_by_title:
+            item["image_url"] = images_by_title[key]
+    news_service._attach_article_images(
+        [item for item in items if item.get("url") and not item.get("image_url")][:8]
+    )
+    db.execute(delete(FeedNews))
+    for item in items:
+        db.add(
+            FeedNews(
+                title=item["title"],
+                url=item["url"],
+                source=item.get("source"),
+                published_at=item.get("published_at"),
+                image_url=item.get("image_url"),
+                feed_kind=item.get("feed_kind") or "",
+                fetched_at=now,
+            )
+        )
+    db.commit()
+
+
+def list_feed_news(db: Session, query: str = "", tipo: str = "", limit: int = NEWS_PAGE_LIMIT) -> list[FeedNews]:
+    if limit < 1:
+        limit = NEWS_PAGE_LIMIT
+    stmt = select(FeedNews)
+    kinds = NEWS_FEED_KIND_MAP.get(tipo or "")
+    if kinds:
+        stmt = stmt.where(FeedNews.feed_kind.in_(kinds))
+    needle = (query or "").strip()
+    if needle:
+        pattern = f"%{needle}%"
+        stmt = stmt.where(or_(FeedNews.title.ilike(pattern), FeedNews.source.ilike(pattern)))
+    rows = [
+        row
+        for row in db.scalars(stmt)
+        if news_service._is_entertainment(row.title, row.source)
+    ]
+    return news_service.diversify_news(rows, limit)
+
+
 def refresh_news(db: Session, show: Show, force: bool = False) -> None:
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     if (
@@ -490,6 +631,43 @@ def refresh_news(db: Session, show: Show, force: bool = False) -> None:
     for item in items:
         db.add(NewsItem(show_id=show.id, **item))
     show.news_fetched_at = now
+
+
+def list_member_news(db: Session, user_id: int, query: str = "", tipo: str = "", limit: int = NEWS_PAGE_LIMIT) -> list[NewsItem]:
+    if limit < 1:
+        limit = NEWS_PAGE_LIMIT
+    stmt = (
+        select(NewsItem)
+        .join(Show, NewsItem.show_id == Show.id)
+        .join(ClubShow, ClubShow.show_id == Show.id)
+        .join(ClubMember, ClubMember.club_id == ClubShow.club_id)
+        .where(ClubMember.user_id == user_id)
+        .options(selectinload(NewsItem.show))
+        .distinct()
+    )
+    show_kinds = {
+        "anime": ("animacao",),
+        "filmes-series": ("filme", "serie"),
+        "tv": ("programa",),
+    }.get(tipo or "")
+    if show_kinds:
+        stmt = stmt.where(Show.kind.in_(show_kinds))
+    needle = (query or "").strip()
+    if needle:
+        pattern = f"%{needle}%"
+        stmt = stmt.where(
+            or_(
+                NewsItem.title.ilike(pattern),
+                NewsItem.source.ilike(pattern),
+                Show.name.ilike(pattern),
+            )
+        )
+    rows = list(db.scalars(stmt).unique())
+    rows.sort(
+        key=lambda item: news_service.parse_news_datetime(item.published_at) or datetime.min,
+        reverse=True,
+    )
+    return rows[:limit]
 
 
 def _link_show_to_club(db: Session, club: Club, show: Show, user_id: int) -> Show:

@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta, timezone
 from urllib.parse import quote
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
@@ -33,6 +33,11 @@ from app.avatars import (
 )
 from app.catalog import (
     CONTENT_KINDS,
+    HOME_NEWS_LIMIT,
+    NEWS_FAVORITES_TIPO,
+    NEWS_FEED_FILTERS,
+    NEWS_FEED_KIND_MAP,
+    NEWS_PAGE_LIMIT,
     add_club_member,
     add_manual_title,
     add_show_to_club,
@@ -52,8 +57,13 @@ from app.catalog import (
     premiere_year,
     parse_member_limit,
     list_join_requests,
+    compose_news_layout,
+    pack_news_rest,
+    list_feed_news,
+    pick_home_news,
     pending_join_request,
     post_club_message,
+    refresh_feed_news,
     refresh_news,
     reject_join_request,
     requested_club_ids,
@@ -72,6 +82,23 @@ from app.catalog import (
     valid_stars,
 )
 from app.navigation import back_href_for
+from app.notifications import (
+    DEFAULT_LIST_LIMIT,
+    HEADER_PREVIEW_LIMIT,
+    JOIN_ALREADY_RESOLVED,
+    JOIN_MISSING_DETAIL,
+    NOTICE_POLL_SECONDS,
+    format_notification_when,
+    header_notification_context,
+    header_snapshot,
+    mark_all_read,
+    mark_own_join_notifications_read,
+    mark_read,
+    notification_cards,
+    unread_badge,
+    unread_count,
+    unread_label,
+)
 from app.club_tags import (
     TAG_BG_DEFAULT,
     TAG_BG_MAX,
@@ -174,7 +201,7 @@ from app.schedules import (
     list_member_upcoming_schedules,
     list_member_week_schedules,
     list_upcoming_schedules,
-    list_week_schedules,
+    next_meetings_by_show,
     local_today,
     monday_of,
     format_week_span,
@@ -186,7 +213,7 @@ from app.schedules import (
     set_schedule_program,
     update_schedule_when,
     utc_to_local,
-    WEEKDAYS,
+    week_planner_days,
 )
 from app.search import (
     SEARCH_MIN_CHARS,
@@ -197,7 +224,7 @@ from app.search import (
 )
 from app.schema import migrate_schema
 from app.security import hash_password, make_join_code, verify_password
-from app.services.news import format_news_when
+from app.services.news import FEED_KIND_LABELS, format_news_when, format_news_when_short
 from app.usernames import (
     NICKNAME_DAYS,
     USERNAME_RE,
@@ -224,7 +251,10 @@ app.add_middleware(
     https_only=SESSION_HTTPS_ONLY,
 )
 app.mount("/static", StaticFiles(directory=BASE_DIR / "app" / "static"), name="static")
-templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
+templates = Jinja2Templates(
+    directory=str(BASE_DIR / "app" / "templates"),
+    context_processors=[header_notification_context],
+)
 _STYLE_CSS = BASE_DIR / "app" / "static" / "style.css"
 
 
@@ -251,6 +281,8 @@ templates.env.globals["MAX_TAGS"] = MAX_TAGS
 templates.env.globals["TAG_LABEL_MAX"] = TAG_LABEL_MAX
 templates.env.globals["KIND_LABELS"] = KIND_LABELS
 templates.env.globals["CONTENT_KINDS"] = CONTENT_KINDS
+templates.env.globals["NEWS_FEED_FILTERS"] = NEWS_FEED_FILTERS
+templates.env.globals["FEED_KIND_LABELS"] = FEED_KIND_LABELS
 templates.env.globals["can_refresh_catalog"] = can_refresh_catalog
 templates.env.globals["show_source"] = show_source
 templates.env.globals["person_href"] = person_href
@@ -287,8 +319,11 @@ templates.env.filters["genres"] = parse_genres
 templates.env.filters["premiere_year"] = premiere_year
 templates.env.filters["avg_pt"] = lambda value: f"{value:.1f}".replace(".", ",") if value is not None else ""
 templates.env.filters["news_when"] = format_news_when
+templates.env.filters["news_when_short"] = format_news_when_short
 templates.env.globals["stylesheet_href"] = stylesheet_href
 templates.env.globals["back_href_for"] = back_href_for
+templates.env.globals["NOTICE_POLL_SECONDS"] = NOTICE_POLL_SECONDS
+templates.env.filters["notice_when"] = format_notification_when
 templates.env.filters["chat_format"] = format_chat
 
 
@@ -320,6 +355,65 @@ def _safe_next(path: str | None, fallback: str = "/") -> str:
     if path and path.startswith("/") and not path.startswith("//"):
         return path
     return fallback
+
+
+def _join_return_path(path: str | None, club_id: int) -> str:
+    return _safe_next(path, f"/clubs/{club_id}")
+
+
+def _notice_fetch(request: Request) -> bool:
+    return request.headers.get("x-watchclub-notice") == "1"
+
+
+def _bell_html(request: Request, unread: int, cards: list) -> str:
+    return templates.get_template("partials/bell_popover_inner.html").render(
+        request=request,
+        notification_unread=unread,
+        header_notifications=cards,
+        current_path=request.url.path,
+    )
+
+
+def _inbox_html(request: Request, unread: int, cards: list) -> str:
+    return templates.get_template("partials/notice_inbox_inner.html").render(
+        request=request,
+        notification_unread=unread,
+        inbox_notifications=cards,
+        current_path=request.url.path,
+    )
+
+
+def _notice_payload(request: Request, db: Session, user_id: int, extra: dict | None = None, full: bool = False) -> dict:
+    if str(request.query_params.get("todas") or "") == "1":
+        full = True
+    if full:
+        count = unread_count(db, user_id)
+        cards = notification_cards(db, user_id, DEFAULT_LIST_LIMIT)
+        payload = {
+            "ok": True,
+            "unread": count,
+            "badge": unread_badge(count),
+            "label": unread_label(count),
+            "html": _bell_html(request, count, cards[:HEADER_PREVIEW_LIMIT]),
+            "inbox_html": _inbox_html(request, count, cards),
+        }
+    else:
+        snap = header_snapshot(db, user_id)
+        payload = {
+            "ok": True,
+            "unread": snap["unread"],
+            "badge": snap["badge"],
+            "label": snap["label"],
+            "html": _bell_html(request, snap["unread"], snap["cards"]),
+        }
+    if extra:
+        payload.update(extra)
+    return payload
+
+
+def _redirect_with_query(path: str, key: str, message: str) -> RedirectResponse:
+    sep = "&" if "?" in path else "?"
+    return RedirectResponse(f"{path}{sep}{key}={quote(message)}", status_code=303)
 
 
 def _is_member(db: Session, club_id: int, user_id: int) -> bool:
@@ -520,11 +614,59 @@ def home(request: Request):
     try:
         user = current_user(request, db)
         clubs = _user_clubs(db, user.id) if user else []
+        home_news = []
+        if user:
+            refresh_feed_news(db)
+            home_news = pick_home_news(list_feed_news(db, limit=NEWS_PAGE_LIMIT), HOME_NEWS_LIMIT)
         return templates.TemplateResponse(
             request,
             "home.html",
-            {"user": user, "clubs": clubs, "error": request.query_params.get("error"), "ok": request.query_params.get("ok")},
+            {
+                "user": user,
+                "clubs": clubs,
+                "home_news": home_news,
+                "error": request.query_params.get("error"),
+                "ok": request.query_params.get("ok"),
+            },
         )
+    finally:
+        db.close()
+
+
+@app.get("/noticias", response_class=HTMLResponse)
+def news_page(request: Request):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        query = (request.query_params.get("q") or "").strip()
+        tipo = (request.query_params.get("tipo") or "").strip()
+        if tipo == NEWS_FAVORITES_TIPO:
+            items = []
+        else:
+            if tipo not in NEWS_FEED_KIND_MAP and tipo != "":
+                tipo = ""
+            refresh_feed_news(db)
+            items = list_feed_news(db, query=query, tipo=tipo, limit=NEWS_PAGE_LIMIT)
+        featured, secondary, rest = compose_news_layout(items)
+        rest_cells = pack_news_rest(rest)
+        return templates.TemplateResponse(
+            request,
+            "news.html",
+            {
+                "user": user,
+                "query": query,
+                "tipo": tipo,
+                "featured": featured,
+                "secondary": secondary,
+                "rest": rest,
+                "rest_cells": rest_cells,
+                "has_news": bool(items),
+            },
+        )
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        raise
     finally:
         db.close()
 
@@ -545,22 +687,7 @@ def personal_agenda(request: Request):
         week_start = monday_of(parse_iso_date(request.query_params.get("semana")) or today)
         items = list_member_upcoming_schedules(db, user.id, club_id)
         week_items = list_member_week_schedules(db, user.id, week_start, club_id)
-        events_by_day: dict[date, list] = {}
-        for item in week_items:
-            day = utc_to_local(item.starts_at).date()
-            events_by_day.setdefault(day, []).append(item)
-        days = []
-        for offset in range(7):
-            day = week_start + timedelta(days=offset)
-            days.append(
-                {
-                    "iso": day.isoformat(),
-                    "num": day.day,
-                    "weekday": WEEKDAYS[offset],
-                    "is_today": day == today,
-                    "events": events_by_day.get(day, []),
-                }
-            )
+        days = week_planner_days(week_start, week_items, today)
         return templates.TemplateResponse(
             request,
             "agenda.html",
@@ -1363,8 +1490,27 @@ async def club_detail(
                 search_too_short = True
         watching = [link for link in club.shows if (link.watch_status or "watching") != "watched"]
         watched = [link for link in club.shows if link.watch_status == "watched"]
-        schedules = list_upcoming_schedules(db, club.id) if tab == "agendamentos" else []
-        week_schedules = list_week_schedules(db, club.id) if tab == "assistindo" else []
+        upcoming_schedules = (
+            list_upcoming_schedules(db, club.id) if tab in {"agendamentos", "assistindo"} else []
+        )
+        schedules = upcoming_schedules if tab == "agendamentos" else []
+        planner_days = []
+        week_label = ""
+        week_iso = ""
+        prev_week = ""
+        next_week = ""
+        now = utcnow()
+        if tab == "agendamentos":
+            today = local_today()
+            week_start = monday_of(parse_iso_date(request.query_params.get("semana")) or today)
+            week_items = list_member_week_schedules(db, user.id, week_start, club.id)
+            planner_days = week_planner_days(week_start, week_items, today)
+            week_label = format_week_span(week_start)
+            week_iso = week_start.isoformat()
+            prev_week = (week_start - timedelta(days=7)).isoformat()
+            next_week = (week_start + timedelta(days=7)).isoformat()
+        next_club_schedule = upcoming_schedules[0] if tab == "assistindo" and upcoming_schedules else None
+        next_meeting_by_show = next_meetings_by_show(upcoming_schedules) if tab == "assistindo" else {}
         if tab == "assistindo":
             await fill_missing_genres(db, [link.show for link in club.shows])
             db.commit()
@@ -1398,7 +1544,14 @@ async def club_detail(
                 "watching": watching,
                 "watched": watched,
                 "schedules": schedules,
-                "week_schedules": week_schedules,
+                "planner_days": planner_days,
+                "week_label": week_label,
+                "week_iso": week_iso,
+                "prev_week": prev_week,
+                "next_week": next_week,
+                "now": now,
+                "next_club_schedule": next_club_schedule,
+                "next_meeting_by_show": next_meeting_by_show,
                 "progress_by_show": progress_by_show,
                 "ratings": ratings,
                 "friend_ids": friend_id_set(db, user.id),
@@ -2549,31 +2702,143 @@ def request_club_join(request: Request, club_id: int, next: str = Form("")):
         db.close()
 
 
+def _join_action_error(request: Request, db: Session, user, dest: str, exc: HTTPException):
+    fetch = _notice_fetch(request)
+    if exc.status_code == 401:
+        if fetch:
+            return JSONResponse({"ok": False, "error": "Faça login"}, status_code=401)
+        return RedirectResponse("/login", status_code=303)
+    if fetch:
+        payload = {"ok": False, "error": str(exc.detail)}
+        if user:
+            payload.update(
+                _notice_payload(
+                    request, db, user.id, extra={"ok": False, "error": str(exc.detail)}, full=True
+                )
+            )
+            payload["ok"] = False
+        status = 200 if exc.status_code == 404 and exc.detail == JOIN_MISSING_DETAIL else exc.status_code
+        if exc.status_code == 404 and exc.detail == JOIN_MISSING_DETAIL:
+            payload["error"] = JOIN_ALREADY_RESOLVED
+            payload["ok"] = True
+            payload["resolved"] = True
+            status = 200
+        return JSONResponse(payload, status_code=status)
+    if exc.status_code == 400:
+        return _redirect_with_query(dest, "error", str(exc.detail))
+    if exc.status_code == 404 and exc.detail == JOIN_MISSING_DETAIL:
+        return _redirect_with_query(dest, "error", JOIN_ALREADY_RESOLVED)
+    raise exc
+
+
 @app.post("/clubs/{club_id}/solicitacoes/{user_id}/aceitar")
-def accept_club_join(request: Request, club_id: int, user_id: int):
+def accept_club_join(request: Request, club_id: int, user_id: int, next: str = Form("")):
     db = db_session()
+    dest = _join_return_path(next, club_id)
+    user = None
     try:
         user = login_required(request, db)
-        accept_join_request(db, club_id, user_id, user.id)
-        return RedirectResponse(f"/clubs/{club_id}", status_code=303)
+        related_id = accept_join_request(db, club_id, user_id, user.id)
+        mark_own_join_notifications_read(db, user.id, club_id, user_id, related_id)
+        db.commit()
+        if _notice_fetch(request):
+            return JSONResponse(_notice_payload(request, db, user.id, full=True))
+        return RedirectResponse(dest, status_code=303)
     except HTTPException as exc:
-        if exc.status_code == 401:
-            return RedirectResponse("/login", status_code=303)
-        if exc.status_code == 400:
-            return RedirectResponse(f"/clubs/{club_id}?error={quote(str(exc.detail))}", status_code=303)
-        raise
+        return _join_action_error(request, db, user, dest, exc)
     finally:
         db.close()
 
 
 @app.post("/clubs/{club_id}/solicitacoes/{user_id}/recusar")
-def reject_club_join(request: Request, club_id: int, user_id: int):
+def reject_club_join(request: Request, club_id: int, user_id: int, next: str = Form("")):
+    db = db_session()
+    dest = _join_return_path(next, club_id)
+    user = None
+    try:
+        user = login_required(request, db)
+        related_id = reject_join_request(db, club_id, user_id, user.id)
+        mark_own_join_notifications_read(db, user.id, club_id, user_id, related_id)
+        db.commit()
+        if _notice_fetch(request):
+            return JSONResponse(_notice_payload(request, db, user.id, full=True))
+        return RedirectResponse(dest, status_code=303)
+    except HTTPException as exc:
+        return _join_action_error(request, db, user, dest, exc)
+    finally:
+        db.close()
+
+
+@app.get("/notificacoes", response_class=HTMLResponse)
+def notifications_page(request: Request):
     db = db_session()
     try:
         user = login_required(request, db)
-        reject_join_request(db, club_id, user_id, user.id)
+        return templates.TemplateResponse(
+            request,
+            "notifications.html",
+            {
+                "user": user,
+                "notifications": notification_cards(db, user.id),
+                "error": request.query_params.get("error"),
+                "ok": request.query_params.get("ok"),
+            },
+        )
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
+@app.get("/notificacoes/sininho")
+def notifications_bell(request: Request):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        return JSONResponse(_notice_payload(request, db, user.id))
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return JSONResponse({"ok": False, "error": "Faça login"}, status_code=401)
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/notificacoes/lidas")
+def mark_notifications_read(request: Request, next: str = Form("/notificacoes")):
+    db = db_session()
+    dest = _safe_next(next, "/notificacoes")
+    try:
+        user = login_required(request, db)
+        mark_all_read(db, user.id)
         db.commit()
-        return RedirectResponse(f"/clubs/{club_id}", status_code=303)
+        if _notice_fetch(request):
+            return JSONResponse(_notice_payload(request, db, user.id, full=True))
+        return RedirectResponse(dest, status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            if _notice_fetch(request):
+                return JSONResponse({"ok": False, "error": "Faça login"}, status_code=401)
+            return RedirectResponse("/login", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
+@app.get("/notificacoes/{notification_id}")
+def open_notification(request: Request, notification_id: int):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        item = mark_read(db, user.id, notification_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Notificação não encontrada")
+        db.commit()
+        club = db.get(Club, item.club_id)
+        dest = f"/clubs/{item.club_id}" if club else "/notificacoes"
+        return RedirectResponse(dest, status_code=303)
     except HTTPException as exc:
         if exc.status_code == 401:
             return RedirectResponse("/login", status_code=303)
