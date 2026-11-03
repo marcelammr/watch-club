@@ -109,6 +109,13 @@ def find_user_by_email(db: Session, email: str, exclude_user_id: int | None = No
     return db.scalar(query)
 
 
+def find_user_by_auth0_sub(db: Session, sub: str | None) -> User | None:
+    key = (sub or "").strip()
+    if not key:
+        return None
+    return db.scalar(select(User).where(User.auth0_sub == key))
+
+
 def email_taken(db: Session, email: str, exclude_user_id: int | None = None) -> bool:
     if find_user_by_email(db, email, exclude_user_id=exclude_user_id):
         return True

@@ -12,6 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.accounts import (
     create_user,
     email_taken,
+    find_user_by_auth0_sub,
     find_user_by_email,
     find_valid_reset,
     login_or_create_oauth,
@@ -19,6 +20,15 @@ from app.accounts import (
     send_activation,
     send_password_reset,
     utcnow,
+)
+from app.auth0_oidc import (
+    Auth0Error,
+    auth0_enabled,
+    authorize_url as auth0_authorize_url,
+    logout_url as auth0_logout_url,
+    pending_identity,
+    pkce_pair,
+    redeem_callback,
 )
 from app.avatar_uploads import delete_upload, save_avatar_photo
 from app.avatars import (
@@ -1111,6 +1121,101 @@ def logout(request: Request):
     finally:
         db.close()
     request.session.clear()
+    return RedirectResponse("/", status_code=303)
+
+
+def _clear_auth0_handshake(request: Request) -> None:
+    request.session.pop("auth0_state", None)
+    request.session.pop("auth0_nonce", None)
+    request.session.pop("auth0_verifier", None)
+
+
+@app.get("/auth/login")
+def auth0_login_start(request: Request):
+    if not auth0_enabled():
+        return RedirectResponse(
+            "/login?error=Configure+AUTH0_DOMAIN,+AUTH0_CLIENT_ID+e+AUTH0_CLIENT_SECRET+no+.env",
+            status_code=303,
+        )
+    from secrets import token_urlsafe
+
+    state = token_urlsafe(24)
+    nonce = token_urlsafe(24)
+    verifier, challenge = pkce_pair()
+    request.session["auth0_state"] = state
+    request.session["auth0_nonce"] = nonce
+    request.session["auth0_verifier"] = verifier
+    try:
+        return RedirectResponse(auth0_authorize_url(state, nonce, challenge), status_code=303)
+    except Auth0Error:
+        _clear_auth0_handshake(request)
+        return RedirectResponse("/login?error=Não+foi+possível+iniciar+o+login+Auth0", status_code=303)
+
+
+@app.get("/callback")
+def auth0_callback(request: Request, code: str | None = None, state: str | None = None, error: str | None = None):
+    if error or not code:
+        _clear_auth0_handshake(request)
+        return RedirectResponse("/login?error=Login+Auth0+cancelado+ou+inválido", status_code=303)
+    expected_state = request.session.get("auth0_state")
+    nonce = request.session.get("auth0_nonce")
+    verifier = request.session.get("auth0_verifier")
+    if not expected_state or not nonce or not verifier or state != expected_state:
+        _clear_auth0_handshake(request)
+        return RedirectResponse("/login?error=Login+Auth0+cancelado+ou+inválido", status_code=303)
+    db = db_session()
+    try:
+        try:
+            identity = redeem_callback(code, verifier, nonce)
+        except Exception:
+            _clear_auth0_handshake(request)
+            return RedirectResponse("/login?error=Não+foi+possível+validar+o+retorno+do+Auth0", status_code=303)
+        _clear_auth0_handshake(request)
+        request.session.pop("user_id", None)
+        user = find_user_by_auth0_sub(db, identity.sub)
+        if user and user.is_active:
+            request.session.pop("auth0_pending", None)
+            request.session["user_id"] = user.id
+            touch_presence(user, "online")
+            db.commit()
+            return RedirectResponse("/", status_code=303)
+        request.session["auth0_pending"] = identity.pending_payload()
+        return RedirectResponse("/auth/pendente", status_code=303)
+    finally:
+        db.close()
+
+
+@app.get("/auth/pendente", response_class=HTMLResponse)
+def auth0_pending_page(request: Request):
+    identity = pending_identity(request.session.get("auth0_pending"))
+    if not identity:
+        return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
+    return templates.TemplateResponse(
+        request,
+        "auth0_pending.html",
+        {
+            "user": None,
+            "identity": identity,
+        },
+    )
+
+
+@app.get("/auth/logout")
+def auth0_logout(request: Request):
+    db = db_session()
+    try:
+        user = current_user(request, db)
+        if user:
+            mark_logout(user)
+            db.commit()
+    finally:
+        db.close()
+    request.session.clear()
+    if auth0_enabled():
+        try:
+            return RedirectResponse(auth0_logout_url(), status_code=303)
+        except Auth0Error:
+            pass
     return RedirectResponse("/", status_code=303)
 
 

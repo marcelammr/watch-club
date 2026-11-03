@@ -35,6 +35,8 @@ def migrate_schema() -> None:
         alters.append("ALTER TABLE users ADD COLUMN google_id VARCHAR(64)")
     if "facebook_id" not in columns:
         alters.append("ALTER TABLE users ADD COLUMN facebook_id VARCHAR(64)")
+    if "auth0_sub" not in columns:
+        alters.append("ALTER TABLE users ADD COLUMN auth0_sub VARCHAR(255)")
     if "last_seen" not in columns:
         alters.append("ALTER TABLE users ADD COLUMN last_seen DATETIME")
     if "presence" not in columns:
@@ -252,6 +254,7 @@ def migrate_schema() -> None:
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email_lower ON users (lower(email))"))
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_id ON users (google_id)"))
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_facebook_id ON users (facebook_id)"))
+        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_auth0_sub ON users (auth0_sub)"))
     if "shows" in inspector.get_table_names():
         show_cols = {column["name"] for column in inspector.get_columns("shows")}
         if "kind" not in show_cols:

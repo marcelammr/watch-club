@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Auth0 · vínculo pendente · Watch Club{% endblock %}
+{% block page_heading %}Auth0{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <p class="muted">Migração Auth0 · etapa 1 (temporário)</p>
+  <h1>Identidade reconhecida</h1>
+  <p>O Auth0 autenticou esta identidade, mas ela ainda não está vinculada a uma conta do Watch Club.</p>
+  <p>Nesta etapa o Watch Club <strong>não cria</strong> usuário novo e <strong>não associa</strong> pelo e-mail.</p>
+  {% if identity.email %}
+  <p>E-mail no Auth0: <strong>{{ identity.email }}</strong></p>
+  {% else %}
+  <p class="muted">O Auth0 não enviou e-mail nesta sessão.</p>
+  {% endif %}
+  <p class="muted">E-mail verificado: {% if identity.email_verified %}sim{% else %}não{% endif %}</p>
+  <p class="muted">sub: <code>{{ identity.sub }}</code></p>
+  <p class="muted"><a href="/login">Voltar ao login atual</a></p>
+</section>
+{% endblock %}

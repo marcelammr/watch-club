@@ -1,6 +1,6 @@
 import pytest
 
-from app.config import required_secret_key, session_https_only
+from app.config import auth0_enabled, required_secret_key, session_https_only
 
 
 def test_required_secret_key_accepts_configured_value(monkeypatch):
@@ -33,3 +33,19 @@ def test_session_https_only_true_values(monkeypatch):
 def test_session_https_only_false_values(monkeypatch):
     monkeypatch.setenv("SESSION_HTTPS_ONLY", "false")
     assert session_https_only() is False
+
+
+def test_auth0_enabled_requires_domain_and_credentials(monkeypatch):
+    monkeypatch.setenv("AUTH0_DOMAIN", "")
+    monkeypatch.setenv("AUTH0_CLIENT_ID", "")
+    monkeypatch.setenv("AUTH0_CLIENT_SECRET", "")
+    monkeypatch.setattr("app.config.AUTH0_DOMAIN", "")
+    monkeypatch.setattr("app.config.AUTH0_CLIENT_ID", "id")
+    monkeypatch.setattr("app.config.AUTH0_CLIENT_SECRET", "secret")
+    assert auth0_enabled() is False
+    monkeypatch.setattr("app.config.AUTH0_DOMAIN", "tenant.example.auth0.com")
+    monkeypatch.setattr("app.config.AUTH0_CLIENT_ID", "")
+    assert auth0_enabled() is False
+    monkeypatch.setattr("app.config.AUTH0_CLIENT_ID", "id")
+    monkeypatch.setattr("app.config.AUTH0_CLIENT_SECRET", "secret")
+    assert auth0_enabled() is True

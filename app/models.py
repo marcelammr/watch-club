@@ -24,6 +24,7 @@ class User(Base):
     bio: Mapped[str] = mapped_column(String(150), default="", nullable=False)
     google_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
     facebook_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    auth0_sub: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
     last_seen: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     presence: Mapped[str] = mapped_column(String(12), default="offline", nullable=False)
     presence_pref: Mapped[str] = mapped_column(String(12), default="auto", nullable=False)

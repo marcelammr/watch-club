@@ -6,6 +6,9 @@ os.environ.setdefault("REGISTRATION_INVITE_REQUIRED", "false")
 os.environ["SMTP_HOST"] = ""
 os.environ["SMTP_USER"] = ""
 os.environ["SMTP_PASSWORD"] = ""
+os.environ["AUTH0_DOMAIN"] = ""
+os.environ["AUTH0_CLIENT_ID"] = ""
+os.environ["AUTH0_CLIENT_SECRET"] = ""
 _db = Path(__file__).resolve().parent / "test.sqlite"
 if _db.exists():
     _db.unlink()

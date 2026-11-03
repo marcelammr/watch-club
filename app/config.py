@@ -3,9 +3,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
-
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
 
 def required_secret_key() -> str:
@@ -39,4 +38,37 @@ FACEBOOK_CLIENT_ID = os.getenv("FACEBOOK_CLIENT_ID", "")
 FACEBOOK_CLIENT_SECRET = os.getenv("FACEBOOK_CLIENT_SECRET", "")
 REGISTRATION_INVITE_REQUIRED = os.getenv("REGISTRATION_INVITE_REQUIRED", "false").lower() in {"1", "true", "yes"}
 TMDB_ACCESS_TOKEN = os.getenv("TMDB_ACCESS_TOKEN", "")
+AUTH0_DOMAIN = (os.getenv("AUTH0_DOMAIN") or "").strip()
+AUTH0_CLIENT_ID = (os.getenv("AUTH0_CLIENT_ID") or "").strip()
+AUTH0_CLIENT_SECRET = (os.getenv("AUTH0_CLIENT_SECRET") or "").strip()
+AUTH0_CONNECTION = (os.getenv("AUTH0_CONNECTION") or "Username-Password-Authentication").strip()
 BIO_MAX = 300
+
+
+def _auth0_setting(name: str) -> str:
+    """Prefer in-memory config (tests), then os.environ after loading the project .env."""
+    load_dotenv(BASE_DIR / ".env")
+    current = str(globals().get(name) or "").strip()
+    if current:
+        return current
+    return (os.getenv(name) or "").strip()
+
+
+def auth0_domain() -> str:
+    return _auth0_setting("AUTH0_DOMAIN")
+
+
+def auth0_client_id() -> str:
+    return _auth0_setting("AUTH0_CLIENT_ID")
+
+
+def auth0_client_secret() -> str:
+    return _auth0_setting("AUTH0_CLIENT_SECRET")
+
+
+def auth0_connection() -> str:
+    return _auth0_setting("AUTH0_CONNECTION") or "Username-Password-Authentication"
+
+
+def auth0_enabled() -> bool:
+    return bool(auth0_domain() and auth0_client_id() and auth0_client_secret())
