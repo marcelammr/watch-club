@@ -82,6 +82,9 @@ _KEEP_WORDS = (
     "animação",
     "animacao",
     "série",
+    "season",
+    "renewed",
+    "premiere",
 )
 
 _SKIP_WORDS = (
@@ -151,6 +154,48 @@ def news_title_key(title: str) -> str:
     text = re.sub(r"\s+[-–|]\s+.*$", "", text)
     text = re.sub(r"[^a-z0-9à-ú\s]", " ", text)
     return " ".join(text.split()[:8])
+
+
+def news_text_norm(text: str) -> str:
+    blob = (text or "").lower()
+    blob = re.sub(r"[^a-z0-9à-ú\s]", " ", blob)
+    return " ".join(blob.split())
+
+
+def favorite_name_needles(names: list[str], min_len: int = 4) -> list[str]:
+    needles: list[str] = []
+    seen: set[str] = set()
+    for raw in names:
+        text = (raw or "").strip()
+        if not text:
+            continue
+        variants = [text]
+        stripped = re.sub(r"\s*[\(\[]\d{4}[\)\]]\s*", " ", text).strip()
+        if stripped and stripped not in variants:
+            variants.append(stripped)
+        headed = stripped
+        if ":" in stripped:
+            headed = stripped.split(":", 1)[0].strip()
+        elif " – " in stripped:
+            headed = stripped.split(" – ", 1)[0].strip()
+        elif " - " in stripped:
+            headed = stripped.split(" - ", 1)[0].strip()
+        if headed and headed not in variants:
+            variants.append(headed)
+        for item in variants:
+            needle = news_text_norm(item)
+            if len(needle) < min_len or needle in seen:
+                continue
+            seen.add(needle)
+            needles.append(needle)
+    return needles
+
+
+def news_matches_favorite_needles(title: str, needles: list[str]) -> bool:
+    hay = news_text_norm(title)
+    if not hay:
+        return False
+    return any(re.search(rf"(^|\s){re.escape(needle)}(\s|$)", hay) for needle in needles)
 
 
 def news_work_key(title: str) -> str:
@@ -425,13 +470,16 @@ def _is_entertainment(title: str, source: str | None) -> bool:
     return any(word in blob for word in _KEEP_WORDS)
 
 
-def _parse_entry(entry, feed_kind: str) -> dict | None:
+def _parse_entry(entry, feed_kind: str, require_entertainment: bool = True) -> dict | None:
     title = (entry.get("title") or "Sem título").strip()
     url = (entry.get("link") or "").strip()
     if not url:
         return None
     source = _entry_source(entry)
-    if not _is_entertainment(title, source):
+    blob = f"{title} {source or ''}".lower()
+    if any(word in blob for word in _SKIP_WORDS):
+        return None
+    if require_entertainment and not _is_entertainment(title, source):
         return None
     return {
         "title": title,
@@ -532,7 +580,7 @@ def _load_rss(url: str):
         return feedparser.parse(b"")
 
 
-def _collect_topic(pair: tuple[str, str]) -> list[dict]:
+def _collect_topic(pair: tuple[str, str], require_entertainment: bool = True) -> list[dict]:
     feed_kind, query = pair
     url = f"{NEWS_FEED}?{urlencode({'q': query, 'hl': 'pt-BR', 'gl': 'BR', 'ceid': 'BR:pt-419'})}"
     try:
@@ -541,11 +589,43 @@ def _collect_topic(pair: tuple[str, str]) -> list[dict]:
         return []
     items: list[dict] = []
     for entry in parsed.entries[:12]:
-        item = _parse_entry(entry, feed_kind)
+        item = _parse_entry(entry, feed_kind, require_entertainment=require_entertainment)
         if item is None:
             continue
         items.append(item)
     return items
+
+
+def fetch_named_show_news(names: list[str], limit_each: int = 8) -> list[dict]:
+    pairs: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for raw in names[:6]:
+        name = (raw or "").strip()
+        if len(name) < 4 or name.casefold() in seen:
+            continue
+        seen.add(name.casefold())
+        query = f'"{name}" (série OR series OR temporada OR season OR trailer) when:14d'
+        pairs.append(("filmes-series", query))
+    if not pairs:
+        return []
+
+    def collect_safe(pair: tuple[str, str]) -> list[dict]:
+        try:
+            return _collect_topic(pair, require_entertainment=False)[:limit_each]
+        except Exception:
+            return []
+
+    collected: list[dict] = []
+    seen_urls: set[str] = set()
+    with ThreadPoolExecutor(max_workers=max(1, len(pairs))) as pool:
+        batches = list(pool.map(collect_safe, pairs))
+    for batch in batches:
+        for item in batch:
+            if item["url"] in seen_urls:
+                continue
+            seen_urls.add(item["url"])
+            collected.append(item)
+    return collected
 
 
 def fetch_general_news(limit: int = 36, resolve_images: bool = True) -> list[dict]:

@@ -46,6 +46,8 @@ def migrate_schema() -> None:
         alters.append("UPDATE users SET presence_pref = 'auto' WHERE presence_pref IS NULL")
     if "displayed_club_id" not in columns:
         alters.append("ALTER TABLE users ADD COLUMN displayed_club_id INTEGER")
+    if "enter_sends" not in columns:
+        alters.append("ALTER TABLE users ADD COLUMN enter_sends BOOLEAN DEFAULT 0")
     with engine.begin() as connection:
         for statement in alters:
             connection.execute(text(statement))
@@ -146,6 +148,8 @@ def migrate_schema() -> None:
             club_alters.append("ALTER TABLE clubs ADD COLUMN sub_name_color VARCHAR(7) DEFAULT '#6C63FF'")
         if "member_limit" not in club_cols:
             club_alters.append("ALTER TABLE clubs ADD COLUMN member_limit INTEGER")
+        if "pinned_message_id" not in club_cols:
+            club_alters.append("ALTER TABLE clubs ADD COLUMN pinned_message_id INTEGER")
         if club_alters:
             with engine.begin() as connection:
                 for statement in club_alters:
@@ -287,6 +291,7 @@ def migrate_schema() -> None:
     _seed_catalog_categories()
     _ensure_user_show_favorites()
     _ensure_club_message_show_id()
+    _ensure_direct_message_read_at()
 
 
 def _migrate_club_schedules() -> None:
@@ -393,6 +398,17 @@ def _backfill_series_show_ids() -> None:
                 """
             )
         )
+
+
+def _ensure_direct_message_read_at() -> None:
+    inspector = inspect(engine)
+    if "direct_messages" not in inspector.get_table_names():
+        return
+    cols = {column["name"] for column in inspector.get_columns("direct_messages")}
+    if "read_at" in cols:
+        return
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE direct_messages ADD COLUMN read_at DATETIME"))
 
 
 def _ensure_club_message_show_id() -> None:

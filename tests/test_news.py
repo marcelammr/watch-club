@@ -7,8 +7,14 @@ from fastapi.testclient import TestClient
 from app.catalog import compose_news_layout, pack_news_rest, pick_home_news, refresh_feed_news
 from app.db import SessionLocal
 from app.main import app
-from app.models import ClubShow, FeedNews, NewsItem, Show, User
-from app.services.news import diversify_news, html_meta_image, inflate_http_body
+from app.models import ClubShow, FeedNews, NewsItem, Show, User, UserShowFavorite
+from app.services.news import (
+    diversify_news,
+    favorite_name_needles,
+    html_meta_image,
+    inflate_http_body,
+    news_matches_favorite_needles,
+)
 from app.services import news as news_service
 from tests.test_app import register_active
 
@@ -276,6 +282,7 @@ def test_feed_cache_skips_refetch_until_ttl_expires(monkeypatch):
         ]
 
     monkeypatch.setattr(news_service, "fetch_general_news", fake_fetch)
+    monkeypatch.setattr(news_service, "fetch_named_show_news", lambda names, limit_each=8: [])
     _seed_feed(
         "Matéria antiga sem foto",
         "https://example.com/old-cache",
@@ -493,3 +500,69 @@ def test_news_text_variant_and_image_priority_in_pages():
     found = owner.get("/noticias?q=Destaque")
     assert "Destaque com imagem da série" in found.text
     assert "Anime com cartaz" not in found.text
+
+
+def test_favorite_name_needles_normalize_year_and_subtitle():
+    needles = favorite_name_needles(
+        ["Rivals (2024)", "Frieren: Beyond Journey's End", "The Office", "IT"]
+    )
+    assert "rivals" in needles
+    assert "frieren" in needles
+    assert "the office" in needles
+    assert "it" not in needles
+    assert news_matches_favorite_needles("Disney+ confirma 2ª temporada de Rivals", ["rivals"])
+    assert news_matches_favorite_needles("Frieren ganha filme", ["frieren"])
+    assert not news_matches_favorite_needles(
+        "The Officer appointed a new season trailer",
+        favorite_name_needles(["The Office"]),
+    )
+    assert not news_matches_favorite_needles(
+        "Alpha Zetaville ganha trailer",
+        favorite_name_needles(["Alpha Zeta"]),
+    )
+
+
+def test_favorites_news_matches_normalized_names_and_get_keeps_cache(monkeypatch):
+    calls = []
+
+    def fake_fetch(limit=36, resolve_images=True):
+        calls.append("general")
+        return []
+
+    def fake_named(names, limit_each=8):
+        calls.append("named")
+        return []
+
+    monkeypatch.setattr(news_service, "fetch_general_news", fake_fetch)
+    monkeypatch.setattr(news_service, "fetch_named_show_news", fake_named)
+
+    owner = TestClient(app)
+    register_active(owner, "fav_news_match", "fav.news.match@example.com")
+    _seed_feed(
+        "Disney+ confirma 2ª temporada de Rivals",
+        "https://example.com/rivals-season",
+        "Variety",
+        "2026-10-28",
+        "filmes-series",
+    )
+    _seed_feed(
+        "The Officer appointed a new season trailer",
+        "https://example.com/officer",
+        "Variety",
+        "2026-10-27",
+        "filmes-series",
+    )
+    db = SessionLocal()
+    try:
+        show = Show(tvmaze_id=881001, name="Rivals (2024)", kind="serie")
+        db.add(show)
+        db.flush()
+        db.add(UserShowFavorite(user_id=_user_id("fav_news_match"), show_id=show.id))
+        db.commit()
+    finally:
+        db.close()
+
+    page = owner.get("/noticias?tipo=favoritos")
+    assert "Disney+ confirma 2ª temporada de Rivals" in page.text
+    assert "The Officer appointed a new season trailer" not in page.text
+    assert calls == []

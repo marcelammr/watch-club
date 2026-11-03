@@ -3,12 +3,13 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from fastapi import Request
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.accounts import utcnow
 from app.club_tags import stamp_display_tags
 from app.db import SessionLocal
+from app.friends import unread_dm_badge, unread_dm_count
 from app.models import Club, ClubJoinRequest, ClubMember, Notification, User
 from app.roles import PERM_JOINS, can
 
@@ -93,6 +94,11 @@ def mark_read(db: Session, user_id: int, notification_id: int) -> Notification |
     if item.read_at is None:
         item.read_at = utcnow()
     return item
+
+
+def clear_notifications(db: Session, user_id: int) -> int:
+    result = db.execute(delete(Notification).where(Notification.user_id == user_id))
+    return result.rowcount or 0
 
 
 def mark_all_read(db: Session, user_id: int) -> int:
@@ -294,6 +300,8 @@ def header_notification_context(request: Request) -> dict:
         "notification_unread": 0,
         "notification_badge": "",
         "header_notifications": [],
+        "dm_unread": 0,
+        "dm_unread_badge": "",
     }
     user_id = request.session.get("user_id") if request.session else None
     if not user_id:
@@ -304,10 +312,13 @@ def header_notification_context(request: Request) -> dict:
         if not user or not user.is_active:
             return empty
         count = unread_count(db, user.id)
+        dm_count = unread_dm_count(db, user.id)
         return {
             "notification_unread": count,
             "notification_badge": unread_badge(count),
             "header_notifications": notification_cards(db, user.id, HEADER_PREVIEW_LIMIT),
+            "dm_unread": dm_count,
+            "dm_unread_badge": unread_dm_badge(dm_count),
         }
     finally:
         db.close()

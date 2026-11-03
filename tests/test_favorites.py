@@ -536,16 +536,20 @@ def test_indicate_posts_chat_and_does_not_join_club_or_favorite():
         assert message is not None
         assert message.user_id == user_id
         assert message.show_id == show_id
-        assert "Marcela indicou Maisy Run para os próximos encontros." in message.body
+        assert message.body == "Marcela indicou:"
+        assert "Maisy Run" not in message.body
+        assert "para os próximos encontros" not in message.body
         assert db.scalar(select(ClubShow).where(ClubShow.club_id == club_id, ClubShow.show_id == show_id)) is None
         assert db.scalar(select(UserShowFavorite).where(UserShowFavorite.user_id == user_id)) is None
         assert db.scalar(select(func.count()).select_from(ClubSchedule).where(ClubSchedule.club_id == club_id)) == 0
     finally:
         db.close()
     chat = member.get(f"/clubs/{club_id}?aba=chat")
-    assert "Marcela indicou Maisy Run para os próximos encontros." in chat.text
+    assert "Marcela indicou:" in chat.text
+    assert "Marcela indicou Maisy Run" not in chat.text
+    assert "para os próximos encontros" not in chat.text
     assert "Ver programa" in chat.text
-    assert f'href="/shows/{show_id}"' in chat.text
+    assert f'href="/clubs/{club_id}/shows/{show_id}"' in chat.text
 
 
 def test_own_profile_keeps_favorite_search_and_other_profile_has_no_edit():

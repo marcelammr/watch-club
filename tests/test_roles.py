@@ -24,6 +24,7 @@ from app.roles import (
     ROLE_MEMBER,
     ROLE_SUPPORT,
     can,
+    can_moderate_club_chat,
     dump_support_perms,
     parse_support_perms,
 )
@@ -74,6 +75,9 @@ def test_can_uses_role_and_allowlist():
     assert can(support, PERM_TAG) is True
     assert can(support, PERM_TITLES) is False
     assert can(member, PERM_TAG) is False
+    assert can_moderate_club_chat(admin) is True
+    assert can_moderate_club_chat(support) is True
+    assert can_moderate_club_chat(member) is False
 
 
 def test_tag_validations_reject_unsafe_values():

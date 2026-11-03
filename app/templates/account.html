@@ -1,6 +1,5 @@
 {% extends "base.html" %}
 {% from "macros/avatar.html" import user_avatar %}
-{% from "macros/presence.html" import presence_mark %}
 {% from "macros/emoji.html" import emoji_picker %}
 {% from "macros/club_tag.html" import club_tag_chip %}
 {% block title %}Configurações · Watch Club{% endblock %}
@@ -19,7 +18,7 @@
     <div>
       <strong>{{ user.name }}</strong>
       {{ club_tag_chip(user.display_tag) }}
-      <p class="status {{ presence_of(user) }}">{{ presence_mark(presence_of(user)) }}{{ presence_label(user) }}</p>
+      <p class="status {{ presence_of(user) }}">{{ presence_label(user) }}</p>
       <p class="mt-4"><a class="btn btn-ghost" href="/u/{{ user.username }}">Ver perfil público</a></p>
     </div>
   </div>
@@ -120,7 +119,7 @@
         <textarea id="bio" class="bio-box" name="bio" maxlength="{{ BIO_MAX }}" rows="4" placeholder="Conte um pouco sobre você">{{ user.bio or '' }}</textarea>
         <p class="muted bio-count"><span id="bio-count">0</span>/{{ BIO_MAX }}</p>
       </div>
-      <button class="btn btn-primary" type="submit">Salvar perfil</button>
+      <button class="btn btn-secondary" type="submit">Salvar perfil</button>
     </form>
   </div>
   <div class="card">
@@ -131,9 +130,33 @@
       {% endif %}
       <label>Nova senha <input type="password" name="new_password" required minlength="4"></label>
       <label>Confirmar nova senha <input type="password" name="confirm_password" required minlength="4"></label>
-      <button class="btn btn-primary" type="submit">Alterar senha</button>
+      <button class="btn btn-secondary" type="submit">Alterar senha</button>
     </form>
   </div>
+</section>
+
+<section class="card">
+  <h2>Conversas</h2>
+  <p class="muted">Vale para o chat dos clubes e para as conversas privadas.</p>
+  <label class="pref-switch">
+    <span class="pref-switch-row">
+      <span class="pref-switch-title">Enviar mensagens com Enter</span>
+      <span class="pref-switch-control">
+        <input
+          class="js-enter-sends"
+          type="checkbox"
+          role="switch"
+          name="enter_sends"
+          value="1"
+          aria-checked="{% if user.enter_sends %}true{% else %}false{% endif %}"
+          {% if user.enter_sends %}checked{% endif %}
+        >
+        <span class="pref-switch-ui" aria-hidden="true"></span>
+      </span>
+    </span>
+    <span class="muted">Quando ativado, Enter envia a mensagem e Shift + Enter cria uma nova linha.</span>
+  </label>
+  <p class="muted js-enter-sends-status" hidden></p>
 </section>
 
 <section class="card">
@@ -154,7 +177,7 @@
       <p class="muted">Nenhum dos seus clubes tem tag ainda.</p>
     {% endfor %}
     {% if tag_choices %}
-      <button class="btn btn-primary" type="submit">Salvar tag exibida</button>
+      <button class="btn btn-secondary" type="submit">Salvar tag exibida</button>
     {% endif %}
   </form>
 </section>
@@ -164,7 +187,7 @@
   <form action="/clubs/join" method="post">
     <input type="hidden" name="next" value="/conta">
     <label>Código do clube <input name="join_code" required maxlength="8" placeholder="A1B2C3D4"></label>
-    <button class="btn btn-primary" type="submit">Entrar</button>
+    <button class="btn btn-secondary" type="submit">Entrar</button>
   </form>
 </section>
 

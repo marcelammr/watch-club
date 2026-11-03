@@ -27,6 +27,7 @@ class User(Base):
     last_seen: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     presence: Mapped[str] = mapped_column(String(12), default="offline", nullable=False)
     presence_pref: Mapped[str] = mapped_column(String(12), default="auto", nullable=False)
+    enter_sends: Mapped[bool] = mapped_column(default=False, nullable=False)
     displayed_club_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     username_changed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
@@ -90,6 +91,7 @@ class Club(Base):
     admin_name_color: Mapped[str] = mapped_column(String(7), default="#B892FF", nullable=False)
     sub_name_color: Mapped[str] = mapped_column(String(7), default="#6C63FF", nullable=False)
     member_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pinned_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     members: Mapped[list["ClubMember"]] = relationship(back_populates="club")
@@ -369,6 +371,7 @@ class DirectMessage(Base):
     recipient_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     sender: Mapped[User] = relationship(foreign_keys=[sender_id])
 

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from fastapi import HTTPException
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.accounts import utcnow
 from app.models import DirectMessage, Friendship, User
 from app.usernames import normalize_username
 
@@ -172,6 +175,119 @@ def dm_thread(db: Session, viewer_id: int, other: int, limit: int = 80) -> list[
     )
     items.reverse()
     return items
+
+
+@dataclass
+class DmInboxRow:
+    person: User
+    last: DirectMessage
+    unread: int
+    preview: str
+
+
+def _preview_text(body: str, mine: bool) -> str:
+    text = " ".join((body or "").split())
+    if len(text) > 72:
+        text = text[:71].rstrip() + "…"
+    return f"Você: {text}" if mine else text
+
+
+def unread_dm_count(db: Session, user_id: int) -> int:
+    return int(
+        db.scalar(
+            select(func.count())
+            .select_from(DirectMessage)
+            .where(DirectMessage.recipient_id == user_id, DirectMessage.read_at.is_(None))
+        )
+        or 0
+    )
+
+
+def unread_dm_badge(count: int) -> str:
+    if count <= 0:
+        return ""
+    if count > 9:
+        return "9+"
+    return str(count)
+
+
+def mark_dm_read(db: Session, viewer_id: int, other: int) -> None:
+    if viewer_id == other:
+        return
+    now = utcnow()
+    items = list(
+        db.scalars(
+            select(DirectMessage).where(
+                DirectMessage.sender_id == other,
+                DirectMessage.recipient_id == viewer_id,
+                DirectMessage.read_at.is_(None),
+            )
+        )
+    )
+    if not items:
+        return
+    for item in items:
+        item.read_at = now
+    db.commit()
+
+
+def list_dm_conversations(db: Session, user_id: int) -> list[DmInboxRow]:
+    other_id_expr = case(
+        (DirectMessage.sender_id == user_id, DirectMessage.recipient_id),
+        else_=DirectMessage.sender_id,
+    )
+    latest = (
+        select(
+            other_id_expr.label("other_id"),
+            func.max(DirectMessage.id).label("last_id"),
+        )
+        .where(or_(DirectMessage.sender_id == user_id, DirectMessage.recipient_id == user_id))
+        .group_by(other_id_expr)
+        .subquery()
+    )
+    rows = db.execute(
+        select(DirectMessage, User)
+        .join(latest, DirectMessage.id == latest.c.last_id)
+        .join(User, User.id == latest.c.other_id)
+        .where(User.is_active.is_(True))
+        .order_by(DirectMessage.created_at.desc(), DirectMessage.id.desc())
+    ).all()
+    unread_rows = db.execute(
+        select(DirectMessage.sender_id, func.count())
+        .where(DirectMessage.recipient_id == user_id, DirectMessage.read_at.is_(None))
+        .group_by(DirectMessage.sender_id)
+    ).all()
+    unread_map = {sender_id: int(count) for sender_id, count in unread_rows}
+    inbox: list[DmInboxRow] = []
+    for message, person in rows:
+        mine = message.sender_id == user_id
+        inbox.append(
+            DmInboxRow(
+                person=person,
+                last=message,
+                unread=unread_map.get(person.id, 0),
+                preview=_preview_text(message.body, mine),
+            )
+        )
+    return inbox
+
+
+def delete_dm(db: Session, viewer_id: int, other_id: int, message_id: int) -> None:
+    if viewer_id == other_id:
+        raise HTTPException(status_code=400, detail="Mensagem inválida")
+    message = db.get(DirectMessage, message_id)
+    if message is None:
+        raise HTTPException(status_code=404, detail="Mensagem não encontrada")
+    in_thread = (
+        (message.sender_id == viewer_id and message.recipient_id == other_id)
+        or (message.sender_id == other_id and message.recipient_id == viewer_id)
+    )
+    if not in_thread:
+        raise HTTPException(status_code=404, detail="Mensagem não encontrada")
+    if message.sender_id != viewer_id:
+        raise HTTPException(status_code=403, detail="Você só pode apagar as suas mensagens")
+    db.delete(message)
+    db.commit()
 
 
 def post_dm(db: Session, sender_id: int, recipient_id: int, body: str) -> DirectMessage:

@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from app.db import SessionLocal, engine
 from app.main import app
-from app.models import ClubJoinRequest, Notification, User
+from app.models import ClubJoinRequest, ClubMember, Notification, User
 from app.notifications import (
     JOIN_STATE_JOINED,
     JOIN_STATE_PENDING,
@@ -319,6 +319,7 @@ def test_bell_badge_and_popover_are_scoped_to_the_viewer():
     assert 'js-notice-inbox-open' in empty.text
     assert 'class="bell-badge"' not in empty.text
     assert 'title="Notificações" disabled' not in empty.text
+    assert "Limpar notificações" not in _popover(empty.text)
 
     club_id, _code = _create_closed_club(owner, "Sala Sino")
     guest = TestClient(app)
@@ -742,4 +743,83 @@ def test_bell_endpoint_and_popover_fetch_accept():
         )
     finally:
         db.close()
+
+
+def test_user_clears_only_own_notifications_and_keeps_related_entities():
+    owner = TestClient(app)
+    other = TestClient(app)
+    guest = TestClient(app)
+    register_active(owner, "clr_host", "clr.host@example.com")
+    register_active(other, "clr_other", "clr.other@example.com")
+    register_active(guest, "clr_guest", "clr.guest@example.com")
+    club_id, _code = _create_closed_club(owner, "Sala Limpar")
+    other_club, _ = _create_closed_club(other, "Sala Alheia Limpar")
+    guest.post(f"/clubs/{club_id}/solicitar", data={"next": f"/clubs/{club_id}"}, follow_redirects=False)
+    stray = TestClient(app)
+    register_active(stray, "clr_stray", "clr.stray@example.com")
+    stray.post(f"/clubs/{other_club}/solicitar", data={"next": f"/clubs/{other_club}"}, follow_redirects=False)
+
+    host_id = _user_id("clr_host")
+    other_id = _user_id("clr_other")
+    guest_id = _user_id("clr_guest")
+    filled = owner.get("/")
+    assert "Limpar notificações" in _popover(filled.text)
+    assert 'class="bell-badge"' in filled.text
+
+    locked = TestClient(app).post("/notificacoes/limpar", follow_redirects=False)
+    assert locked.status_code == 303
+    assert locked.headers["location"].startswith("/login")
+
+    cleared = owner.post(
+        "/notificacoes/limpar",
+        data={"next": "/", "user_id": str(other_id)},
+        follow_redirects=False,
+    )
+    assert cleared.status_code == 303
+    assert cleared.headers["location"] == "/"
+    after = owner.get("/")
+    assert "Nenhuma notificação por enquanto." in _popover(after.text)
+    assert "Limpar notificações" not in _popover(after.text)
+    assert 'class="bell-badge"' not in after.text
+
+    db = SessionLocal()
+    try:
+        assert unread_count(db, host_id) == 0
+        assert list_notifications(db, host_id) == []
+        assert unread_count(db, other_id) == 1
+        assert (
+            db.scalar(
+                select(ClubJoinRequest).where(
+                    ClubJoinRequest.user_id == guest_id, ClubJoinRequest.club_id == club_id
+                )
+            )
+            is not None
+        )
+        assert (
+            db.scalar(select(ClubMember).where(ClubMember.user_id == guest_id, ClubMember.club_id == club_id))
+            is None
+        )
+    finally:
+        db.close()
+
+    accepted = owner.post(f"/clubs/{club_id}/solicitacoes/{guest_id}/aceitar", follow_redirects=False)
+    assert accepted.status_code == 303
+    owner.post("/notificacoes/limpar", data={"next": "/notificacoes"}, follow_redirects=False)
+    db = SessionLocal()
+    try:
+        assert (
+            db.scalar(select(ClubMember).where(ClubMember.user_id == guest_id, ClubMember.club_id == club_id))
+            is not None
+        )
+        assert db.scalar(
+            select(Notification.id).where(
+                Notification.user_id == guest_id, Notification.type == TYPE_JOIN_ACCEPTED
+            )
+        )
+        assert list_notifications(db, host_id) == []
+    finally:
+        db.close()
+    empty_page = owner.get("/notificacoes")
+    assert "Nenhuma notificação por enquanto." in empty_page.text
+    assert "Limpar notificações" not in empty_page.text
 

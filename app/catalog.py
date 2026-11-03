@@ -36,6 +36,7 @@ from app.roles import (
     ROLE_SUPPORT,
     ROLES,
     can,
+    can_moderate_club_chat,
     dump_support_perms,
     member_role,
     set_member_role,
@@ -366,6 +367,7 @@ def leave_club(db: Session, club_id: int, user_id: int) -> str:
     clear_displayed_club(db, user_id, club_id)
     db.delete(member)
     if not others:
+        club.pinned_message_id = None
         db.execute(delete(ClubShowRating).where(ClubShowRating.club_id == club_id))
         db.execute(delete(ClubMessage).where(ClubMessage.club_id == club_id))
         db.execute(delete(ClubShow).where(ClubShow.club_id == club_id))
@@ -592,6 +594,19 @@ def refresh_feed_news(db: Session, force: bool = False) -> None:
     except Exception as exc:
         print(f"[watch-club] feed geral de notícias indisponível: {exc.__class__.__name__}")
         return
+    try:
+        named = news_service.fetch_named_show_news(popular_favorite_show_names(db))
+    except Exception as exc:
+        print(f"[watch-club] feed de favoritos indisponível: {exc.__class__.__name__}")
+        named = []
+    if named:
+        seen_urls = {item.get("url") for item in items if item.get("url")}
+        for extra in named:
+            url = extra.get("url")
+            if not url or url in seen_urls:
+                continue
+            seen_urls.add(url)
+            items.append(extra)
     if not items:
         return
     for item in items:
@@ -633,14 +648,24 @@ def list_feed_news(
     if kinds:
         stmt = stmt.where(FeedNews.feed_kind.in_(kinds))
     names = [name.strip() for name in (favorite_names or []) if (name or "").strip()]
-    if tipo == NEWS_FAVORITES_TIPO:
-        if len(names) < 1:
-            return []
-        clauses = [FeedNews.title.ilike(f"%{name}%") for name in names[:40] if len(name) >= 2]
-        if not clauses:
-            return []
-        stmt = stmt.where(or_(*clauses))
     needle = (query or "").strip()
+    if tipo == NEWS_FAVORITES_TIPO:
+        needles = news_service.favorite_name_needles(names)
+        if not needles:
+            return []
+        matched = [
+            row
+            for row in db.scalars(select(FeedNews))
+            if news_service.news_matches_favorite_needles(row.title or "", needles)
+        ]
+        if needle:
+            found = needle.casefold()
+            matched = [
+                row
+                for row in matched
+                if found in (row.title or "").casefold() or found in (row.source or "").casefold()
+            ]
+        return news_service.diversify_news(matched, limit)
     if needle:
         pattern = f"%{needle}%"
         stmt = stmt.where(or_(FeedNews.title.ilike(pattern), FeedNews.source.ilike(pattern)))
@@ -782,6 +807,52 @@ def club_messages(db: Session, club_id: int, limit: int = 80) -> list[ClubMessag
     return items
 
 
+def load_pinned_message(db: Session, club: Club) -> ClubMessage | None:
+    pinned_id = club.pinned_message_id
+    if not pinned_id:
+        return None
+    message = db.scalar(
+        select(ClubMessage)
+        .options(selectinload(ClubMessage.user), selectinload(ClubMessage.show))
+        .where(ClubMessage.id == pinned_id, ClubMessage.club_id == club.id)
+    )
+    if message:
+        return message
+    club.pinned_message_id = None
+    db.commit()
+    return None
+
+
+def pin_club_message(db: Session, club_id: int, actor_id: int, message_id: int) -> ClubMessage:
+    club = require_club_admin(db, club_id, actor_id)
+    message = db.get(ClubMessage, message_id)
+    if not message or message.club_id != club.id:
+        raise HTTPException(status_code=404, detail="Mensagem não encontrada neste clube")
+    club.pinned_message_id = message.id
+    db.commit()
+    return message
+
+
+def unpin_club_message(db: Session, club_id: int, actor_id: int) -> None:
+    club = require_club_admin(db, club_id, actor_id)
+    club.pinned_message_id = None
+    db.commit()
+
+
+def delete_club_message(db: Session, club_id: int, actor_id: int, message_id: int) -> None:
+    club = require_club_member(db, club_id, actor_id)
+    member = club_membership(db, club_id, actor_id)
+    message = db.get(ClubMessage, message_id)
+    if message is None or message.club_id != club.id:
+        raise HTTPException(status_code=404, detail="Mensagem não encontrada neste clube")
+    if message.user_id != actor_id and not can_moderate_club_chat(member):
+        raise HTTPException(status_code=403, detail="Você não pode apagar esta mensagem")
+    if club.pinned_message_id == message.id:
+        club.pinned_message_id = None
+    db.delete(message)
+    db.commit()
+
+
 def post_club_message(
     db: Session,
     club_id: int,
@@ -859,9 +930,8 @@ def annotate_search_results(db: Session, user_id: int, results: list[dict]) -> l
 
 def suggest_show_to_club(db: Session, club_id: int, user: User, show: Show) -> ClubMessage:
     require_club_member(db, club_id, user.id)
-    title = (show.name or "um programa").strip() or "um programa"
     who = (user.name or user.username or "Alguém").strip()
-    body = f"{who} indicou {title} para os próximos encontros."
+    body = f"{who} indicou:"
     return post_club_message(db, club_id, user.id, body, show_id=show.id)
 
 
@@ -1018,6 +1088,19 @@ def favorite_show_names(db: Session, user_id: int) -> list[str]:
         )
         if (name or "").strip()
     ]
+
+
+def popular_favorite_show_names(db: Session, limit: int = 6) -> list[str]:
+    if limit < 1:
+        return []
+    rows = db.execute(
+        select(Show.name, func.count().label("n"))
+        .join(UserShowFavorite, UserShowFavorite.show_id == Show.id)
+        .group_by(Show.id)
+        .order_by(func.count().desc(), Show.name.asc())
+        .limit(limit)
+    ).all()
+    return [name for name, _count in rows if (name or "").strip()]
 
 
 def count_user_favorites(db: Session, user_id: int) -> int:

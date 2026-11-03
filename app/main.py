@@ -31,6 +31,7 @@ from app.avatars import (
     set_upload_avatar,
     valid_avatar,
 )
+from app.chat_time import chat_clock, chat_day_key, chat_day_label
 from app.catalog import (
     CONTENT_KINDS,
     HOME_NEWS_LIMIT,
@@ -67,11 +68,15 @@ from app.catalog import (
     list_join_requests,
     compose_news_layout,
     pack_news_rest,
+    delete_club_message,
     list_feed_news,
+    load_pinned_message,
     list_user_favorites,
     pick_home_news,
     pending_join_request,
+    pin_club_message,
     post_club_message,
+    unpin_club_message,
     refresh_feed_news,
     refresh_news,
     reject_join_request,
@@ -102,6 +107,7 @@ from app.notifications import (
     format_notification_when,
     header_notification_context,
     header_snapshot,
+    clear_notifications,
     mark_all_read,
     mark_own_join_notifications_read,
     mark_read,
@@ -139,7 +145,7 @@ from app.discovery import (
     load_catalog,
 )
 from app.covers import COVER_COLORS, COVER_PRESETS, cover_image_url, save_cover_image, valid_cover_color
-from app.markup import format_chat
+from app.markup import format_chat, pin_preview
 from app import config as app_config
 from app.config import BASE_DIR, BIO_MAX, EMAIL_DEV_SHOW_LINK, SECRET_KEY, SESSION_HTTPS_ONLY
 from app.db import Base, close_exclusive_session, engine, exclusive_write_session, get_db
@@ -155,12 +161,15 @@ from app.friends import (
     accept_invite,
     can_view_thread,
     decline_invite,
+    delete_dm,
     dm_thread,
     find_active_user,
     friend_id_set,
     has_dm_history,
     incoming_invites,
+    list_dm_conversations,
     list_friends,
+    mark_dm_read,
     person_href,
     post_dm,
     relation_status,
@@ -194,6 +203,7 @@ from app.roles import (
     SUPPORT_PERM_LABELS,
     SUPPORT_PERMS,
     can,
+    can_moderate_club_chat,
     member_role,
     parse_support_perms,
 )
@@ -336,6 +346,10 @@ templates.env.globals["back_href_for"] = back_href_for
 templates.env.globals["NOTICE_POLL_SECONDS"] = NOTICE_POLL_SECONDS
 templates.env.filters["notice_when"] = format_notification_when
 templates.env.filters["chat_format"] = format_chat
+templates.env.filters["pin_preview"] = pin_preview
+templates.env.filters["chat_clock"] = chat_clock
+templates.env.filters["chat_day_key"] = chat_day_key
+templates.env.filters["chat_day_label"] = chat_day_label
 
 
 def current_user(request: Request, db: Session) -> User | None:
@@ -564,6 +578,7 @@ def _club_caps(db: Session, club_id: int, user_id: int) -> dict:
         "can_titles": can(member, PERM_TITLES),
         "can_schedules": can(member, PERM_SCHEDULES),
         "can_progress": can(member, PERM_PROGRESS),
+        "can_moderate_chat": can_moderate_club_chat(member),
     }
 
 
@@ -617,6 +632,13 @@ def _user_clubs(db: Session, user_id: int) -> list[Club]:
             .options(selectinload(Club.members), selectinload(Club.shows))
         ).unique()
     )
+
+
+def _member_club_nav(db: Session, user_id: int) -> list[Club]:
+    clubs = list(
+        db.scalars(select(Club).join(ClubMember).where(ClubMember.user_id == user_id)).unique()
+    )
+    return sorted(clubs, key=lambda item: (item.name or "").casefold())
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -1541,7 +1563,11 @@ async def club_detail(
             }
         members = list(club.members)
         messages = club_messages(db, club.id) if tab == "chat" else []
-        stamp_display_tags(db, [item.user for item in members] + [item.user for item in messages])
+        pinned_message = load_pinned_message(db, club) if tab == "chat" else None
+        stamp_users = [item.user for item in members] + [item.user for item in messages]
+        if pinned_message and pinned_message.user:
+            stamp_users.append(pinned_message.user)
+        stamp_display_tags(db, stamp_users)
         online_count = sum(1 for item in members if presence_of(item.user) == "online")
         join_requests = list_join_requests(db, club.id) if caps["can_joins"] and club.is_closed else []
         return templates.TemplateResponse(
@@ -1559,6 +1585,7 @@ async def club_detail(
                 "tab": tab,
                 "watch_list": "finalizados" if lista == "finalizados" else "assistindo",
                 "messages": messages,
+                "pinned_message": pinned_message,
                 "watching": watching,
                 "watched": watched,
                 "schedules": schedules,
@@ -1578,7 +1605,7 @@ async def club_detail(
                 "join_requests": join_requests,
                 "members_by_user": {item.user_id: item for item in members},
                 "member_groups": grouped_club_members(members),
-                "user_clubs": sorted(_user_clubs(db, user.id), key=lambda item: (item.name or "").casefold()),
+                "user_clubs": _member_club_nav(db, user.id),
                 "error": request.query_params.get("error"),
                 **caps,
             },
@@ -1910,6 +1937,33 @@ def update_club_tag(
         db.close()
 
 
+@app.post("/conta/conversas")
+def update_chat_preference(request: Request, enter_sends: str = Form("")):
+    ajax = request.headers.get("x-watchclub-pref") == "1"
+
+    def fail(status: int, message: str, location: str = "/login"):
+        if ajax:
+            return JSONResponse({"ok": False, "error": message}, status_code=status)
+        if status == 401:
+            return RedirectResponse(location, status_code=303)
+        return RedirectResponse(f"/conta?error={quote(message)}", status_code=303)
+
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        if enter_sends not in {"", "0", "1"}:
+            return fail(400, "Valor inválido")
+        user.enter_sends = enter_sends == "1"
+        db.commit()
+        if ajax:
+            return JSONResponse({"ok": True, "enter_sends": bool(user.enter_sends)})
+        return RedirectResponse("/conta?ok=Preferência+de+conversas+atualizada", status_code=303)
+    except HTTPException:
+        return fail(401, "Faça login")
+    finally:
+        db.close()
+
+
 @app.post("/conta/tag")
 def update_displayed_tag(request: Request, displayed_club_id: str = Form("0")):
     db = db_session()
@@ -1987,6 +2041,67 @@ def create_club_message(request: Request, club_id: int, body: str = Form("")):
                 f"/clubs/{club_id}?aba=chat&error={quote(str(exc.detail))}",
                 status_code=303,
             )
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/clubs/{club_id}/mensagens/{message_id}/apagar")
+def remove_club_message(request: Request, club_id: int, message_id: int):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        delete_club_message(db, club_id, user.id, message_id)
+        return RedirectResponse(f"/clubs/{club_id}?aba=chat", status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 403:
+            return RedirectResponse(f"/clubs/{club_id}?aba=chat", status_code=303)
+        if exc.status_code == 404:
+            return RedirectResponse(
+                f"/clubs/{club_id}?aba=chat&error={quote(str(exc.detail))}",
+                status_code=303,
+            )
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/clubs/{club_id}/mensagens/{message_id}/fixar")
+def pin_existing_club_message(request: Request, club_id: int, message_id: int):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        pin_club_message(db, club_id, user.id, message_id)
+        return RedirectResponse(f"/clubs/{club_id}?aba=chat", status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 403:
+            return RedirectResponse(f"/clubs/{club_id}?aba=chat", status_code=303)
+        if exc.status_code == 404:
+            return RedirectResponse(
+                f"/clubs/{club_id}?aba=chat&error={quote(str(exc.detail))}",
+                status_code=303,
+            )
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/clubs/{club_id}/mensagem-fixa/desafixar")
+def unpin_existing_club_message(request: Request, club_id: int):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        unpin_club_message(db, club_id, user.id)
+        return RedirectResponse(f"/clubs/{club_id}?aba=chat", status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 403:
+            return RedirectResponse(f"/clubs/{club_id}?aba=chat", status_code=303)
         raise
     finally:
         db.close()
@@ -2543,6 +2658,7 @@ def api_command(request: Request):
                     {"label": "Criar um clube", "href": "/clubs/novo"},
                     {"label": "Meu perfil", "href": f"/u/{user.username}"},
                     {"label": "Amigos", "href": "/amigos"},
+                    {"label": "Conversas", "href": "/mensagens"},
                 ],
             }
         ]
@@ -2698,6 +2814,45 @@ def friend_unfriend(request: Request, username: str, next: str = Form("/amigos")
         db.close()
 
 
+def _conversations_response(request: Request, db, user, person=None):
+    conversations = list_dm_conversations(db, user.id)
+    people = [row.person for row in conversations]
+    messages = []
+    are_friends = False
+    if person is not None:
+        mark_dm_read(db, user.id, person.id)
+        are_friends = relation_status(db, user.id, person.id) == "friends"
+        messages = dm_thread(db, user.id, person.id)
+        people = people + [person] + [item.sender for item in messages]
+    stamp_display_tags(db, people)
+    return templates.TemplateResponse(
+        request,
+        "direct_chat.html",
+        {
+            "user": user,
+            "person": person,
+            "messages": messages,
+            "are_friends": are_friends,
+            "conversations": conversations,
+            "error": request.query_params.get("error"),
+        },
+    )
+
+
+@app.get("/mensagens", response_class=HTMLResponse)
+def conversations_home(request: Request):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        return _conversations_response(request, db, user)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
 @app.get("/mensagens/{username}", response_class=HTMLResponse)
 def direct_chat(request: Request, username: str):
     db = db_session()
@@ -2710,23 +2865,40 @@ def direct_chat(request: Request, username: str):
             return RedirectResponse(f"/u/{user.username}", status_code=303)
         if not can_view_thread(db, user.id, person.id):
             return RedirectResponse(f"/u/{person.username}", status_code=303)
-        are_friends = relation_status(db, user.id, person.id) == "friends"
-        messages = dm_thread(db, user.id, person.id)
-        stamp_display_tags(db, [person] + [item.sender for item in messages])
-        return templates.TemplateResponse(
-            request,
-            "direct_chat.html",
-            {
-                "user": user,
-                "person": person,
-                "messages": messages,
-                "are_friends": are_friends,
-                "error": request.query_params.get("error"),
-            },
-        )
+        return _conversations_response(request, db, user, person)
     except HTTPException as exc:
         if exc.status_code == 401:
             return RedirectResponse("/login", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/mensagens/{username}/{message_id}/apagar")
+def remove_direct_message(request: Request, username: str, message_id: int):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        person = find_active_user(db, username)
+        if not person:
+            raise HTTPException(status_code=404, detail="Perfil não encontrado")
+        if person.id == user.id:
+            return RedirectResponse(f"/u/{user.username}", status_code=303)
+        delete_dm(db, user.id, person.id, message_id)
+        return RedirectResponse(f"/mensagens/{person.username}", status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        person = find_active_user(db, username)
+        nick = person.username if person else username
+        if exc.status_code == 403:
+            if person and can_view_thread(db, user.id, person.id):
+                return RedirectResponse(f"/mensagens/{nick}", status_code=303)
+            return RedirectResponse(f"/u/{nick}", status_code=303)
+        if exc.status_code == 404:
+            if person and can_view_thread(db, user.id, person.id):
+                return RedirectResponse(f"/mensagens/{nick}", status_code=303)
+            return RedirectResponse(f"/u/{nick}" if person else "/mensagens", status_code=303)
         raise
     finally:
         db.close()
@@ -2948,6 +3120,27 @@ def notifications_bell(request: Request):
     except HTTPException as exc:
         if exc.status_code == 401:
             return JSONResponse({"ok": False, "error": "Faça login"}, status_code=401)
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/notificacoes/limpar")
+def clear_user_notifications(request: Request, next: str = Form("/notificacoes")):
+    db = db_session()
+    dest = _safe_next(next, "/notificacoes")
+    try:
+        user = login_required(request, db)
+        clear_notifications(db, user.id)
+        db.commit()
+        if _notice_fetch(request):
+            return JSONResponse(_notice_payload(request, db, user.id, full=True))
+        return RedirectResponse(dest, status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            if _notice_fetch(request):
+                return JSONResponse({"ok": False, "error": "Faça login"}, status_code=401)
+            return RedirectResponse("/login", status_code=303)
         raise
     finally:
         db.close()

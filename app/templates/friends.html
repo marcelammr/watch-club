@@ -45,9 +45,8 @@
           <span>{{ person.name }}</span>
           {{ club_tag_chip(person.display_tag) }}
           <span class="muted">@{{ person.username }}</span>
-          <span class="status {{ presence_of(person) }}">{{ presence_mark(presence_of(person)) }}{{ presence_label(person) }}</span>
         </a>
-        <a class="btn btn-primary" href="/mensagens/{{ person.username }}">Conversar</a>
+        <a class="btn btn-primary" href="/mensagens/{{ person.username }}">Mensagem</a>
       </li>
     {% else %}
       <li class="muted">Você ainda não tem amigos. Envie um pedido pelo perfil de alguém do clube.</li>

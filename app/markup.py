@@ -10,6 +10,16 @@ BOLD_RE = re.compile(r"\*\*(.+?)\*\*", re.DOTALL)
 ITALIC_RE = re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", re.DOTALL)
 
 
+def pin_preview(text: str | None, limit: int = 140) -> str:
+    raw = SPOILER_RE.sub(r"\1", text or "")
+    raw = BOLD_RE.sub(r"\1", raw)
+    raw = ITALIC_RE.sub(r"\1", raw)
+    compact = " ".join(raw.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 1].rstrip() + "…"
+
+
 def format_chat(text: str | None) -> Markup:
     if not text:
         return Markup("")

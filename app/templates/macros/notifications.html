@@ -51,15 +51,34 @@
 </article>
 {% endmacro %}
 
+{% macro notice_clear_form(next_path, ajax=false) %}
+<form class="{{ 'js-notice-clear' if ajax else '' }}" action="/notificacoes/limpar" method="post"{% if not ajax %} onsubmit="return confirm('Tem certeza de que deseja limpar suas notificações?')"{% endif %}>
+  <input type="hidden" name="next" value="{{ next_path }}">
+  <button class="btn btn-icon notice-clear-btn" type="submit" aria-label="Limpar notificações" title="Limpar notificações">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4 7h16"/>
+      <path d="M9 7V5h6v2"/>
+      <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/>
+      <path d="M10 11v6M14 11v6"/>
+    </svg>
+  </button>
+</form>
+{% endmacro %}
+
 {% macro bell_popover_inner(unread, items, current_path) %}
 <div class="bell-popover-head">
   <strong>Notificações</strong>
-  {% if unread %}
-    <form action="/notificacoes/lidas" method="post">
-      <input type="hidden" name="next" value="{{ current_path }}">
-      <button class="btn btn-ghost" type="submit">Marcar todas como lidas</button>
-    </form>
-  {% endif %}
+  <div class="notice-inbox-tools">
+    {% if unread %}
+      <form action="/notificacoes/lidas" method="post">
+        <input type="hidden" name="next" value="{{ current_path }}">
+        <button class="btn btn-ghost" type="submit">Marcar todas como lidas</button>
+      </form>
+    {% endif %}
+    {% if items %}
+      {{ notice_clear_form(current_path, true) }}
+    {% endif %}
+  </div>
 </div>
 {% if items %}
   <div class="notice-list notice-list-compact">
@@ -82,6 +101,9 @@
         <input type="hidden" name="next" value="{{ current_path }}">
         <button class="btn btn-ghost" type="submit">Marcar todas como lidas</button>
       </form>
+    {% endif %}
+    {% if items %}
+      {{ notice_clear_form(current_path, true) }}
     {% endif %}
   </div>
 </div>

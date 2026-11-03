@@ -12,50 +12,65 @@
   <a class="home-btn" href="/" aria-label="Início" title="Início">{{ nav_icon('home') }}</a>
   {{ club_menu_toggle() }}
   <div class="club-switcher">
-    <div class="club-switch-head">
-      <p class="page-heading">{{ club.name }}</p>
+    {% if user_clubs and user_clubs|length > 1 %}
       <button
         type="button"
         class="club-switch-btn js-club-switch-toggle"
         aria-expanded="false"
         aria-haspopup="dialog"
         aria-controls="club-switch-popover"
-      >Trocar clube</button>
-    </div>
-    <div id="club-switch-popover" class="club-switch-popover" hidden role="dialog" aria-label="Seus clubes">
-      <p class="club-switch-kicker">Seus clubes</p>
-      <div class="club-switch-list">
-        {% for item in user_clubs or [] %}
-          {% set is_current = item.id == club.id %}
-          {% if is_current %}
-            <span class="club-switch-item is-current" aria-current="page">
+        aria-label="{{ club.name }}. Trocar de clube"
+        title="{{ club.name }}"
+      >
+        <span class="club-mark" style="--icon-fallback: {{ club.cover_color or '#3A2348' }}" aria-hidden="true">
+          {% if club.icon_image %}
+            <img src="{{ club_icon_url(club.icon_image) }}" alt="">
           {% else %}
-            <a class="club-switch-item" href="/clubs/{{ item.id }}">
+            <span class="club-icon-fallback">{{ club_icon_initials(club.name) }}</span>
           {% endif %}
-              <span class="club-mark" style="--icon-fallback: {{ item.cover_color or '#3A2348' }}">
-                {% if item.icon_image %}
-                  <img src="{{ club_icon_url(item.icon_image) }}" alt="">
-                {% else %}
-                  <span class="club-icon-fallback">{{ club_icon_initials(item.name) }}</span>
-                {% endif %}
-              </span>
-              <span class="club-switch-name">{{ item.name }}</span>
-              {% if is_current %}
-                <span class="club-switch-check" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M5 12l5 5L20 7"/>
-                  </svg>
+        </span>
+        <span class="club-switch-current">{{ club.name }}</span>
+        <svg class="club-switch-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </button>
+      <div id="club-switch-popover" class="club-switch-popover" hidden role="dialog" aria-label="Seus clubes">
+        <p class="club-switch-kicker">Seus clubes</p>
+        <div class="club-switch-list">
+          {% for item in user_clubs %}
+            {% set is_current = item.id == club.id %}
+            {% if is_current %}
+              <span class="club-switch-item is-current" aria-current="page" title="{{ item.name }}">
+            {% else %}
+              <a class="club-switch-item" href="/clubs/{{ item.id }}" title="{{ item.name }}">
+            {% endif %}
+                <span class="club-mark" style="--icon-fallback: {{ item.cover_color or '#3A2348' }}" aria-hidden="true">
+                  {% if item.icon_image %}
+                    <img src="{{ club_icon_url(item.icon_image) }}" alt="">
+                  {% else %}
+                    <span class="club-icon-fallback">{{ club_icon_initials(item.name) }}</span>
+                  {% endif %}
                 </span>
-              {% endif %}
-          {% if is_current %}
-            </span>
-          {% else %}
-            </a>
-          {% endif %}
-        {% endfor %}
+                <span class="club-switch-name">{{ item.name }}</span>
+                {% if is_current %}
+                  <span class="club-switch-check" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M5 12l5 5L20 7"/>
+                    </svg>
+                  </span>
+                {% endif %}
+            {% if is_current %}
+              </span>
+            {% else %}
+              </a>
+            {% endif %}
+          {% endfor %}
+        </div>
+        <a class="club-switch-all" href="/clubes">Ver todos os clubes</a>
       </div>
-      <a class="club-switch-all" href="/clubes">Ver todos os clubes</a>
-    </div>
+    {% else %}
+      <p class="page-heading">{{ club.name }}</p>
+    {% endif %}
   </div>
 {% endblock %}
 {% block content %}
@@ -114,27 +129,27 @@
         <span>{{ CONTENT_KINDS.get(link.show.kind, 'Série') }}</span>
         <span class="watch-flag {{ flag_class }}">{{ flag_label }}</span>
       </p>
-      {% if link.show.summary %}
-        <p class="watch-synopsis">{{ link.show.summary[:180] }}{% if link.show.summary|length > 180 %}…{% endif %}</p>
-      {% endif %}
-      {% set progress = progress_by_show.get(link.show.id) %}
-      {% set meeting = next_meeting_by_show.get(link.show.id) if watch_list != 'finalizados' else none %}
-      {% if (progress and progress.has_regular) or meeting %}
-        <div class="watch-progress">
-          {% if progress and progress.has_regular %}
-            <p>{{ progress.watched_count }} de {{ progress.total }} episódio{% if progress.total != 1 %}s{% endif %} assistidos</p>
-            {% if progress.complete %}
-              <p class="muted">Todos os episódios disponíveis foram assistidos.</p>
-            {% elif progress.next_label %}
-              <p class="muted watch-progress-next">Próximo episódio: {{ progress.next_label }}</p>
-            {% endif %}
-          {% endif %}
-          {% if meeting %}
-            <p class="muted watch-progress-meet">Próximo encontro: {{ meeting.starts_at|schedule_detail }}</p>
-          {% endif %}
-        </div>
-      {% endif %}
     </div>
+    {% if link.show.summary %}
+      <p class="watch-synopsis">{{ link.show.summary[:180] }}{% if link.show.summary|length > 180 %}…{% endif %}</p>
+    {% endif %}
+    {% set progress = progress_by_show.get(link.show.id) %}
+    {% set meeting = next_meeting_by_show.get(link.show.id) if watch_list != 'finalizados' else none %}
+    {% if (progress and progress.has_regular) or meeting %}
+      <div class="watch-progress">
+        {% if progress and progress.has_regular %}
+          <p>{{ progress.watched_count }} de {{ progress.total }} episódio{% if progress.total != 1 %}s{% endif %} assistidos</p>
+          {% if progress.complete %}
+            <p class="muted">Todos os episódios disponíveis foram assistidos.</p>
+          {% elif progress.next_label %}
+            <p class="muted watch-progress-next">Próximo episódio: {{ progress.next_label }}</p>
+          {% endif %}
+        {% endif %}
+        {% if meeting %}
+          <p class="muted watch-progress-meet">Próximo encontro: {{ meeting.starts_at|schedule_detail }}</p>
+        {% endif %}
+      </div>
+    {% endif %}
   </article>
 {% endmacro %}
 <div class="club-shell" style="--club-admin-color: {{ club.admin_name_color or '#B892FF' }}; --club-sub-color: {{ club.sub_name_color or '#6C63FF' }}">
@@ -193,28 +208,50 @@
             </svg>
           </a>
         </div>
+        {% if pinned_message %}
+          <div class="chat-pin-bar">
+            <a class="chat-pin-jump js-chat-pin" href="#msg-{{ pinned_message.id }}">
+              <span class="chat-pin-kicker">Mensagem fixada</span>
+              <span class="chat-pin-text">{{ pinned_message.body|pin_preview }}</span>
+              <span class="muted chat-pin-who">{{ club_person_name(pinned_message.user, members_by_user.get(pinned_message.user_id)) }}</span>
+            </a>
+            {% if is_admin %}
+              <form action="/clubs/{{ club.id }}/mensagem-fixa/desafixar" method="post">
+                <button class="chat-pin-unpin" type="submit">Desafixar</button>
+              </form>
+            {% endif %}
+          </div>
+        {% endif %}
+        <div class="chat-log-wrap js-chat-log-wrap">
+        <div class="chat-day-float js-chat-day-float" hidden></div>
         <div class="chat-log">
           {% for item in messages %}
-            {% set follow = not loop.first and loop.previtem.user_id == item.user_id %}
-            <article class="chat-item{% if follow %} is-follow{% endif %}">
+            {% set day_key = item.created_at|chat_day_key %}
+            {% set prev_day = loop.previtem.created_at|chat_day_key if not loop.first else '' %}
+            {% set new_day = day_key and day_key != prev_day %}
+            {% set follow = not loop.first and loop.previtem.user_id == item.user_id and not new_day %}
+            {% if new_day %}
+              <p class="chat-day-mark" data-day="{{ day_key }}"><span>{{ item.created_at|chat_day_label }}</span></p>
+            {% endif %}
+            <article class="chat-item{% if follow %} is-follow{% endif %}{% if pinned_message and pinned_message.id == item.id %} is-pinned{% endif %}" id="msg-{{ item.id }}">
               {% if follow %}
                 <span class="chat-gutter" aria-hidden="true"></span>
               {% else %}
                 <a class="chat-avatar" href="/u/{{ item.user.username }}?clube={{ club.id }}">{{ user_avatar(item.user, 'md') }}</a>
               {% endif %}
-              <div>
+              <div class="chat-item-main">
                 {% if not follow %}
                   <p class="chat-meta">
                     <span class="chat-meta-who">
                       <a class="chat-name" href="/u/{{ item.user.username }}?clube={{ club.id }}">{{ club_person_name(item.user, members_by_user.get(item.user_id)) }}</a>
                       {{ club_tag_chip(item.user.display_tag) }}
                     </span>
-                    <span class="chat-meta-when muted">{{ item.created_at.strftime('%H:%M') if item.created_at else '' }}</span>
+                    <span class="chat-meta-when muted">{{ item.created_at|chat_clock }}</span>
                   </p>
                 {% endif %}
                 <p class="chat-body">{{ item.body|chat_format }}</p>
                 {% if item.show %}
-                  <a class="chat-show-card" href="/shows/{{ item.show.id }}">
+                  <a class="chat-show-card" href="/clubs/{{ club.id }}/shows/{{ item.show.id }}">
                     {% if item.show.image_url %}
                       <img src="{{ item.show.image_url }}" alt="">
                     {% else %}
@@ -227,10 +264,32 @@
                   </a>
                 {% endif %}
               </div>
+              {% set can_delete = item.user_id == user.id or can_moderate_chat %}
+              {% if can_delete or is_admin %}
+                <div class="chat-msg-actions">
+                  {% if can_delete %}
+                    <form class="chat-pin-action" action="/clubs/{{ club.id }}/mensagens/{{ item.id }}/apagar" method="post" onsubmit="return confirm('Tem certeza que deseja apagar esta mensagem?')">
+                      <button type="submit" class="chat-pin-msg" aria-label="Apagar mensagem" title="Apagar mensagem">Apagar</button>
+                    </form>
+                  {% endif %}
+                  {% if is_admin %}
+                    {% if pinned_message and pinned_message.id == item.id %}
+                      <form class="chat-pin-action" action="/clubs/{{ club.id }}/mensagem-fixa/desafixar" method="post">
+                        <button type="submit" class="chat-pin-msg" aria-label="Desafixar mensagem" title="Desafixar mensagem">Desafixar</button>
+                      </form>
+                    {% else %}
+                      <form class="chat-pin-action" action="/clubs/{{ club.id }}/mensagens/{{ item.id }}/fixar" method="post">
+                        <button type="submit" class="chat-pin-msg" aria-label="Fixar mensagem" title="Fixar mensagem">Fixar mensagem</button>
+                      </form>
+                    {% endif %}
+                  {% endif %}
+                </div>
+              {% endif %}
             </article>
           {% else %}
             <p class="muted">Nenhuma mensagem ainda. Diga oi para o clube.</p>
           {% endfor %}
+        </div>
         </div>
         <form class="chat-form" action="/clubs/{{ club.id }}/mensagens" method="post">
           <div class="chat-composer">
@@ -1002,6 +1061,26 @@
     spoiler.setAttribute("aria-expanded", open ? "false" : "true");
     spoiler.classList.toggle("is-open", !open);
   });
+
+  (function () {
+    const log = document.querySelector(".chat-log");
+    function flashPinned(id) {
+      if (!id || !log) return false;
+      const target = document.getElementById(id);
+      if (!target) return false;
+      target.scrollIntoView({ block: "center" });
+      target.classList.add("is-pin-flash");
+      window.setTimeout(() => target.classList.remove("is-pin-flash"), 1600);
+      return true;
+    }
+    document.querySelector(".js-chat-pin")?.addEventListener("click", (event) => {
+      const href = event.currentTarget.getAttribute("href") || "";
+      if (href.startsWith("#") && flashPinned(href.slice(1))) {
+        event.preventDefault();
+      }
+    });
+    if (location.hash) flashPinned(location.hash.replace(/^#/, ""));
+  })();
 
   (function () {
     const input = document.querySelector(".js-chat-input");

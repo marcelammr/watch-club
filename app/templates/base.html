@@ -4,7 +4,7 @@
 {% from "macros/club_tag.html" import club_tag_chip %}
 {% from "macros/notifications.html" import bell_popover_inner, notice_inbox_inner %}
 <!DOCTYPE html>
-<html lang="pt-BR" class="dark" dir="ltr">
+<html lang="pt-BR" class="dark" dir="ltr"{% if user %} data-enter-sends="{% if user.enter_sends %}1{% else %}0{% endif %}"{% endif %}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -25,7 +25,7 @@
           {% set back_to = back_href_for(request) %}
           {% if back_to %}
           <a class="back-btn" href="{{ back_to }}" aria-label="Voltar">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg class="chrome-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M15 18l-6-6 6-6"/>
             </svg>
           </a>
@@ -37,7 +37,7 @@
         <nav class="top-end" aria-label="Conta">
           {% set bell_label = 'Notificações, 1 não lida' if notification_unread == 1 else ('Notificações, ' ~ notification_unread ~ ' não lidas' if notification_unread else 'Notificações') %}
           <a class="bell-btn bell-link" href="/notificacoes" aria-label="{{ bell_label }}" title="Notificações">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg class="chrome-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M6 9a6 6 0 0 1 12 0c0 7 2 7 2 9H4c0-2 2-2 2-9"/>
               <path d="M10 20a2 2 0 0 0 4 0"/>
             </svg>
@@ -45,7 +45,7 @@
           </a>
           <div class="bell-menu">
             <button type="button" class="bell-btn js-bell-toggle" aria-label="{{ bell_label }}" title="Notificações" aria-expanded="false" aria-haspopup="dialog" aria-controls="notice-inbox">
-              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <svg class="chrome-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M6 9a6 6 0 0 1 12 0c0 7 2 7 2 9H4c0-2 2-2 2-9"/>
                 <path d="M10 20a2 2 0 0 0 4 0"/>
               </svg>
@@ -72,7 +72,7 @@
                   <strong>{{ user.name }}</strong>
                   {{ club_tag_chip(user.display_tag) }}
                   <p class="muted">@{{ user.username }}</p>
-                  <p class="status {{ presence_of(user) }} js-account-status">{{ presence_mark(presence_of(user)) }}{{ presence_label(user) }}</p>
+                  <p class="status {{ presence_of(user) }} js-account-status">{{ presence_label(user) }}</p>
                 </div>
               </div>
               <a class="account-popover-link" href="/conta">Editar perfil</a>
@@ -100,7 +100,7 @@
     <a class="logo" href="/">Watch Club</a>
     <nav class="flex items-center gap-4">
       <a href="/login">Entrar</a>
-      <a class="btn" href="/register">Criar conta</a>
+      <a class="btn btn-secondary" href="/register">Criar conta</a>
     </nav>
   </header>
   {% endif %}
@@ -185,7 +185,6 @@
       const submenu = document.getElementById("status-submenu");
       const statusLine = document.querySelector(".js-account-status");
       let noticeInboxOpener = null;
-      const moonSvg = `<svg class="presence-moon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M13.2 10.15A6.2 6.2 0 0 1 5.85 2.8 6.35 6.35 0 1 0 13.2 13.6a6.2 6.2 0 0 1 0-3.45z"/></svg>`;
 
       function isOpen() {
         return root.classList.contains("sidebar-open");
@@ -287,10 +286,16 @@
 
       function bindNoticeActions(root) {
         if (!root) return;
-        root.querySelectorAll(".js-notice-action, .js-notice-mark-all").forEach((form) => {
+        root.querySelectorAll(".js-notice-action, .js-notice-mark-all, .js-notice-clear").forEach((form) => {
           if (form.dataset.bound === "1") return;
           form.dataset.bound = "1";
           form.addEventListener("submit", (event) => {
+            if (form.classList.contains("js-notice-clear")) {
+              if (!window.confirm("Tem certeza de que deseja limpar suas notificações?")) {
+                event.preventDefault();
+                return;
+              }
+            }
             event.preventDefault();
             const fromBell = Boolean(bellPopover && bellPopover.contains(form));
             const body = new URLSearchParams(new FormData(form));
@@ -299,7 +304,7 @@
               headers: { "Content-Type": "application/x-www-form-urlencoded" },
               body: body.toString()
             }).then(() => {
-              if (fromBell) setBell(false);
+              if (fromBell && !form.classList.contains("js-notice-clear")) setBell(false);
             }).catch(() => {});
           });
         });
@@ -335,11 +340,6 @@
         if (!open) setSubmenu(false);
       }
 
-      function markHtml(status, label) {
-        const icon = status === "away" ? moonSvg : '<span class="dot"></span>';
-        return icon + label;
-      }
-
       function applyStatus(status, label) {
         document.querySelectorAll("[data-user-avatar]").forEach((node) => {
           const inAccount = node.closest(".account-menu");
@@ -350,7 +350,7 @@
         });
         if (statusLine) {
           statusLine.className = "status " + status + " js-account-status";
-          statusLine.innerHTML = markHtml(status, label);
+          statusLine.textContent = label;
         }
         if (window.WatchClub && typeof window.WatchClub.remountUserAvatars === "function") {
           window.WatchClub.remountUserAvatars(document.querySelector(".account-menu"));
@@ -452,6 +452,7 @@
       sync();
     })();
   </script>
+  <script src="/static/js/chat-composer.js"></script>
   {% endif %}
   <div id="command-root"></div>
   <script type="module" src="/static/js/command.js"></script>

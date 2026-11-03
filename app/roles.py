@@ -63,6 +63,10 @@ def can(member: ClubMember | None, perm: str) -> bool:
     return perm in perms_of(member)
 
 
+def can_moderate_club_chat(member: ClubMember | None) -> bool:
+    return member_role(member) in {ROLE_ADMIN, ROLE_SUPPORT}
+
+
 def set_member_role(member: ClubMember, role: str) -> None:
     if role not in ROLES:
         role = ROLE_MEMBER

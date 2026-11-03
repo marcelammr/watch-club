@@ -1,6 +1,5 @@
 {% extends "base.html" %}
 {% from "macros/avatar.html" import user_avatar %}
-{% from "macros/presence.html" import presence_mark %}
 {% from "macros/club_tag.html" import club_tag_chip %}
 {% block title %}{{ person.name }} · Watch Club{% endblock %}
 {% block page_heading %}{{ person.name }}{% endblock %}
@@ -18,7 +17,7 @@
         <span class="profile-club-context-role">{{ context_role_label }}</span>
       </p>
     {% endif %}
-    <p class="status {{ status }}">{{ presence_mark(status) }}{{ status_label }}</p>
+    <p class="status {{ status }}">{{ status_label }}</p>
     <p class="bio-label">Bio</p>
     {% if person.bio %}
       <p class="bio-box">{{ person.bio }}</p>
@@ -59,7 +58,7 @@
           </form>
         {% elif relation == 'friends' %}
           <p class="muted">Vocês são amigos</p>
-          <p><a class="btn btn-primary" href="/mensagens/{{ person.username }}">Conversar</a></p>
+          <p><a class="btn btn-primary" href="/mensagens/{{ person.username }}">Mensagem</a></p>
           <form action="/amigos/{{ person.username }}/desfazer" method="post">
             <input type="hidden" name="next" value="/u/{{ person.username }}">
             <button class="btn btn-danger" type="submit">Desfazer amizade</button>

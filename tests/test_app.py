@@ -70,6 +70,8 @@ def test_logged_in_shell_and_clubes_page():
     assert 'href="/agenda"' in home.text
     assert 'aria-label="Meus Clubes"' in home.text
     assert 'aria-label="Amigos"' in home.text
+    assert 'aria-label="Conversas"' in home.text
+    assert 'href="/mensagens"' in home.text
     assert 'aria-label="Configurações"' in home.text
     assert 'aria-label="Sobre"' in home.text
     assert 'href="/conta"' in home.text
@@ -104,6 +106,10 @@ def test_logged_in_shell_and_clubes_page():
     assert "Sair da sessão" in account.text
     guest_home = client.get("/")
     assert "app-sidebar" not in guest_home.text
+    assert 'href="/login">Entrar</a>' in guest_home.text
+    assert 'class="btn btn-secondary" href="/register">Criar conta</a>' in guest_home.text
+    assert 'class="btn btn-secondary" href="/register">Começar</a>' in guest_home.text
+    assert 'class="btn btn-primary" href="/register">Começar</a>' not in guest_home.text
 
 
 def test_health():
@@ -478,6 +484,113 @@ def test_member_count_list_and_presence():
     away_page = owner.get(f"/clubs/{club_id}/membros")
     assert 'class="presence-moon"' in away_page.text
     assert 'aria-label="Ausente"' in away_page.text
+
+
+def test_account_popover_status_label_keeps_option_marks():
+    person = TestClient(app)
+    register_active(person, "pop_status", "pop.status@example.com")
+    person.post("/presenca", data={"status": "away", "prefer": "1"})
+    page = person.get("/")
+    popover = page.text.split('id="account-popover"', 1)[1]
+    current = popover.split('js-account-status', 1)[1].split("</p>", 1)[0]
+    submenu = popover.split('id="status-submenu"', 1)[1]
+    assert "Ausente" in current
+    assert "presence-moon" not in current
+    assert 'class="dot"' not in current
+    assert "presence-moon" in submenu
+    assert 'class="dot"' in submenu
+    assert "Online" in submenu
+    assert "Ausente" in submenu
+    assert "Offline" in submenu
+
+
+def test_account_header_status_is_label_only():
+    person = TestClient(app)
+    register_active(person, "acct_status", "acct.status@example.com", name="Conta Status")
+
+    def header_parts(html: str) -> tuple[str, str]:
+        block = html.split('class="current-avatar"', 1)[1].split("<h2>Imagem de perfil</h2>", 1)[0]
+        avatar, _, copy = block.partition('class="status')
+        return avatar, copy
+
+    person.post("/presenca", data={"status": "online", "prefer": "1"})
+    online = person.get("/conta")
+    avatar, copy = header_parts(online.text)
+    assert "Online" in copy
+    assert "presence-moon" not in copy
+    assert 'class="dot"' not in copy
+    assert 'data-presence="online"' in avatar
+
+    person.post("/presenca", data={"status": "away", "prefer": "1"})
+    away = person.get("/conta")
+    avatar, copy = header_parts(away.text)
+    assert "Ausente" in copy
+    assert "presence-moon" not in copy
+    assert 'class="dot"' not in copy
+    assert "presence-moon" in avatar
+    assert 'data-presence="away"' in avatar
+
+    person.post("/presenca", data={"status": "offline", "prefer": "1"})
+    offline = person.get("/conta")
+    avatar, copy = header_parts(offline.text)
+    assert "Offline" in copy
+    assert "presence-moon" not in copy
+    assert 'class="dot"' not in copy
+    assert 'data-presence="offline"' in avatar
+
+
+def test_profile_and_friends_presence_presentation():
+    host = TestClient(app)
+    guest = TestClient(app)
+    register_active(host, "pres_host", "pres.host@example.com", name="Pres Host")
+    register_active(guest, "pres_guest", "pres.guest@example.com", name="Pres Guest")
+    host.post("/amigos/pres_guest/convidar", data={"next": "/amigos"}, follow_redirects=False)
+    guest.post("/amigos/pres_host/aceitar", data={"next": "/amigos"}, follow_redirects=False)
+
+    def profile_head(html: str) -> tuple[str, str]:
+        head = html.split("profile-head", 1)[1].split("bio-label", 1)[0]
+        avatar, _, copy = head.partition('class="status')
+        return avatar, copy
+
+    guest.post("/presenca", data={"status": "online", "prefer": "1"})
+    profile = host.get("/u/pres_guest")
+    assert profile.status_code == 200
+    avatar, copy = profile_head(profile.text)
+    assert "Online" in copy
+    assert "presence-moon" not in copy
+    assert 'class="dot"' not in copy
+    assert 'data-presence="online"' in avatar
+
+    guest.post("/presenca", data={"status": "away", "prefer": "1"})
+    away = host.get("/u/pres_guest")
+    avatar, copy = profile_head(away.text)
+    assert "Ausente" in copy
+    assert "presence-moon" not in copy
+    assert 'class="dot"' not in copy
+    assert "presence-moon" in avatar
+    assert 'data-presence="away"' in avatar
+
+    guest.post("/presenca", data={"status": "offline", "prefer": "1"})
+    offline = host.get("/u/pres_guest")
+    avatar, copy = profile_head(offline.text)
+    assert "Offline" in copy
+    assert "presence-moon" not in copy
+    assert 'class="dot"' not in copy
+    assert 'data-presence="offline"' in avatar
+
+    guest.post("/presenca", data={"status": "away", "prefer": "1"})
+    friends = host.get("/amigos")
+    section = friends.text.split("Seus amigos</h2>", 1)[1]
+    assert "Pres Guest" in section
+    assert "@pres_guest" in section
+    assert 'href="/mensagens/pres_guest"' in section
+    assert "Mensagem" in section
+    assert 'class="status' not in section
+    assert ">Online<" not in section
+    assert ">Ausente<" not in section
+    assert ">Offline<" not in section
+    assert 'data-presence="away"' in section
+    assert "presence-moon" in section
 
 
 def test_nickname_cooldown_and_unique():
@@ -1222,12 +1335,12 @@ def test_friends_private_chat_history_and_auth():
     stale = host.get("/u/amizade_b?ok=Pedido+enviado")
     assert "Pedido enviado" not in stale.text
     assert "Vocês são amigos" in stale.text
-    assert "Conversar" in stale.text
+    assert "Mensagem" in stale.text
     assert "Desfazer amizade" in stale.text
     assert "Cancelar pedido" not in stale.text
     other_side = guest.get("/u/amizade_a")
     assert "Vocês são amigos" in other_side.text
-    assert "Conversar" in other_side.text
+    assert "Mensagem" in other_side.text
 
     sent = host.post("/mensagens/amizade_b", data={"body": "segredo-do-par"}, follow_redirects=False)
     assert sent.status_code == 303
@@ -1239,7 +1352,7 @@ def test_friends_private_chat_history_and_auth():
     assert "segredo-do-par" in same.text
 
     friends_page = host.get("/amigos")
-    assert "Conversar" in friends_page.text
+    assert "Mensagem" in friends_page.text
     assert 'href="/mensagens/amizade_b"' in friends_page.text
 
     chat = host.get(f"/clubs/{club_id}?aba=chat")
@@ -1596,22 +1709,33 @@ def test_club_switcher_lists_membership_only():
     alfa_id = int(first.headers["location"].rsplit("/", 1)[-1])
     second = owner.post("/clubs", data={"name": "Clube Beta"}, follow_redirects=False)
     beta_id = int(second.headers["location"].rsplit("/", 1)[-1])
+    closed = owner.post("/clubs", data={"name": "Sala Fechada", "is_closed": "1"}, follow_redirects=False)
+    closed_id = int(closed.headers["location"].rsplit("/", 1)[-1])
 
     stranger = TestClient(app)
     register_active(stranger, "switch_out", "switch.out@example.com")
     secret = stranger.post("/clubs", data={"name": "Clube Secreto"}, follow_redirects=False)
     secret_id = int(secret.headers["location"].rsplit("/", 1)[-1])
+    stranger.post(f"/clubs/{closed_id}/solicitar", follow_redirects=False)
 
     db = SessionLocal()
     try:
         owner_id = db.scalar(select(User.id).where(User.username_key == "switch_own"))
         before = db.scalar(select(func.count()).select_from(ClubMember).where(ClubMember.user_id == owner_id))
+        pending = db.scalar(
+            select(ClubJoinRequest).where(
+                ClubJoinRequest.club_id == closed_id,
+                ClubJoinRequest.user_id == db.scalar(select(User.id).where(User.username_key == "switch_out")),
+            )
+        )
+        assert pending is not None
     finally:
         db.close()
 
-    page = owner.get(f"/clubs/{alfa_id}")
+    with patch("app.search.search_catalog", AsyncMock(side_effect=AssertionError("busca externa"))):
+        page = owner.get(f"/clubs/{alfa_id}")
     assert page.status_code == 200
-    assert "Trocar clube" in page.text
+    assert "Trocar de clube" in page.text
     assert "js-club-switch-toggle" in page.text
     assert "Seus clubes" in page.text
     assert "Ver todos os clubes" in page.text
@@ -1620,14 +1744,19 @@ def test_club_switcher_lists_membership_only():
     popover = page.text.split('id="club-switch-popover"', 1)[1].split("</div>", 2)[0]
     assert "Clube Alfa" in popover
     assert "Clube Beta" in popover
+    assert "Sala Fechada" in popover
     assert "Clube Secreto" not in popover
     assert f'href="/clubs/{beta_id}"' in popover
+    assert f'href="/clubs/{closed_id}"' in popover
     assert f'href="/clubs/{alfa_id}"' not in popover
     assert f'href="/clubs/{secret_id}"' not in popover
     assert 'aria-current="page"' in popover
     assert "club-mark" in popover
     assert "CA" in popover
     assert "CB" in popover
+    assert "SF" in popover
+    assert popover.find("Clube Alfa") < popover.find("Clube Beta") < popover.find("Sala Fechada")
+    assert "/static/uploads/clubs/" not in popover
 
     other = owner.get(f"/clubs/{beta_id}")
     other_popover = other.text.split('id="club-switch-popover"', 1)[1].split("</div>", 2)[0]
@@ -1637,11 +1766,11 @@ def test_club_switcher_lists_membership_only():
     db = SessionLocal()
     try:
         after = db.scalar(select(func.count()).select_from(ClubMember).where(ClubMember.user_id == owner_id))
-        assert after == before == 2
+        assert after == before == 3
         member_ids = set(
             db.scalars(select(ClubMember.club_id).where(ClubMember.user_id == owner_id))
         )
-        assert member_ids == {alfa_id, beta_id}
+        assert member_ids == {alfa_id, beta_id, closed_id}
     finally:
         db.close()
 
@@ -1650,15 +1779,20 @@ def test_club_switcher_lists_membership_only():
     only = lonely.post("/clubs", data={"name": "Clube Unico"}, follow_redirects=False)
     only_id = int(only.headers["location"].rsplit("/", 1)[-1])
     solo = lonely.get(f"/clubs/{only_id}")
-    assert "Trocar clube" in solo.text
-    solo_popover = solo.text.split('id="club-switch-popover"', 1)[1].split("</div>", 2)[0]
-    assert "Clube Unico" in solo_popover
-    assert 'aria-current="page"' in solo_popover
-    assert f'href="/clubs/{only_id}"' not in solo_popover
-    assert "Ver todos os clubes" in solo.text
+    assert 'class="club-switch-btn js-club-switch-toggle"' not in solo.text
+    assert 'id="club-switch-popover"' not in solo.text
+    assert "Trocar de clube" not in solo.text
+    assert "Clube Unico" in solo.text
+    assert "page-heading" in solo.text
 
     preview = lonely.get(f"/clubs/{alfa_id}")
     assert preview.status_code == 200
-    assert "Trocar clube" not in preview.text
+    assert 'id="club-switch-popover"' not in preview.text
     assert "Participar" in preview.text
+
+    locked = stranger.get(f"/clubs/{closed_id}")
+    assert locked.status_code == 403
+    assert "js-club-switch-toggle" not in locked.text
+    assert "Clube Alfa" not in locked.text
+    assert "Clube Beta" not in locked.text
 
