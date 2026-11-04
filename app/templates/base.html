@@ -17,7 +17,7 @@
 <body class="min-h-screen font-sans text-foreground {% block body_class %}{% endblock %}">
   {% if user %}
   <div class="app-shell">
-    {{ app_sidebar(request) }}
+    {{ app_sidebar(request, user) }}
     <div class="app-main">
       <header class="top">
         <div class="top-start">
@@ -99,8 +99,8 @@
   <header class="top">
     <a class="logo" href="/">Watch Club</a>
     <nav class="flex items-center gap-4">
-      <a href="/login">Entrar</a>
-      <a class="btn btn-secondary" href="/register">Criar conta</a>
+      <a href="/auth/login">Entrar</a>
+      <a class="btn btn-secondary" href="/auth/signup">Criar conta</a>
     </nav>
   </header>
   {% endif %}

@@ -706,6 +706,25 @@
     margin-top: 0;
     padding-right: 2.75rem;
   }
+  .username-field {
+    position: relative;
+    display: block;
+  }
+  main label > .username-field {
+    margin-top: 0.375rem;
+  }
+  main .username-field input {
+    margin-top: 0;
+    padding-left: 1.85rem;
+  }
+  .username-at {
+    position: absolute;
+    left: 0.8rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted-foreground);
+    pointer-events: none;
+  }
   main .password-toggle {
     position: absolute;
     top: 50%;

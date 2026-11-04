@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Complete seu perfil · Watch Club{% endblock %}
+{% block page_heading %}Watch Club{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Complete seu perfil</h1>
+  <p>Antes de continuar, escolha como você quer aparecer no Watch Club.</p>
+  {% if identity.email %}
+  <p class="muted">E-mail verificado: {{ identity.email }}</p>
+  {% endif %}
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% if suggestions %}
+  <p class="muted">Variações disponíveis:</p>
+  <div class="suggestions">
+    {% for item in suggestions %}
+      <button type="button" class="chip js-username-suggestion" data-username="{{ item }}">{{ item }}</button>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <form action="/auth/completar-perfil" method="post">
+    <label>Nome
+      <input name="name" required maxlength="80" value="{{ form.name or '' }}" autocomplete="name">
+    </label>
+    <label>@username
+      <span class="username-field">
+        <span class="username-at" aria-hidden="true">@</span>
+        <input id="username" name="username" required minlength="3" maxlength="30" value="{{ form.username or '' }}" autocomplete="username" spellcheck="false" inputmode="text">
+      </span>
+    </label>
+    <p class="muted">Seu @ é único e será usado para encontrar seu perfil.</p>
+    <button class="btn btn-primary" type="submit">Continuar</button>
+  </form>
+  <p class="muted"><a href="/auth/logout">Sair e trocar de conta</a></p>
+</section>
+<script>
+  document.querySelectorAll(".js-username-suggestion").forEach(function (chip) {
+    chip.addEventListener("click", function () {
+      var input = document.getElementById("username");
+      if (input) input.value = chip.getAttribute("data-username") || "";
+    });
+  });
+</script>
+{% endblock %}

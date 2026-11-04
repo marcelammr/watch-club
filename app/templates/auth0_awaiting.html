@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Aguardando aprovação · Watch Club{% endblock %}
+{% block page_heading %}Watch Club{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Aguardando aprovação</h1>
+  <p>Sua solicitação foi enviada para a administração do Watch Club.</p>
+  <p>Assim que seu acesso for aprovado, você poderá entrar.</p>
+  {% if profile %}
+  <p class="muted">{{ profile.name }} · @{{ profile.username }}</p>
+  {% endif %}
+  {% if identity.email %}
+  <p class="muted">{{ identity.email }}</p>
+  {% endif %}
+  <p class="muted">Você pode sair desta conta neste computador.</p>
+  <p><a class="btn btn-ghost" href="/auth/logout">Sair</a></p>
+</section>
+{% endblock %}

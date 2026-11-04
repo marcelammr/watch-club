@@ -7,7 +7,14 @@ from sqlalchemy import select
 
 from app.db import SessionLocal
 from app.invites import STATUS_AVAILABLE, create_invite, format_invite_code, normalize_invite_code
-from app.mail import MAIL_ERROR_MESSAGE, MailDeliveryError, _send_email
+from app.mail import (
+    MAIL_ERROR_MESSAGE,
+    MailDeliveryError,
+    _send_email,
+    login_url,
+    send_registration_approved_email,
+    send_registration_rejected_email,
+)
 from app.main import app
 from app.models import AccountInvite, EmailToken, User
 from tests.test_app import register_active
@@ -149,6 +156,29 @@ def test_forgot_password_smtp_failure(monkeypatch):
     assert response.status_code == 400
     assert MAIL_ERROR_MESSAGE in response.text
     assert "reset.mail@example.com" in response.text
+
+
+def test_registration_decision_emails_use_app_base_url(monkeypatch):
+    monkeypatch.setattr("app.mail.APP_BASE_URL", "https://watch.example")
+    captured = []
+
+    def capture(to_email, subject, body):
+        captured.append((to_email, subject, body))
+
+    monkeypatch.setattr("app.mail._send_email", capture)
+    assert login_url() == "https://watch.example/auth/login"
+    send_registration_approved_email("azi@example.com", "Azi")
+    send_registration_rejected_email("azi@example.com", "Azi")
+    assert captured[0][0] == "azi@example.com"
+    assert captured[0][1] == "Seu acesso ao Watch Club foi aprovado"
+    assert "Olá, Azi!" in captured[0][2]
+    assert "https://watch.example/auth/login" in captured[0][2]
+    assert "127.0.0.1" not in captured[0][2]
+    assert captured[1][1] == "Sobre sua solicitação de acesso ao Watch Club"
+    assert "não foi aprovada neste momento" in captured[1][2]
+    assert "poderá solicitar uma revisão" in captured[1][2]
+    assert "https://watch.example" not in captured[1][2]
+    assert "Entrar no Watch Club" not in captured[1][2]
 
 
 def test_profile_email_change_smtp_failure_does_not_set_pending(monkeypatch):

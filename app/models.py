@@ -31,6 +31,7 @@ class User(Base):
     enter_sends: Mapped[bool] = mapped_column(default=False, nullable=False)
     displayed_club_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     username_changed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    is_site_admin: Mapped[bool] = mapped_column(default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     memberships: Mapped[list["ClubMember"]] = relationship(back_populates="user")
@@ -51,6 +52,21 @@ class EmailToken(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     user: Mapped[User] = relationship(back_populates="email_tokens")
+
+
+class RegistrationRequest(Base):
+    __tablename__ = "registration_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    decided_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    decision_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
+    decided_by: Mapped[User | None] = relationship(foreign_keys=[decided_by_user_id])
 
 
 class AccountInvite(Base):

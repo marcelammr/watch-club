@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Solicitação não aprovada · Watch Club{% endblock %}
+{% block page_heading %}Watch Club{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Solicitação não aprovada</h1>
+  <p>Sua solicitação de cadastro no Watch Club não foi aprovada.</p>
+  {% if profile %}
+  <p class="muted">{{ profile.name }} · @{{ profile.username }}</p>
+  {% endif %}
+  <p class="muted">Você pode sair desta conta neste computador.</p>
+  <p><a class="btn btn-ghost" href="/auth/logout">Sair</a></p>
+</section>
+{% endblock %}

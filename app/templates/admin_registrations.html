@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Cadastros · Administração · Watch Club{% endblock %}
+{% block page_heading %}Cadastros{% endblock %}
+{% block content %}
+<p class="muted"><a href="/admin">Administração</a></p>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+
+<section class="card">
+  <h2>Pendentes</h2>
+  {% if pending %}
+  <ul class="people">
+    {% for item in pending %}
+    <li>
+      <a class="person-row" href="/admin/cadastros/{{ item.id }}">
+        <span>{{ item.user.name }}</span>
+        <span class="muted">@{{ item.user.username }}</span>
+        <span class="muted">{{ item.user.email }}</span>
+        <span class="muted">{{ item.created_at|when }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Nenhuma solicitação pendente.</p>
+  {% endif %}
+</section>
+{% endblock %}

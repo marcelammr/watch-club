@@ -50,6 +50,8 @@ def migrate_schema() -> None:
         alters.append("ALTER TABLE users ADD COLUMN displayed_club_id INTEGER")
     if "enter_sends" not in columns:
         alters.append("ALTER TABLE users ADD COLUMN enter_sends BOOLEAN DEFAULT 0")
+    if "is_site_admin" not in columns:
+        alters.append("ALTER TABLE users ADD COLUMN is_site_admin BOOLEAN DEFAULT 0")
     with engine.begin() as connection:
         for statement in alters:
             connection.execute(text(statement))
@@ -78,7 +80,8 @@ def migrate_schema() -> None:
         connection.execute(
             text(
                 "UPDATE users SET username_changed_at = created_at "
-                "WHERE username_changed_at IS NULL AND created_at IS NOT NULL"
+                "WHERE username_changed_at IS NULL AND created_at IS NOT NULL "
+                "AND (auth0_sub IS NULL OR auth0_sub = '')"
             )
         )
         connection.execute(
@@ -255,6 +258,25 @@ def migrate_schema() -> None:
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_id ON users (google_id)"))
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_facebook_id ON users (facebook_id)"))
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_auth0_sub ON users (auth0_sub)"))
+    inspector.clear_cache()
+    if "registration_requests" in inspector.get_table_names():
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO registration_requests (user_id, status, created_at) "
+                    "SELECT u.id, 'pending', COALESCE(u.created_at, CURRENT_TIMESTAMP) "
+                    "FROM users u "
+                    "WHERE u.auth0_sub IS NOT NULL AND TRIM(u.auth0_sub) != '' "
+                    "AND COALESCE(u.is_active, 0) = 0 "
+                    "AND NOT EXISTS (SELECT 1 FROM registration_requests r WHERE r.user_id = u.id)"
+                )
+            )
+            connection.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_registration_requests_one_pending "
+                    "ON registration_requests (user_id) WHERE status = 'pending'"
+                )
+            )
     if "shows" in inspector.get_table_names():
         show_cols = {column["name"] for column in inspector.get_columns("shows")}
         if "kind" not in show_cols:

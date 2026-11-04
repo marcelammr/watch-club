@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Solicitação · Administração · Watch Club{% endblock %}
+{% block page_heading %}Solicitação{% endblock %}
+{% block content %}
+<p class="muted"><a href="/admin/cadastros">Cadastros</a></p>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+
+<section class="card narrow">
+  <h1>{{ person.name }}</h1>
+  <p>@{{ person.username }}</p>
+  <p>{{ person.email }}</p>
+  <p class="muted">Enviado em {{ item.created_at|when }}</p>
+  <p>Status: {{ status_label }}</p>
+  {% if item.status == 'pending' %}
+  <form action="/admin/cadastros/{{ item.id }}/aprovar" method="post">
+    <button class="btn btn-primary" type="submit">Aprovar</button>
+  </form>
+  <form action="/admin/cadastros/{{ item.id }}/recusar" method="post">
+    <button class="btn btn-danger" type="submit">Recusar</button>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

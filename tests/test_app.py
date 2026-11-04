@@ -73,6 +73,7 @@ def test_logged_in_shell_and_clubes_page():
     assert 'aria-label="Conversas"' in home.text
     assert 'href="/mensagens"' in home.text
     assert 'aria-label="Configurações"' in home.text
+    assert 'aria-label="Administração"' not in home.text
     assert 'aria-label="Sobre"' in home.text
     assert 'href="/conta"' in home.text
     assert 'href="/sobre"' in home.text
@@ -106,10 +107,12 @@ def test_logged_in_shell_and_clubes_page():
     assert "Sair da sessão" in account.text
     guest_home = client.get("/")
     assert "app-sidebar" not in guest_home.text
-    assert 'href="/login">Entrar</a>' in guest_home.text
-    assert 'class="btn btn-secondary" href="/register">Criar conta</a>' in guest_home.text
-    assert 'class="btn btn-secondary" href="/register">Começar</a>' in guest_home.text
-    assert 'class="btn btn-primary" href="/register">Começar</a>' not in guest_home.text
+    assert 'href="/auth/login">Entrar</a>' in guest_home.text
+    assert 'class="btn btn-secondary" href="/auth/signup">Criar conta</a>' in guest_home.text
+    assert 'class="btn btn-secondary" href="/auth/signup">Começar</a>' in guest_home.text
+    assert 'href="/register">Criar conta</a>' not in guest_home.text
+    assert 'href="/register">Começar</a>' not in guest_home.text
+    assert 'class="btn btn-primary" href="/auth/signup">Começar</a>' not in guest_home.text
 
 
 def test_health():
@@ -121,9 +124,10 @@ def test_health():
 def test_command_api_guest_and_member():
     guest = client.get("/api/command")
     assert guest.status_code == 200
-    labels = [item["label"] for group in guest.json()["groups"] for item in group["items"]]
-    assert "Entrar" in labels
-    assert "Criar conta" in labels
+    items = [item for group in guest.json()["groups"] for item in group["items"]]
+    hrefs = {item["label"]: item["href"] for item in items}
+    assert hrefs["Entrar"] == "/auth/login"
+    assert hrefs["Criar conta"] == "/auth/signup"
 
     member = TestClient(app)
     register_active(member, "cmdk_user", "cmdk@example.com")

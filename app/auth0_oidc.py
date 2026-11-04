@@ -21,17 +21,30 @@ class Auth0Error(Exception):
     """Falha no handshake OIDC com o Auth0."""
 
 
+def _claim_profile_text(value: object, *, max_len: int = 80) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = " ".join(value.split()).strip()
+    if not text or "@" in text:
+        return None
+    return text[:max_len]
+
+
 @dataclass(frozen=True)
 class Auth0Identity:
     sub: str
     email: str | None
     email_verified: bool
+    name: str | None = None
+    nickname: str | None = None
 
     def pending_payload(self) -> dict:
         return {
             "sub": self.sub,
             "email": self.email or "",
             "email_verified": self.email_verified,
+            "name": self.name or "",
+            "nickname": self.nickname or "",
         }
 
 
@@ -59,6 +72,10 @@ def auth0_connection() -> str:
     return app_config.auth0_connection() or AUTH0_DATABASE_CONNECTION
 
 
+def claim_email_verified(value: object) -> bool:
+    return value is True
+
+
 def identity_from_claims(claims: dict) -> Auth0Identity:
     sub = str(claims.get("sub") or "").strip()
     if not sub:
@@ -70,7 +87,9 @@ def identity_from_claims(claims: dict) -> Auth0Identity:
     return Auth0Identity(
         sub=sub,
         email=email,
-        email_verified=bool(claims.get("email_verified")),
+        email_verified=claim_email_verified(claims.get("email_verified")),
+        name=_claim_profile_text(claims.get("name")),
+        nickname=_claim_profile_text(claims.get("nickname")),
     )
 
 
@@ -84,11 +103,13 @@ def pending_identity(payload: dict | None) -> Auth0Identity | None:
     return Auth0Identity(
         sub=sub,
         email=email_raw or None,
-        email_verified=bool(payload.get("email_verified")),
+        email_verified=claim_email_verified(payload.get("email_verified")),
+        name=_claim_profile_text(payload.get("name")),
+        nickname=_claim_profile_text(payload.get("nickname")),
     )
 
 
-def authorize_url(state: str, nonce: str, code_challenge: str) -> str:
+def authorize_url(state: str, nonce: str, code_challenge: str, *, signup: bool = False) -> str:
     if not auth0_enabled():
         raise Auth0Error("Auth0 não está configurado.")
     params = {
@@ -102,6 +123,8 @@ def authorize_url(state: str, nonce: str, code_challenge: str) -> str:
         "code_challenge_method": "S256",
         "connection": auth0_connection(),
     }
+    if signup:
+        params["screen_hint"] = "signup"
     return f"https://{auth0_host()}/authorize?{urlencode(params)}"
 
 

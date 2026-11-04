@@ -10,15 +10,20 @@ from sqlalchemy.orm import Session, selectinload
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.accounts import (
+    auth0_followup_path,
+    complete_auth0_onboarding,
     create_user,
     email_taken,
     find_user_by_auth0_sub,
     find_user_by_email,
+    resolve_auth0_login_user_id,
     find_valid_reset,
     login_or_create_oauth,
     normalize_email,
     send_activation,
     send_password_reset,
+    suggested_auth0_name,
+    suggested_auth0_username,
     utcnow,
 )
 from app.auth0_oidc import (
@@ -198,6 +203,14 @@ from app.oauth import (
 )
 from app.presence import LABELS as PRESENCE_LABELS
 from app.presence import mark_logout, presence_of, touch_presence
+from app.registrations import (
+    STATUS_LABELS,
+    approve_registration,
+    get_registration,
+    list_pending_registrations,
+    reject_registration,
+    require_site_admin,
+)
 from app.roles import (
     MAX_ADMINS,
     MAX_SUPPORT,
@@ -916,6 +929,7 @@ def verify_email_page(request: Request, token: str | None = None):
             user.is_active = True
             db.delete(record)
             db.commit()
+            request.session.pop("auth_provider", None)
             request.session["user_id"] = user.id
             request.session.pop("verify_link", None)
             return RedirectResponse("/?ok=Conta+ativada", status_code=303)
@@ -1072,6 +1086,7 @@ def reset_password(
         db.delete(record)
         request.session.pop("reset_email", None)
         request.session.pop("reset_code", None)
+        request.session.pop("auth_provider", None)
         request.session["user_id"] = user.id
         touch_presence(user, "online")
         db.commit()
@@ -1102,6 +1117,7 @@ def login(request: Request, email: str = Form(...), password: str = Form(...)):
             if EMAIL_DEV_SHOW_LINK:
                 request.session["verify_link"] = verify_url
             return RedirectResponse("/verificar-email?error=Ative+sua+conta+pelo+e-mail", status_code=303)
+        request.session.pop("auth_provider", None)
         request.session["user_id"] = user.id
         touch_presence(user, "online")
         db.commit()
@@ -1110,8 +1126,7 @@ def login(request: Request, email: str = Form(...), password: str = Form(...)):
         db.close()
 
 
-@app.post("/logout")
-def logout(request: Request):
+def _end_watch_club_session(request: Request) -> None:
     db = db_session()
     try:
         user = current_user(request, db)
@@ -1121,6 +1136,17 @@ def logout(request: Request):
     finally:
         db.close()
     request.session.clear()
+
+
+@app.post("/logout")
+def logout(request: Request):
+    auth0_session = request.session.get("auth_provider") == "auth0"
+    _end_watch_club_session(request)
+    if auth0_session and auth0_enabled():
+        try:
+            return RedirectResponse(auth0_logout_url(), status_code=303)
+        except Auth0Error:
+            pass
     return RedirectResponse("/", status_code=303)
 
 
@@ -1130,8 +1156,7 @@ def _clear_auth0_handshake(request: Request) -> None:
     request.session.pop("auth0_verifier", None)
 
 
-@app.get("/auth/login")
-def auth0_login_start(request: Request):
+def _start_auth0(request: Request, *, signup: bool = False) -> RedirectResponse:
     if not auth0_enabled():
         return RedirectResponse(
             "/login?error=Configure+AUTH0_DOMAIN,+AUTH0_CLIENT_ID+e+AUTH0_CLIENT_SECRET+no+.env",
@@ -1146,10 +1171,23 @@ def auth0_login_start(request: Request):
     request.session["auth0_nonce"] = nonce
     request.session["auth0_verifier"] = verifier
     try:
-        return RedirectResponse(auth0_authorize_url(state, nonce, challenge), status_code=303)
+        return RedirectResponse(
+            auth0_authorize_url(state, nonce, challenge, signup=signup),
+            status_code=303,
+        )
     except Auth0Error:
         _clear_auth0_handshake(request)
         return RedirectResponse("/login?error=Não+foi+possível+iniciar+o+login+Auth0", status_code=303)
+
+
+@app.get("/auth/login")
+def auth0_login_start(request: Request):
+    return _start_auth0(request, signup=False)
+
+
+@app.get("/auth/signup")
+def auth0_signup_start(request: Request):
+    return _start_auth0(request, signup=True)
 
 
 @app.get("/callback")
@@ -1172,45 +1210,289 @@ def auth0_callback(request: Request, code: str | None = None, state: str | None 
             return RedirectResponse("/login?error=Não+foi+possível+validar+o+retorno+do+Auth0", status_code=303)
         _clear_auth0_handshake(request)
         request.session.pop("user_id", None)
-        user = find_user_by_auth0_sub(db, identity.sub)
+        user_id = resolve_auth0_login_user_id(
+            db,
+            sub=identity.sub,
+            email=identity.email,
+            email_verified=identity.email_verified,
+        )
+        user = db.get(User, user_id) if user_id else None
         if user and user.is_active:
             request.session.pop("auth0_pending", None)
+            request.session["auth_provider"] = "auth0"
             request.session["user_id"] = user.id
             touch_presence(user, "online")
             db.commit()
             return RedirectResponse("/", status_code=303)
+        request.session.pop("user_id", None)
+        request.session["auth_provider"] = "auth0"
         request.session["auth0_pending"] = identity.pending_payload()
-        return RedirectResponse("/auth/pendente", status_code=303)
+        return RedirectResponse(
+            auth0_followup_path(db, user, email=identity.email, email_verified=identity.email_verified),
+            status_code=303,
+        )
     finally:
         db.close()
+
+
+def _auth0_pending_identity(request: Request):
+    return pending_identity(request.session.get("auth0_pending"))
+
+
+def _auth0_gate_page(request: Request, template: str, identity, extra: dict | None = None, status_code: int = 200):
+    context = {"user": None, "identity": identity}
+    if extra:
+        context.update(extra)
+    return templates.TemplateResponse(request, template, context, status_code=status_code)
 
 
 @app.get("/auth/pendente", response_class=HTMLResponse)
 def auth0_pending_page(request: Request):
-    identity = pending_identity(request.session.get("auth0_pending"))
+    identity = _auth0_pending_identity(request)
     if not identity:
         return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
-    return templates.TemplateResponse(
-        request,
-        "auth0_pending.html",
-        {
-            "user": None,
-            "identity": identity,
-        },
-    )
+    db = db_session()
+    try:
+        user = find_user_by_auth0_sub(db, identity.sub)
+        destination = auth0_followup_path(db, user, email=identity.email, email_verified=identity.email_verified)
+        if destination != "/auth/pendente":
+            return RedirectResponse(destination, status_code=303)
+        return _auth0_gate_page(request, "auth0_pending.html", identity)
+    finally:
+        db.close()
+
+
+@app.get("/auth/completar-perfil", response_class=HTMLResponse)
+def auth0_complete_profile_form(request: Request):
+    identity = _auth0_pending_identity(request)
+    if not identity:
+        return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
+    db = db_session()
+    try:
+        user = find_user_by_auth0_sub(db, identity.sub)
+        destination = auth0_followup_path(db, user, email=identity.email, email_verified=identity.email_verified)
+        if destination != "/auth/completar-perfil":
+            return RedirectResponse(destination, status_code=303)
+        suggested_name = suggested_auth0_name(
+            email=identity.email,
+            name=identity.name,
+            nickname=identity.nickname,
+        )
+        suggested_username = suggested_auth0_username(db, suggested_name or identity.email or "cinefilo")
+        return _auth0_gate_page(
+            request,
+            "auth0_onboard.html",
+            identity,
+            {
+                "error": request.query_params.get("error") or "",
+                "suggestions": [],
+                "form": {"name": suggested_name, "username": suggested_username},
+            },
+        )
+    finally:
+        db.close()
+
+
+@app.post("/auth/completar-perfil")
+def auth0_complete_profile(request: Request, name: str = Form(""), username: str = Form("")):
+    identity = _auth0_pending_identity(request)
+    if not identity:
+        return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
+    db = db_session()
+    try:
+        existing = find_user_by_auth0_sub(db, identity.sub)
+        destination = auth0_followup_path(db, existing, email=identity.email, email_verified=identity.email_verified)
+        if existing or destination != "/auth/completar-perfil":
+            if existing and existing.is_active:
+                request.session.pop("auth0_pending", None)
+                request.session["auth_provider"] = "auth0"
+                request.session["user_id"] = existing.id
+                touch_presence(existing, "online")
+                db.commit()
+                return RedirectResponse("/", status_code=303)
+            request.session.pop("user_id", None)
+            return RedirectResponse(destination, status_code=303)
+        outcome, user_id, error, suggestions = complete_auth0_onboarding(
+            db,
+            sub=identity.sub,
+            email=identity.email,
+            email_verified=identity.email_verified,
+            name=name,
+            username=username,
+        )
+        user = db.get(User, user_id) if user_id else None
+        if outcome == "active" and user:
+            request.session.pop("auth0_pending", None)
+            request.session["auth_provider"] = "auth0"
+            request.session["user_id"] = user.id
+            touch_presence(user, "online")
+            db.commit()
+            return RedirectResponse("/", status_code=303)
+        if outcome == "awaiting":
+            request.session.pop("user_id", None)
+            request.session["auth_provider"] = "auth0"
+            return RedirectResponse("/auth/aguardando", status_code=303)
+        if outcome == "unverified":
+            request.session.pop("user_id", None)
+            return RedirectResponse("/auth/pendente", status_code=303)
+        form = {"name": (name or "").strip()[:80], "username": normalize_username(username)}
+        return _auth0_gate_page(
+            request,
+            "auth0_onboard.html",
+            identity,
+            {"error": error, "suggestions": suggestions, "form": form},
+            status_code=400,
+        )
+    finally:
+        db.close()
+
+
+@app.get("/auth/aguardando", response_class=HTMLResponse)
+def auth0_awaiting_page(request: Request):
+    identity = _auth0_pending_identity(request)
+    if not identity:
+        return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
+    db = db_session()
+    try:
+        user = find_user_by_auth0_sub(db, identity.sub)
+        destination = auth0_followup_path(db, user, email=identity.email, email_verified=identity.email_verified)
+        if destination == "/" and user and user.is_active and (user.auth0_sub or "").strip() == identity.sub:
+            request.session.pop("auth0_pending", None)
+            request.session["auth_provider"] = "auth0"
+            request.session["user_id"] = user.id
+            touch_presence(user, "online")
+            db.commit()
+            return RedirectResponse("/", status_code=303)
+        if destination != "/auth/aguardando":
+            return RedirectResponse(destination, status_code=303)
+        request.session.pop("user_id", None)
+        return _auth0_gate_page(request, "auth0_awaiting.html", identity, {"profile": user})
+    finally:
+        db.close()
+
+
+@app.get("/auth/nao-aprovado", response_class=HTMLResponse)
+def auth0_rejected_page(request: Request):
+    identity = _auth0_pending_identity(request)
+    if not identity:
+        return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
+    db = db_session()
+    try:
+        user = find_user_by_auth0_sub(db, identity.sub)
+        destination = auth0_followup_path(db, user, email=identity.email, email_verified=identity.email_verified)
+        if destination != "/auth/nao-aprovado":
+            return RedirectResponse(destination, status_code=303)
+        request.session.pop("user_id", None)
+        return _auth0_gate_page(request, "auth0_rejected.html", identity, {"profile": user})
+    finally:
+        db.close()
+
+
+def _admin_http_redirect(exc: HTTPException, fallback: str = "/"):
+    if exc.status_code == 401:
+        return RedirectResponse("/login", status_code=303)
+    if exc.status_code == 403:
+        return RedirectResponse("/?error=" + quote("Acesso restrito à administração"), status_code=303)
+    if exc.status_code == 404:
+        return RedirectResponse("/admin/cadastros?error=" + quote(str(exc.detail)), status_code=303)
+    if exc.status_code == 400:
+        return RedirectResponse(f"{fallback}?error=" + quote(str(exc.detail)), status_code=303)
+    raise exc
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_home(request: Request):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        require_site_admin(user)
+        return templates.TemplateResponse(request, "admin.html", {"user": user})
+    except HTTPException as exc:
+        return _admin_http_redirect(exc)
+    finally:
+        db.close()
+
+
+@app.get("/admin/cadastros", response_class=HTMLResponse)
+def admin_registrations(request: Request):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        require_site_admin(user)
+        return templates.TemplateResponse(
+            request,
+            "admin_registrations.html",
+            {
+                "user": user,
+                "pending": list_pending_registrations(db),
+                "error": request.query_params.get("error"),
+                "ok": request.query_params.get("ok"),
+            },
+        )
+    except HTTPException as exc:
+        return _admin_http_redirect(exc)
+    finally:
+        db.close()
+
+
+@app.get("/admin/cadastros/{request_id}", response_class=HTMLResponse)
+def admin_registration_detail(request: Request, request_id: int):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        require_site_admin(user)
+        item = get_registration(db, request_id)
+        if not item or not item.user:
+            raise HTTPException(status_code=404, detail="Solicitação não encontrada")
+        return templates.TemplateResponse(
+            request,
+            "admin_registration_detail.html",
+            {
+                "user": user,
+                "item": item,
+                "person": item.user,
+                "status_label": STATUS_LABELS.get(item.status, item.status),
+                "error": request.query_params.get("error"),
+                "ok": request.query_params.get("ok"),
+            },
+        )
+    except HTTPException as exc:
+        return _admin_http_redirect(exc, "/admin/cadastros")
+    finally:
+        db.close()
+
+
+@app.post("/admin/cadastros/{request_id}/aprovar")
+def admin_registration_approve(request: Request, request_id: int):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        require_site_admin(user)
+        approve_registration(db, request_id, user.id)
+        return RedirectResponse("/admin/cadastros?ok=" + quote("Solicitação aprovada."), status_code=303)
+    except HTTPException as exc:
+        return _admin_http_redirect(exc, f"/admin/cadastros/{request_id}")
+    finally:
+        db.close()
+
+
+@app.post("/admin/cadastros/{request_id}/recusar")
+def admin_registration_reject(request: Request, request_id: int):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        require_site_admin(user)
+        reject_registration(db, request_id, user.id)
+        return RedirectResponse("/admin/cadastros?ok=" + quote("Solicitação recusada."), status_code=303)
+    except HTTPException as exc:
+        return _admin_http_redirect(exc, f"/admin/cadastros/{request_id}")
+    finally:
+        db.close()
 
 
 @app.get("/auth/logout")
 def auth0_logout(request: Request):
-    db = db_session()
-    try:
-        user = current_user(request, db)
-        if user:
-            mark_logout(user)
-            db.commit()
-    finally:
-        db.close()
-    request.session.clear()
+    _end_watch_club_session(request)
     if auth0_enabled():
         try:
             return RedirectResponse(auth0_logout_url(), status_code=303)
@@ -1255,6 +1537,7 @@ def oauth_callback(request: Request, provider: str, code: str | None = None, sta
             return RedirectResponse("/login?error=Não+foi+possível+entrar+com+essa+conta", status_code=303)
         request.session.pop("oauth_state", None)
         request.session.pop("oauth_provider", None)
+        request.session.pop("auth_provider", None)
         request.session["user_id"] = user.id
         return RedirectResponse("/", status_code=303)
     finally:
@@ -2746,8 +3029,8 @@ def api_command(request: Request):
                         "heading": "Navegação",
                         "items": [
                             {"label": "Início", "href": "/"},
-                            {"label": "Entrar", "href": "/login"},
-                            {"label": "Criar conta", "href": "/register"},
+                            {"label": "Entrar", "href": "/auth/login"},
+                            {"label": "Criar conta", "href": "/auth/signup"},
                         ],
                     }
                 ]
