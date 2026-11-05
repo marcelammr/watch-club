@@ -219,6 +219,62 @@ def migrate_schema() -> None:
         if "related_id" not in notice_cols:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE notifications ADD COLUMN related_id INTEGER"))
+        inspector.clear_cache()
+        club_col = next(
+            (column for column in inspector.get_columns("notifications") if column["name"] == "club_id"),
+            None,
+        )
+        if club_col is not None and club_col.get("nullable") is False:
+            with engine.begin() as connection:
+                connection.execute(text("PRAGMA foreign_keys=OFF"))
+                connection.execute(
+                    text(
+                        "CREATE TABLE notifications_new ("
+                        "id INTEGER NOT NULL PRIMARY KEY, "
+                        "user_id INTEGER NOT NULL, "
+                        "type VARCHAR(32) NOT NULL, "
+                        "club_id INTEGER, "
+                        "actor_user_id INTEGER NOT NULL, "
+                        "related_id INTEGER, "
+                        "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                        "read_at DATETIME, "
+                        "FOREIGN KEY(user_id) REFERENCES users (id), "
+                        "FOREIGN KEY(club_id) REFERENCES clubs (id), "
+                        "FOREIGN KEY(actor_user_id) REFERENCES users (id)"
+                        ")"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO notifications_new "
+                        "(id, user_id, type, club_id, actor_user_id, related_id, created_at, read_at) "
+                        "SELECT id, user_id, type, club_id, actor_user_id, related_id, created_at, read_at "
+                        "FROM notifications"
+                    )
+                )
+                connection.execute(text("DROP TABLE notifications"))
+                connection.execute(text("ALTER TABLE notifications_new RENAME TO notifications"))
+                connection.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_notifications_user_created "
+                        "ON notifications (user_id, created_at)"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_notifications_user_read "
+                        "ON notifications (user_id, read_at)"
+                    )
+                )
+                connection.execute(text("PRAGMA foreign_keys=ON"))
+        inspector.clear_cache()
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_notifications_one_registration_per_admin "
+                    "ON notifications (user_id, related_id) WHERE type = 'registration_request'"
+                )
+            )
 
     member_cols = set()
     if "club_members" in inspector.get_table_names():

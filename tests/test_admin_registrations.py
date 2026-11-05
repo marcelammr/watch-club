@@ -4,8 +4,10 @@ from fastapi.testclient import TestClient
 from app.auth0_oidc import Auth0Identity
 from app.db import SessionLocal, engine
 from app.main import app
-from app.models import RegistrationRequest, User
+from app.models import Notification, RegistrationRequest, User
+from app.notifications import TYPE_REGISTRATION_REQUEST, unread_count
 from app.registrations import STATUS_APPROVED, STATUS_PENDING, STATUS_REJECTED
+from app.roles import PERM_JOINS
 from app.schema import migrate_schema
 from tests.test_app import register_active
 from tests.test_auth0 import _assert_auth0_tenant_logout, _enable_auth0, _start_callback
@@ -50,10 +52,17 @@ def test_is_site_admin_defaults_false_and_schema_exists():
     } <= request_cols
     from sqlalchemy import text
 
+    notice_cols = {column["name"]: column for column in inspector.get_columns("notifications")}
+    assert notice_cols["club_id"]["nullable"] is True
     with engine.connect() as connection:
         index_sql = connection.execute(
             text("SELECT sql FROM sqlite_master WHERE name = 'ix_registration_requests_one_pending'")
         ).scalar()
+        notice_index = connection.execute(
+            text("SELECT sql FROM sqlite_master WHERE name = 'ix_notifications_one_registration_per_admin'")
+        ).scalar()
+    assert notice_index
+    assert "registration_request" in notice_index
     assert index_sql
     assert "pending" in index_sql.lower()
     http = TestClient(app)
@@ -454,3 +463,256 @@ def test_legacy_login_still_works_with_admin_schema(monkeypatch):
     assert http.get("/register").status_code == 200
     google = http.get("/auth/google", follow_redirects=False)
     assert google.status_code == 303
+
+
+def _registration_notes(request_id: int) -> list[Notification]:
+    db = SessionLocal()
+    try:
+        return list(
+            db.scalars(
+                select(Notification).where(
+                    Notification.type == TYPE_REGISTRATION_REQUEST,
+                    Notification.related_id == request_id,
+                )
+            )
+        )
+    finally:
+        db.close()
+
+
+def test_new_pending_registration_notifies_site_admins_only(monkeypatch):
+    _enable_auth0(monkeypatch)
+    site_one = TestClient(app)
+    register_active(site_one, "ntf_site_a", "ntf.site.a@example.com")
+    _grant_site_admin("ntf.site.a@example.com")
+    site_two = TestClient(app)
+    register_active(site_two, "ntf_site_b", "ntf.site.b@example.com")
+    _grant_site_admin("ntf.site.b@example.com")
+    idle_admin = TestClient(app)
+    register_active(idle_admin, "ntf_site_idle", "ntf.site.idle@example.com")
+    _grant_site_admin("ntf.site.idle@example.com")
+    db = SessionLocal()
+    try:
+        idle = db.scalar(select(User).where(User.email == "ntf.site.idle@example.com"))
+        idle.is_active = False
+        db.commit()
+    finally:
+        db.close()
+    common = TestClient(app)
+    register_active(common, "ntf_common", "ntf.common@example.com")
+    club_host = TestClient(app)
+    register_active(club_host, "ntf_club_adm", "ntf.club.adm@example.com")
+    created = club_host.post("/clubs", data={"name": "Clube Sem Site Admin", "is_closed": "1"}, follow_redirects=False)
+    club_id = int(created.headers["location"].rsplit("/", 1)[-1])
+    helper = TestClient(app)
+    register_active(helper, "ntf_club_sub", "ntf.club.sub@example.com")
+    db = SessionLocal()
+    try:
+        from app.models import Club
+
+        code = db.get(Club, club_id).join_code
+        helper_id = db.scalar(select(User.id).where(User.email == "ntf.club.sub@example.com"))
+    finally:
+        db.close()
+    helper.post("/clubs/join", data={"join_code": code, "next": "/"}, follow_redirects=False)
+    club_host.post(f"/clubs/{club_id}/solicitacoes/{helper_id}/aceitar", follow_redirects=False)
+    club_host.post(
+        f"/clubs/{club_id}/membros/{helper_id}/papel",
+        data={"role": "support", "support_perm": [PERM_JOINS]},
+        follow_redirects=False,
+    )
+    created = _onboard(TestClient(app), "auth0|ntf-azi", "ntf.azi@example.com", "Azi", "azi_crow")
+    assert created.headers["location"] == "/auth/aguardando"
+    db = SessionLocal()
+    try:
+        actor = db.scalar(select(User).where(User.email == "ntf.azi@example.com"))
+        item = db.scalar(select(RegistrationRequest).where(RegistrationRequest.user_id == actor.id))
+        assert item.status == STATUS_PENDING
+        notes = list(
+            db.scalars(
+                select(Notification).where(
+                    Notification.type == TYPE_REGISTRATION_REQUEST,
+                    Notification.related_id == item.id,
+                )
+            )
+        )
+        recipients = {note.user_id for note in notes}
+        admin_a_id = db.scalar(select(User.id).where(User.email == "ntf.site.a@example.com"))
+        admin_b_id = db.scalar(select(User.id).where(User.email == "ntf.site.b@example.com"))
+        common_id = db.scalar(select(User.id).where(User.email == "ntf.common@example.com"))
+        host_id = db.scalar(select(User.id).where(User.email == "ntf.club.adm@example.com"))
+        idle_id = db.scalar(select(User.id).where(User.email == "ntf.site.idle@example.com"))
+        assert {admin_a_id, admin_b_id} <= recipients
+        assert {common_id, host_id, helper_id, idle_id, actor.id}.isdisjoint(recipients)
+        assert all(note.actor_user_id == actor.id for note in notes)
+        assert all(note.club_id is None for note in notes)
+        assert all(note.read_at is None for note in notes)
+        request_id = item.id
+        note_id = next(note.id for note in notes if note.user_id == admin_a_id)
+        unread_a = unread_count(db, admin_a_id)
+        host_reg = list(
+            db.scalars(
+                select(Notification).where(
+                    Notification.user_id.in_([common_id, host_id, helper_id, idle_id, actor.id]),
+                    Notification.type == TYPE_REGISTRATION_REQUEST,
+                    Notification.related_id == item.id,
+                )
+            )
+        )
+    finally:
+        db.close()
+    assert unread_a >= 1
+    assert host_reg == []
+    home = site_one.get("/")
+    assert "Azi" in home.text
+    assert "@azi_crow" in home.text
+    assert "solicitou acesso ao Watch Club" in home.text
+    opened = site_one.get(f"/notificacoes/{note_id}", follow_redirects=False)
+    assert opened.status_code == 303
+    assert opened.headers["location"] == f"/admin/cadastros/{request_id}"
+    detail = site_one.get(opened.headers["location"])
+    assert detail.status_code == 200
+    blocked = common.get(f"/admin/cadastros/{request_id}", follow_redirects=False)
+    assert blocked.status_code == 303
+
+
+def test_repeated_onboarding_does_not_duplicate_registration_notification(monkeypatch):
+    _enable_auth0(monkeypatch)
+    admin = TestClient(app)
+    register_active(admin, "ntf_dup_admin", "ntf.dup.admin@example.com")
+    _grant_site_admin("ntf.dup.admin@example.com")
+    waiting = TestClient(app)
+    first = _onboard(waiting, "auth0|ntf-dup", "ntf.dup.user@example.com", "Dup User", "ntf_dup_user")
+    assert first.headers["location"] == "/auth/aguardando"
+    db = SessionLocal()
+    try:
+        user = db.scalar(select(User).where(User.email == "ntf.dup.user@example.com"))
+        item = db.scalar(select(RegistrationRequest).where(RegistrationRequest.user_id == user.id))
+        request_id = item.id
+        before = db.scalar(
+            select(Notification).where(
+                Notification.type == TYPE_REGISTRATION_REQUEST,
+                Notification.related_id == item.id,
+            )
+        )
+        assert before is not None
+    finally:
+        db.close()
+    again = waiting.post(
+        "/auth/completar-perfil",
+        data={"name": "Dup User", "username": "ntf_dup_user"},
+        follow_redirects=False,
+    )
+    assert again.status_code == 303
+    waiting.get("/auth/aguardando")
+    _start_callback(
+        waiting,
+        Auth0Identity(
+            sub="auth0|ntf-dup",
+            email="ntf.dup.user@example.com",
+            email_verified=True,
+            name="Dup User",
+        ),
+    )
+    notes = _registration_notes(request_id)
+    db = SessionLocal()
+    try:
+        admin_id = db.scalar(select(User.id).where(User.email == "ntf.dup.admin@example.com"))
+    finally:
+        db.close()
+    assert len({note.id for note in notes if note.user_id == admin_id}) == 1
+    assert len(notes) == len({note.user_id for note in notes})
+    db = SessionLocal()
+    try:
+        requests = list(db.scalars(select(RegistrationRequest).where(RegistrationRequest.user_id == notes[0].actor_user_id)))
+        assert len(requests) == 1
+        assert requests[0].status == STATUS_PENDING
+    finally:
+        db.close()
+
+
+def test_failed_onboarding_does_not_notify_site_admin(monkeypatch):
+    _enable_auth0(monkeypatch)
+    admin = TestClient(app)
+    register_active(admin, "ntf_fail_admin", "ntf.fail.admin@example.com")
+    _grant_site_admin("ntf.fail.admin@example.com")
+    http = TestClient(app)
+    _start_callback(
+        http,
+        Auth0Identity(sub="auth0|ntf-fail", email="ntf.fail.user@example.com", email_verified=True, name="Fail User"),
+    )
+    failed = http.post(
+        "/auth/completar-perfil",
+        data={"name": "Fail User", "username": "ab"},
+        follow_redirects=False,
+    )
+    assert failed.status_code == 400
+    db = SessionLocal()
+    try:
+        admin_id = db.scalar(select(User.id).where(User.email == "ntf.fail.admin@example.com"))
+        assert db.scalar(select(User).where(User.email == "ntf.fail.user@example.com")) is None
+        notes = list(
+            db.scalars(
+                select(Notification).where(
+                    Notification.user_id == admin_id,
+                    Notification.type == TYPE_REGISTRATION_REQUEST,
+                )
+            )
+        )
+        assert notes == []
+    finally:
+        db.close()
+
+
+def test_registration_notification_survives_decision_and_keeps_email(monkeypatch):
+    _enable_auth0(monkeypatch)
+    admin = TestClient(app)
+    register_active(admin, "ntf_mail_admin", "ntf.mail.admin@example.com")
+    _grant_site_admin("ntf.mail.admin@example.com")
+    _onboard(TestClient(app), "auth0|ntf-mail", "ntf.mail.user@example.com", "Mail User", "ntf_mail_user")
+    sent = []
+    monkeypatch.setattr("app.mail._send_email", lambda *args: sent.append(args))
+    db = SessionLocal()
+    try:
+        user = db.scalar(select(User).where(User.email == "ntf.mail.user@example.com"))
+        item = db.scalar(select(RegistrationRequest).where(RegistrationRequest.user_id == user.id))
+        admin_id = db.scalar(select(User.id).where(User.email == "ntf.mail.admin@example.com"))
+        note = db.scalar(
+            select(Notification).where(
+                Notification.type == TYPE_REGISTRATION_REQUEST,
+                Notification.related_id == item.id,
+                Notification.user_id == admin_id,
+            )
+        )
+        request_id = item.id
+        note_id = note.id
+    finally:
+        db.close()
+    approved = admin.post(f"/admin/cadastros/{request_id}/aprovar", follow_redirects=False)
+    assert approved.status_code == 303
+    assert len(sent) == 1
+    assert sent[0][1] == "Seu acesso ao Watch Club foi aprovado"
+    opened = admin.get(f"/notificacoes/{note_id}", follow_redirects=False)
+    assert opened.headers["location"] == f"/admin/cadastros/{request_id}"
+    page = admin.get(f"/admin/cadastros/{request_id}")
+    assert page.status_code == 200
+    assert "Aprovada" in page.text
+    db = SessionLocal()
+    try:
+        assert db.get(Notification, note_id) is not None
+        assert db.get(RegistrationRequest, request_id).status == STATUS_APPROVED
+    finally:
+        db.close()
+    sent.clear()
+    _onboard(TestClient(app), "auth0|ntf-rej", "ntf.rej.user@example.com", "Rej User", "ntf_rej_user")
+    db = SessionLocal()
+    try:
+        user = db.scalar(select(User).where(User.email == "ntf.rej.user@example.com"))
+        item = db.scalar(select(RegistrationRequest).where(RegistrationRequest.user_id == user.id))
+        request_id = item.id
+    finally:
+        db.close()
+    rejected = admin.post(f"/admin/cadastros/{request_id}/recusar", follow_redirects=False)
+    assert rejected.status_code == 303
+    assert len(sent) == 1
+    assert sent[0][1] == "Sobre sua solicitação de acesso ao Watch Club"

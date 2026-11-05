@@ -15,6 +15,7 @@ from app.roles import PERM_JOINS, can
 
 TYPE_JOIN_REQUEST = "join_request"
 TYPE_JOIN_ACCEPTED = "join_request_accepted"
+TYPE_REGISTRATION_REQUEST = "registration_request"
 JOIN_STATE_PENDING = "pending"
 JOIN_STATE_JOINED = "joined"
 JOIN_STATE_RESOLVED = "resolved"
@@ -38,6 +39,38 @@ def notify_join_request(db: Session, club_id: int, actor_user_id: int, request_i
             user_id=member.user_id,
             type=TYPE_JOIN_REQUEST,
             club_id=club_id,
+            actor_user_id=actor_user_id,
+            related_id=request_id,
+            created_at=now,
+        )
+        db.add(item)
+        created.append(item)
+    if created:
+        db.flush()
+    return created
+
+
+def notify_registration_request(db: Session, actor_user_id: int, request_id: int) -> list[Notification]:
+    already = set(
+        db.scalars(
+            select(Notification.user_id).where(
+                Notification.type == TYPE_REGISTRATION_REQUEST,
+                Notification.related_id == request_id,
+            )
+        )
+    )
+    admins = list(
+        db.scalars(select(User).where(User.is_site_admin.is_(True), User.is_active.is_(True)))
+    )
+    created: list[Notification] = []
+    now = utcnow()
+    for admin in admins:
+        if admin.id == actor_user_id or admin.id in already:
+            continue
+        item = Notification(
+            user_id=admin.id,
+            type=TYPE_REGISTRATION_REQUEST,
+            club_id=None,
             actor_user_id=actor_user_id,
             related_id=request_id,
             created_at=now,
@@ -113,6 +146,16 @@ def mark_all_read(db: Session, user_id: int) -> int:
     for item in items:
         item.read_at = now
     return len(items)
+
+
+def notification_destination(notification: Notification) -> str:
+    if notification.type == TYPE_REGISTRATION_REQUEST:
+        if notification.related_id:
+            return f"/admin/cadastros/{notification.related_id}"
+        return "/admin/cadastros"
+    if notification.club_id:
+        return f"/clubs/{notification.club_id}"
+    return "/notificacoes"
 
 
 def join_subject_id(notification: Notification) -> int:
@@ -210,16 +253,18 @@ def notification_cards(db: Session, user_id: int, limit: int = DEFAULT_LIST_LIMI
     if not rows:
         return []
     actor_ids = {item.actor_user_id for item in rows}
-    club_ids = {item.club_id for item in rows}
-    actors = {user.id: user for user in db.scalars(select(User).where(User.id.in_(actor_ids)))}
-    clubs = {club.id: club for club in db.scalars(select(Club).where(Club.id.in_(club_ids)))}
+    club_ids = {item.club_id for item in rows if item.club_id}
+    actors = {user.id: user for user in db.scalars(select(User).where(User.id.in_(actor_ids)))} if actor_ids else {}
+    clubs = {club.id: club for club in db.scalars(select(Club).where(Club.id.in_(club_ids)))} if club_ids else {}
     stamp_display_tags(db, list(actors.values()))
-    mine = {
-        member.club_id: member
-        for member in db.scalars(
-            select(ClubMember).where(ClubMember.user_id == user_id, ClubMember.club_id.in_(club_ids))
-        )
-    }
+    mine = {}
+    if club_ids:
+        mine = {
+            member.club_id: member
+            for member in db.scalars(
+                select(ClubMember).where(ClubMember.user_id == user_id, ClubMember.club_id.in_(club_ids))
+            )
+        }
     related_ids = {item.related_id for item in rows if item.type == TYPE_JOIN_REQUEST and item.related_id}
     live_by_id: dict[int, ClubJoinRequest] = {}
     if related_ids:
@@ -244,26 +289,32 @@ def notification_cards(db: Session, user_id: int, limit: int = DEFAULT_LIST_LIMI
         ):
             if (row.club_id, row.user_id) in pair_ids:
                 live_by_pair[(row.club_id, row.user_id)] = row
-    subject_ids = {join_subject_id(item) for item in rows}
-    joined = {
-        (club_id, user_id)
-        for club_id, user_id in db.execute(
-            select(ClubMember.club_id, ClubMember.user_id).where(
-                ClubMember.club_id.in_(club_ids),
-                ClubMember.user_id.in_(subject_ids),
+    subject_ids = {join_subject_id(item) for item in rows if item.type != TYPE_REGISTRATION_REQUEST}
+    joined: set[tuple[int, int]] = set()
+    if club_ids and subject_ids:
+        joined = {
+            (club_id, user_id)
+            for club_id, user_id in db.execute(
+                select(ClubMember.club_id, ClubMember.user_id).where(
+                    ClubMember.club_id.in_(club_ids),
+                    ClubMember.user_id.in_(subject_ids),
+                )
             )
-        )
-    }
+        }
     cards = []
     for item in rows:
-        pending = live_by_id.get(item.related_id) if item.related_id else live_by_pair.get((item.club_id, item.actor_user_id))
-        if item.type == TYPE_JOIN_REQUEST and _same_join_event(item, pending):
-            state = JOIN_STATE_PENDING
-        elif (item.club_id, join_subject_id(item)) in joined:
-            state = JOIN_STATE_JOINED
+        if item.type == TYPE_REGISTRATION_REQUEST:
+            state = ""
+            can_manage = False
         else:
-            state = JOIN_STATE_RESOLVED
-        can_manage = item.type == TYPE_JOIN_REQUEST and can(mine.get(item.club_id), PERM_JOINS)
+            pending = live_by_id.get(item.related_id) if item.related_id else live_by_pair.get((item.club_id, item.actor_user_id))
+            if item.type == TYPE_JOIN_REQUEST and _same_join_event(item, pending):
+                state = JOIN_STATE_PENDING
+            elif (item.club_id, join_subject_id(item)) in joined:
+                state = JOIN_STATE_JOINED
+            else:
+                state = JOIN_STATE_RESOLVED
+            can_manage = item.type == TYPE_JOIN_REQUEST and can(mine.get(item.club_id), PERM_JOINS)
         cards.append(
             {
                 "notification": item,

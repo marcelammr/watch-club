@@ -159,7 +159,7 @@ class Notification(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     type: Mapped[str] = mapped_column(String(32), nullable=False)
-    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), nullable=False)
+    club_id: Mapped[int | None] = mapped_column(ForeignKey("clubs.id"), nullable=True)
     actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     related_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)

@@ -127,6 +127,7 @@ from app.notifications import (
     mark_own_join_notifications_read,
     mark_read,
     notification_cards,
+    notification_destination,
     unread_badge,
     unread_count,
     unread_label,
@@ -3564,8 +3565,10 @@ def open_notification(request: Request, notification_id: int):
         if item is None:
             raise HTTPException(status_code=404, detail="Notificação não encontrada")
         db.commit()
-        club = db.get(Club, item.club_id)
-        dest = f"/clubs/{item.club_id}" if club else "/notificacoes"
+        dest = notification_destination(item)
+        if item.club_id:
+            club = db.get(Club, item.club_id)
+            dest = f"/clubs/{item.club_id}" if club else "/notificacoes"
         return RedirectResponse(dest, status_code=303)
     except HTTPException as exc:
         if exc.status_code == 401:

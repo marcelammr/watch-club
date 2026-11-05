@@ -62,6 +62,9 @@ def ensure_pending_registration(db: Session, user_id: int, *, created_at=None) -
     )
     db.add(request)
     db.flush()
+    from app.notifications import notify_registration_request
+
+    notify_registration_request(db, user_id, request.id)
     return request
 
 
