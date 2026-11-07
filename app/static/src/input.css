@@ -695,6 +695,90 @@
   .auth-page main {
     @apply flex min-h-[calc(100dvh-5.5rem)] items-center justify-center px-4 py-10;
   }
+  .auth-gate h1 {
+    @apply mt-0;
+  }
+  .auth-gate-icon {
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    margin: 0 0 1rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--primary);
+  }
+  .auth-gate-id {
+    @apply mt-3;
+  }
+  .auth-gate-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.65rem;
+    margin-top: 1.25rem;
+  }
+  .auth-gate-actions form {
+    margin: 0;
+  }
+  .auth-gate-leave {
+    margin-top: 1.25rem;
+  }
+  .auth-stepper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.7rem;
+    list-style: none;
+    margin: 0 0 1.15rem;
+    padding: 0;
+    font-size: 0.78rem;
+    color: var(--muted-foreground);
+  }
+  .auth-stepper li.is-done {
+    color: color-mix(in srgb, var(--foreground) 70%, var(--muted-foreground));
+  }
+  .auth-stepper li.is-current {
+    color: var(--foreground);
+    font-weight: 600;
+  }
+  .registration-person {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.9rem;
+    margin-bottom: 1rem;
+  }
+  .registration-person h1 {
+    margin: 0 0 0.2rem;
+  }
+  .review-quote {
+    margin: 1rem 0;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--card) 86%, #000);
+    white-space: pre-wrap;
+  }
+  .person-row-copy {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.55rem;
+  }
+  .person-row-when {
+    margin-left: auto;
+  }
+  .dev-preview-note {
+    margin: 0 auto 1rem;
+    max-width: 42rem;
+    font-size: 0.82rem;
+  }
+  @media (max-width: 720px) {
+    .person-row-when {
+      margin-left: 0;
+      width: 100%;
+    }
+  }
   .password-field {
     position: relative;
     display: block;

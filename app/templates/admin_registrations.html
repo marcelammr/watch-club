@@ -1,22 +1,54 @@
 {% extends "base.html" %}
+{% from "macros/avatar.html" import user_avatar %}
 {% block title %}Cadastros · Administração · Watch Club{% endblock %}
 {% block page_heading %}Cadastros{% endblock %}
 {% block content %}
 <p class="muted"><a href="/admin">Administração</a></p>
+<nav class="watch-tabs" aria-label="Filas de cadastro">
+  <a class="watch-tab{% if aba != 'revisoes' %} is-on{% endif %}" href="{% if ui_preview %}/dev/acesso/cadastros{% else %}/admin/cadastros{% endif %}"{% if aba != 'revisoes' %} aria-current="page"{% endif %}>Pendentes</a>
+  <a class="watch-tab{% if aba == 'revisoes' %} is-on{% endif %}" href="{% if ui_preview %}/dev/acesso/revisoes{% else %}/admin/cadastros?aba=revisoes{% endif %}"{% if aba == 'revisoes' %} aria-current="page"{% endif %}>Revisões</a>
+</nav>
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
 
+{% if aba == 'revisoes' %}
+<section class="card">
+  <h2>Revisões</h2>
+  {% if reviews %}
+  <ul class="people">
+    {% for item in reviews %}
+    <li>
+      <a class="person-row" href="{% if ui_preview %}/dev/acesso/revisao-detalhe{% else %}/admin/cadastros/revisoes/{{ item.id }}{% endif %}">
+        {{ user_avatar(item.user, 'sm') }}
+        <span class="person-row-copy">
+          <span>{{ item.user.name }}</span>
+          <span class="muted">@{{ item.user.username }}</span>
+          <span class="muted">{{ item.user.email }}</span>
+        </span>
+        <span class="muted person-row-when">{{ item.created_at|when }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Nenhuma revisão pendente.</p>
+  {% endif %}
+</section>
+{% else %}
 <section class="card">
   <h2>Pendentes</h2>
   {% if pending %}
   <ul class="people">
     {% for item in pending %}
     <li>
-      <a class="person-row" href="/admin/cadastros/{{ item.id }}">
-        <span>{{ item.user.name }}</span>
-        <span class="muted">@{{ item.user.username }}</span>
-        <span class="muted">{{ item.user.email }}</span>
-        <span class="muted">{{ item.created_at|when }}</span>
+      <a class="person-row" href="{% if ui_preview %}/dev/acesso/cadastro-detalhe{% else %}/admin/cadastros/{{ item.id }}{% endif %}">
+        {{ user_avatar(item.user, 'sm') }}
+        <span class="person-row-copy">
+          <span>{{ item.user.name }}</span>
+          <span class="muted">@{{ item.user.username }}</span>
+          <span class="muted">{{ item.user.email }}</span>
+        </span>
+        <span class="muted person-row-when">{{ item.created_at|when }}</span>
       </a>
     </li>
     {% endfor %}
@@ -25,4 +57,5 @@
   <p class="muted">Nenhuma solicitação pendente.</p>
   {% endif %}
 </section>
+{% endif %}
 {% endblock %}

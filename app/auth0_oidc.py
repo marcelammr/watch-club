@@ -109,7 +109,21 @@ def pending_identity(payload: dict | None) -> Auth0Identity | None:
     )
 
 
-def authorize_url(state: str, nonce: str, code_challenge: str, *, signup: bool = False) -> str:
+def merge_pending_payload(previous: dict | None, identity: Auth0Identity) -> dict:
+    payload = identity.pending_payload()
+    prev_sub = str((previous or {}).get("sub") or "").strip()
+    if previous and prev_sub == identity.sub:
+        payload["profile_name"] = str(previous.get("profile_name") or "")
+        payload["profile_username"] = str(previous.get("profile_username") or "")
+    else:
+        payload["profile_name"] = ""
+        payload["profile_username"] = ""
+    return payload
+
+
+def authorize_url(
+    state: str, nonce: str, code_challenge: str, *, signup: bool = False, silent: bool = False
+) -> str:
     if not auth0_enabled():
         raise Auth0Error("Auth0 não está configurado.")
     params = {
@@ -125,6 +139,8 @@ def authorize_url(state: str, nonce: str, code_challenge: str, *, signup: bool =
     }
     if signup:
         params["screen_hint"] = "signup"
+    if silent:
+        params["prompt"] = "none"
     return f"https://{auth0_host()}/authorize?{urlencode(params)}"
 
 

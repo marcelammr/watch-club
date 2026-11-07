@@ -449,7 +449,7 @@ def test_unauthorized_approve_does_not_send_email(monkeypatch):
     assert sent == []
 
 
-def test_legacy_login_still_works_with_admin_schema(monkeypatch):
+def test_legacy_login_is_closed_when_auth0_is_configured(monkeypatch):
     _enable_auth0(monkeypatch)
     http = TestClient(app)
     register_active(http, "legado_ok", "legado.ok@example.com")
@@ -459,10 +459,16 @@ def test_legacy_login_still_works_with_admin_schema(monkeypatch):
         data={"email": "legado.ok@example.com", "password": "segredo"},
         follow_redirects=False,
     )
-    assert login.headers["location"] == "/"
-    assert http.get("/register").status_code == 200
+    assert login.status_code == 303
+    assert "tenant.example.auth0.com" in login.headers["location"]
+    assert "/authorize" in login.headers["location"]
+    register = http.get("/register", follow_redirects=False)
+    assert register.status_code == 303
+    assert "screen_hint=signup" in register.headers["location"]
     google = http.get("/auth/google", follow_redirects=False)
     assert google.status_code == 303
+    assert "accounts.google.com" not in google.headers["location"]
+    assert "tenant.example.auth0.com" in google.headers["location"]
 
 
 def _registration_notes(request_id: int) -> list[Notification]:

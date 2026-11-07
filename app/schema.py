@@ -333,6 +333,24 @@ def migrate_schema() -> None:
                     "ON registration_requests (user_id) WHERE status = 'pending'"
                 )
             )
+    inspector.clear_cache()
+    if "registration_reviews" in inspector.get_table_names():
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_registration_reviews_request_id "
+                    "ON registration_reviews (registration_request_id)"
+                )
+            )
+    inspector.clear_cache()
+    if "notifications" in inspector.get_table_names():
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_notifications_one_registration_review_per_admin "
+                    "ON notifications (user_id, related_id) WHERE type = 'registration_review'"
+                )
+            )
     if "shows" in inspector.get_table_names():
         show_cols = {column["name"] for column in inspector.get_columns("shows")}
         if "kind" not in show_cols:

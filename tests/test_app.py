@@ -2,6 +2,7 @@ from sqlalchemy import func, select
 from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock, patch
 
+from app.accounts import create_user, issue_email_token
 from app.club_icons import stored_icon_path
 from app.db import SessionLocal
 from app.main import app
@@ -32,23 +33,11 @@ def register_active(
     password: str = "segredo",
     name: str | None = None,
 ) -> None:
-    created = http.post(
-        "/register",
-        data={
-            "name": name or username.replace("_", " ").title(),
-            "username": username,
-            "email": email,
-            "password": password,
-        },
-        follow_redirects=False,
-    )
-    assert created.status_code == 303
     db = SessionLocal()
     try:
-        user = db.scalar(select(User).where(User.email == email))
-        token = db.scalar(select(EmailToken).where(EmailToken.user_id == user.id))
-        assert token is not None
-        raw = token.token
+        user = create_user(db, username, email, password, name=name or username.replace("_", " ").title())
+        raw = issue_email_token(db, user, purpose="activate")
+        db.commit()
     finally:
         db.close()
     verified = http.get(f"/verificar-email?token={raw}", follow_redirects=False)

@@ -186,18 +186,51 @@ def suggested_auth0_username(db: Session, seed: str) -> str:
     return unique_username(db, seed)
 
 
-def auth0_followup_path(db: Session, user: User | None, *, email: str | None, email_verified: bool) -> str:
+def parse_profile_draft(name: str, username: str) -> tuple[str, str, str]:
+    display = (name or "").strip()[:80]
+    if not display:
+        return "", "", "Informe um nome."
+    key = normalize_username(username)
+    if not USERNAME_RE.match(key):
+        return display, key, "O @ precisa ter 3 a 30 caracteres (letras, números ou _)."
+    return display, key, ""
+
+
+def is_profile_draft_ready(payload: dict | None) -> bool:
+    if not payload or not isinstance(payload, dict):
+        return False
+    _display, _key, error = parse_profile_draft(
+        str(payload.get("profile_name") or ""),
+        str(payload.get("profile_username") or ""),
+    )
+    return not error
+
+
+def auth0_followup_path(
+    db: Session,
+    user: User | None,
+    *,
+    email: str | None,
+    email_verified: bool,
+    profile_ready: bool = False,
+) -> str:
     if user and user.is_active:
         return "/"
     if user:
-        from app.registrations import STATUS_REJECTED, registration_status_for_user
+        from app.registrations import registration_followup_path
 
-        if registration_status_for_user(db, user.id) == STATUS_REJECTED:
-            return "/auth/nao-aprovado"
-        return "/auth/aguardando"
-    if email_verified is True and normalize_email(email or ""):
+        return registration_followup_path(db, user)
+    address = normalize_email(email or "")
+    if not address:
+        return "/auth/verificar-email"
+    existing = find_user_by_email(db, address)
+    if existing is not None and email_verified is not True:
+        return "/auth/verificar-email"
+    if email_verified is True:
         return "/auth/completar-perfil"
-    return "/auth/pendente"
+    if profile_ready:
+        return "/auth/verificar-email"
+    return "/auth/completar-perfil"
 
 
 def create_auth0_user(db: Session, *, sub: str, email: str, name: str, username: str) -> User:
@@ -239,12 +272,9 @@ def complete_auth0_onboarding(
     address = normalize_email(email or "")
     if not address:
         return "unverified", None, "O Auth0 não enviou um e-mail verificado.", []
-    display = (name or "").strip()[:80]
-    if not display:
-        return "form_error", None, "Informe um nome.", []
-    key = normalize_username(username)
-    if not USERNAME_RE.match(key):
-        return "form_error", None, "O @ precisa ter 3 a 30 caracteres (letras, números ou _).", []
+    display, key, profile_error = parse_profile_draft(name, username)
+    if profile_error:
+        return "form_error", None, profile_error, []
 
     write = exclusive_write_session(source)
     try:
@@ -252,10 +282,12 @@ def complete_auth0_onboarding(
         if known:
             if known.is_active:
                 return "active", known.id, "", []
-            from app.registrations import ensure_pending_registration
+            from app.registrations import STATUS_EXPIRED, ensure_pending_registration
 
-            ensure_pending_registration(write, known.id)
+            request = ensure_pending_registration(write, known.id)
             write.commit()
+            if request.status == STATUS_EXPIRED:
+                return "expired", known.id, "", []
             return "awaiting", known.id, "", []
         candidate = find_user_by_email(write, address)
         if candidate is not None:
@@ -288,10 +320,12 @@ def complete_auth0_onboarding(
         if known:
             if known.is_active:
                 return "active", known.id, "", []
-            from app.registrations import ensure_pending_registration
+            from app.registrations import STATUS_EXPIRED, ensure_pending_registration
 
-            ensure_pending_registration(write, known.id)
+            request = ensure_pending_registration(write, known.id)
             write.commit()
+            if request.status == STATUS_EXPIRED:
+                return "expired", known.id, "", []
             return "awaiting", known.id, "", []
         if username_taken(write, key):
             return (

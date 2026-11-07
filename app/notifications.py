@@ -16,6 +16,7 @@ from app.roles import PERM_JOINS, can
 TYPE_JOIN_REQUEST = "join_request"
 TYPE_JOIN_ACCEPTED = "join_request_accepted"
 TYPE_REGISTRATION_REQUEST = "registration_request"
+TYPE_REGISTRATION_REVIEW = "registration_review"
 JOIN_STATE_PENDING = "pending"
 JOIN_STATE_JOINED = "joined"
 JOIN_STATE_RESOLVED = "resolved"
@@ -73,6 +74,38 @@ def notify_registration_request(db: Session, actor_user_id: int, request_id: int
             club_id=None,
             actor_user_id=actor_user_id,
             related_id=request_id,
+            created_at=now,
+        )
+        db.add(item)
+        created.append(item)
+    if created:
+        db.flush()
+    return created
+
+
+def notify_registration_review(db: Session, actor_user_id: int, review_id: int) -> list[Notification]:
+    already = set(
+        db.scalars(
+            select(Notification.user_id).where(
+                Notification.type == TYPE_REGISTRATION_REVIEW,
+                Notification.related_id == review_id,
+            )
+        )
+    )
+    admins = list(
+        db.scalars(select(User).where(User.is_site_admin.is_(True), User.is_active.is_(True)))
+    )
+    created: list[Notification] = []
+    now = utcnow()
+    for admin in admins:
+        if admin.id == actor_user_id or admin.id in already:
+            continue
+        item = Notification(
+            user_id=admin.id,
+            type=TYPE_REGISTRATION_REVIEW,
+            club_id=None,
+            actor_user_id=actor_user_id,
+            related_id=review_id,
             created_at=now,
         )
         db.add(item)
@@ -153,6 +186,10 @@ def notification_destination(notification: Notification) -> str:
         if notification.related_id:
             return f"/admin/cadastros/{notification.related_id}"
         return "/admin/cadastros"
+    if notification.type == TYPE_REGISTRATION_REVIEW:
+        if notification.related_id:
+            return f"/admin/cadastros/revisoes/{notification.related_id}"
+        return "/admin/cadastros?aba=revisoes"
     if notification.club_id:
         return f"/clubs/{notification.club_id}"
     return "/notificacoes"
@@ -289,7 +326,11 @@ def notification_cards(db: Session, user_id: int, limit: int = DEFAULT_LIST_LIMI
         ):
             if (row.club_id, row.user_id) in pair_ids:
                 live_by_pair[(row.club_id, row.user_id)] = row
-    subject_ids = {join_subject_id(item) for item in rows if item.type != TYPE_REGISTRATION_REQUEST}
+    subject_ids = {
+        join_subject_id(item)
+        for item in rows
+        if item.type not in {TYPE_REGISTRATION_REQUEST, TYPE_REGISTRATION_REVIEW}
+    }
     joined: set[tuple[int, int]] = set()
     if club_ids and subject_ids:
         joined = {
@@ -303,7 +344,7 @@ def notification_cards(db: Session, user_id: int, limit: int = DEFAULT_LIST_LIMI
         }
     cards = []
     for item in rows:
-        if item.type == TYPE_REGISTRATION_REQUEST:
+        if item.type in {TYPE_REGISTRATION_REQUEST, TYPE_REGISTRATION_REVIEW}:
             state = ""
             can_manage = False
         else:

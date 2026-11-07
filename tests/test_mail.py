@@ -14,6 +14,8 @@ from app.mail import (
     login_url,
     send_registration_approved_email,
     send_registration_rejected_email,
+    send_registration_review_approved_email,
+    send_registration_review_rejected_email,
 )
 from app.main import app
 from app.models import AccountInvite, EmailToken, User
@@ -179,6 +181,15 @@ def test_registration_decision_emails_use_app_base_url(monkeypatch):
     assert "poderá solicitar uma revisão" in captured[1][2]
     assert "https://watch.example" not in captured[1][2]
     assert "Entrar no Watch Club" not in captured[1][2]
+    send_registration_review_approved_email("azi@example.com", "Azi")
+    send_registration_review_rejected_email("azi@example.com", "Azi")
+    assert captured[2][1] == "Sua revisão de acesso ao Watch Club foi aprovada"
+    assert "solicitação de revisão foi analisada" in captured[2][2]
+    assert "https://watch.example/auth/login" in captured[2][2]
+    assert captured[3][1] == "Sobre sua revisão de acesso ao Watch Club"
+    assert "continua não aprovado" in captured[3][2]
+    assert "poderá solicitar uma revisão" not in captured[3][2]
+    assert "https://watch.example" not in captured[3][2]
 
 
 def test_profile_email_change_smtp_failure_does_not_set_pending(monkeypatch):

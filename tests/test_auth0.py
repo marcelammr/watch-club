@@ -5,11 +5,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import inspect, select
 from sqlalchemy.exc import IntegrityError
 
-from app.accounts import suggested_auth0_name, suggested_auth0_username
-from app.auth0_oidc import Auth0Identity, identity_from_claims
+from app.accounts import create_user, suggested_auth0_name, suggested_auth0_username
+from app.auth0_oidc import Auth0Identity, identity_from_claims, merge_pending_payload
 from app.db import SessionLocal, engine
 from app.main import app
-from app.models import Club, RegistrationRequest, User
+from app.models import Club, Notification, RegistrationRequest, User
+from app.notifications import TYPE_REGISTRATION_REQUEST
 from app.registrations import STATUS_PENDING
 from app.schema import migrate_schema
 from tests.test_app import register_active
@@ -156,6 +157,20 @@ def test_auth0_signup_unlinked_callback_does_not_create_user(monkeypatch):
         db.close()
 
 
+def _assert_auth0_authorize(response, *, signup=False):
+    assert response.status_code == 303
+    parsed = urlparse(response.headers["location"])
+    assert parsed.scheme == "https"
+    assert parsed.netloc == "tenant.example.auth0.com"
+    assert parsed.path == "/authorize"
+    query = parse_qs(parsed.query)
+    if signup:
+        assert query.get("screen_hint") == ["signup"]
+    else:
+        assert "screen_hint" not in query
+    assert "client_secret" not in response.headers["location"]
+
+
 def test_legacy_auth_routes_still_exist():
     http = TestClient(app)
     assert http.get("/login").status_code == 200
@@ -163,6 +178,83 @@ def test_legacy_auth_routes_still_exist():
     assert http.get("/recuperar-senha").status_code == 200
     google = http.get("/auth/google", follow_redirects=False)
     assert google.status_code == 303
+
+
+def test_legacy_public_auth_redirects_to_auth0_when_configured(monkeypatch):
+    _enable_auth0(monkeypatch)
+    http = TestClient(app)
+    _assert_auth0_authorize(http.get("/login", follow_redirects=False))
+    login_page = http.get("/login", follow_redirects=False)
+    assert "E-mail ou senha" not in (login_page.text or "")
+    assert 'name="password"' not in (login_page.text or "")
+    _assert_auth0_authorize(http.get("/register", follow_redirects=False), signup=True)
+    register_page = http.get("/register", follow_redirects=False)
+    assert "Cadastre-se" not in (register_page.text or "")
+    _assert_auth0_authorize(
+        http.post(
+            "/login",
+            data={"email": "bypass@example.com", "password": "segredo"},
+            follow_redirects=False,
+        )
+    )
+    created = http.post(
+        "/register",
+        data={
+            "name": "Bypass Auth",
+            "username": "bypass_auth0",
+            "email": "bypass.auth0@example.com",
+            "password": "segredo",
+        },
+        follow_redirects=False,
+    )
+    _assert_auth0_authorize(created, signup=True)
+    db = SessionLocal()
+    try:
+        assert db.scalar(select(User).where(User.email == "bypass.auth0@example.com")) is None
+        assert db.scalar(select(User).where(User.username_key == "bypass_auth0")) is None
+    finally:
+        db.close()
+    _assert_auth0_authorize(http.get("/auth/google", follow_redirects=False))
+    _assert_auth0_authorize(http.get("/auth/facebook", follow_redirects=False))
+    google_cb = http.get("/auth/google/callback?code=fake&state=x", follow_redirects=False)
+    _assert_auth0_authorize(google_cb)
+    facebook_cb = http.get("/auth/facebook/callback?code=fake&state=x", follow_redirects=False)
+    _assert_auth0_authorize(facebook_cb)
+    _assert_auth0_authorize(http.get("/recuperar-senha", follow_redirects=False))
+    reset = http.post(
+        "/recuperar-senha/codigo",
+        data={"code": "000000", "new_password": "nova", "confirm_password": "nova"},
+        follow_redirects=False,
+    )
+    _assert_auth0_authorize(reset)
+    started = http.get("/auth/login", follow_redirects=False)
+    _assert_auth0_authorize(started)
+    signup = http.get("/auth/signup", follow_redirects=False)
+    _assert_auth0_authorize(signup, signup=True)
+
+
+def test_legacy_oauth_callback_does_not_create_user_when_auth0_configured(monkeypatch):
+    _enable_auth0(monkeypatch)
+    http = TestClient(app)
+    profile = {
+        "provider": "google",
+        "provider_id": "google-bypass-1",
+        "email": "google.bypass@example.com",
+        "name": "Google Bypass",
+    }
+    with patch("app.main.fetch_google_profile", return_value=profile):
+        with patch("app.main.login_or_create_oauth") as create:
+            response = http.get(
+                "/auth/google/callback?code=fake&state=oauth-state",
+                follow_redirects=False,
+            )
+    _assert_auth0_authorize(response)
+    create.assert_not_called()
+    db = SessionLocal()
+    try:
+        assert db.scalar(select(User).where(User.email == "google.bypass@example.com")) is None
+    finally:
+        db.close()
 
 
 def test_auth0_callback_rejects_bad_state(monkeypatch):
@@ -236,7 +328,9 @@ def test_auth0_unverified_email_does_not_link(monkeypatch):
         Auth0Identity(sub="auth0|unverified-1", email="auth0.unv@example.com", email_verified=False),
     )
     assert callback.status_code == 303
-    assert callback.headers["location"] == "/auth/pendente"
+    assert callback.headers["location"] == "/auth/verificar-email"
+    profile = http.get("/auth/completar-perfil", follow_redirects=False)
+    assert profile.headers["location"] == "/auth/verificar-email"
     home = http.get("/")
     assert 'aria-label="Configurações"' not in home.text
     db = SessionLocal()
@@ -258,7 +352,7 @@ def test_auth0_missing_email_verified_does_not_link(monkeypatch):
     )
     identity = identity_from_claims({"sub": "auth0|none-1", "email": "auth0.none@example.com"})
     assert identity.email_verified is False
-    assert callback.headers["location"] == "/auth/pendente"
+    assert callback.headers["location"] == "/auth/verificar-email"
     db = SessionLocal()
     try:
         user = db.scalar(select(User).where(User.email == "auth0.none@example.com"))
@@ -501,13 +595,9 @@ def test_legacy_logout_stays_local_even_with_auth0_sub(monkeypatch):
         data={"email": "auth0.legacy@example.com", "password": "segredo"},
         follow_redirects=False,
     )
-    assert login.status_code == 303
-    assert login.headers["location"] == "/"
+    _assert_auth0_authorize(login)
     home = http.get("/")
-    assert 'aria-label="Configurações"' in home.text
-    left_again = http.post("/logout", follow_redirects=False)
-    assert left_again.status_code == 303
-    assert left_again.headers["location"] == "/"
+    assert 'aria-label="Configurações"' not in home.text
 
 
 def test_dual_credential_user_logout_follows_current_session(monkeypatch):
@@ -528,10 +618,7 @@ def test_dual_credential_user_logout_follows_current_session(monkeypatch):
         data={"email": "auth0.dual@example.com", "password": "segredo"},
         follow_redirects=False,
     )
-    assert login.status_code == 303
-    legacy_left = http.post("/logout", follow_redirects=False)
-    assert legacy_left.status_code == 303
-    assert legacy_left.headers["location"] == "/"
+    _assert_auth0_authorize(login)
 
 
 def test_auth0_pending_can_abandon_identity_via_auth0_logout(monkeypatch):
@@ -542,8 +629,8 @@ def test_auth0_pending_can_abandon_identity_via_auth0_logout(monkeypatch):
         Auth0Identity(sub="auth0|pending-out", email="auth0.pending.out@example.com", email_verified=False),
     )
     assert callback.status_code == 303
-    assert callback.headers["location"] == "/auth/pendente"
-    pending = http.get("/auth/pendente")
+    assert callback.headers["location"] == "/auth/completar-perfil"
+    pending = http.get("/auth/completar-perfil")
     assert pending.status_code == 200
     assert 'href="/auth/logout"' in pending.text
     left = http.get("/auth/logout", follow_redirects=False)
@@ -581,7 +668,7 @@ def test_auth0_verified_new_identity_opens_complete_profile(monkeypatch):
     page = http.get("/auth/completar-perfil")
     assert page.status_code == 200
     assert "Complete seu perfil" in page.text
-    assert "Antes de continuar, escolha como você quer aparecer" in page.text
+    assert "Escolha como você aparece no Watch Club." in page.text
     assert "Continuar" in page.text
     assert 'name="name"' in page.text
     assert 'name="username"' in page.text
@@ -608,14 +695,14 @@ def test_auth0_unverified_cannot_create_user_via_onboarding(monkeypatch):
         http,
         Auth0Identity(sub="auth0|unv-create", email="auth0.unv.create@example.com", email_verified=False),
     )
-    assert callback.headers["location"] == "/auth/pendente"
+    assert callback.headers["location"] == "/auth/completar-perfil"
     created = http.post(
         "/auth/completar-perfil",
         data={"name": "Não Deve", "username": "nao_deve", "email": "hack@example.com", "sub": "auth0|hack"},
         follow_redirects=False,
     )
     assert created.status_code == 303
-    assert created.headers["location"] == "/auth/pendente"
+    assert created.headers["location"] == "/auth/verificar-email"
     db = SessionLocal()
     try:
         assert db.scalar(select(User).where(User.auth0_sub == "auth0|unv-create")) is None
@@ -706,8 +793,7 @@ def test_auth0_complete_profile_creates_one_inactive_user(monkeypatch):
     waiting = http.get("/auth/aguardando")
     assert waiting.status_code == 200
     assert "Aguardando aprovação" in waiting.text
-    assert "Sua solicitação foi enviada para a administração" in waiting.text
-    assert "Assim que seu acesso for aprovado" in waiting.text
+    assert "Seu pedido já foi enviado" in waiting.text
     assert 'href="/auth/logout"' in waiting.text
     assert "7 dias" not in waiting.text
     home = http.get("/")
@@ -856,24 +942,18 @@ def test_auth0_onboard_does_not_duplicate_existing_email(monkeypatch):
 
 def test_legacy_inactive_user_is_not_treated_as_auth0_awaiting(monkeypatch):
     _enable_auth0(monkeypatch)
-    http = TestClient(app)
-    created = http.post(
-        "/register",
-        data={
-            "name": "Legado Inativo",
-            "username": "legado_inativo",
-            "email": "legado.inativo@example.com",
-            "password": "segredo",
-        },
-        follow_redirects=False,
-    )
-    assert created.status_code == 303
-    login = http.post(
-        "/login",
-        data={"email": "legado.inativo@example.com", "password": "segredo"},
-        follow_redirects=False,
-    )
-    assert "/verificar-email" in login.headers["location"]
+    db = SessionLocal()
+    try:
+        create_user(
+            db,
+            "legado_inativo",
+            "legado.inativo@example.com",
+            "segredo",
+            name="Legado Inativo",
+        )
+        db.commit()
+    finally:
+        db.close()
     other = TestClient(app)
     callback = _start_callback(
         other,
@@ -928,3 +1008,363 @@ def test_migrate_schema_backfills_legacy_username_changed_at_only():
         assert auth0_user.username_changed_at is None
     finally:
         db.close()
+
+
+def _grant_site_admin(email: str) -> None:
+    db = SessionLocal()
+    try:
+        user = db.scalar(select(User).where(User.email == email))
+        user.is_site_admin = True
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_merge_pending_payload_keeps_draft_only_for_same_sub():
+    first = Auth0Identity(sub="auth0|same", email="a@example.com", email_verified=False)
+    payload = merge_pending_payload(None, first)
+    payload["profile_name"] = "Azi"
+    payload["profile_username"] = "azi_crow"
+    same = merge_pending_payload(
+        payload,
+        Auth0Identity(sub="auth0|same", email="a@example.com", email_verified=True),
+    )
+    assert same["profile_name"] == "Azi"
+    assert same["profile_username"] == "azi_crow"
+    assert same["email_verified"] is True
+    other = merge_pending_payload(
+        payload,
+        Auth0Identity(sub="auth0|other", email="b@example.com", email_verified=False),
+    )
+    assert other["profile_name"] == ""
+    assert other["profile_username"] == ""
+    assert other["sub"] == "auth0|other"
+
+
+def test_unverified_new_identity_opens_profile_without_creating_user(monkeypatch):
+    _enable_auth0(monkeypatch)
+    http = TestClient(app)
+    callback = _start_callback(
+        http,
+        Auth0Identity(sub="auth0|journey-1", email="journey.one@example.com", email_verified=False, name="Azi"),
+    )
+    assert callback.headers["location"] == "/auth/completar-perfil"
+    page = http.get("/auth/completar-perfil")
+    assert page.status_code == 200
+    assert "Complete seu perfil" in page.text
+    assert "journey.one@example.com" in page.text
+    assert "Conta" in page.text and "Perfil" in page.text
+    db = SessionLocal()
+    try:
+        assert db.scalar(select(User).where(User.auth0_sub == "auth0|journey-1")) is None
+        assert db.scalar(select(User).where(User.email == "journey.one@example.com")) is None
+    finally:
+        db.close()
+
+
+def test_unverified_profile_draft_goes_to_verification_without_user_or_notice(monkeypatch):
+    _enable_auth0(monkeypatch)
+    admin = TestClient(app)
+    register_active(admin, "journey_admin", "journey.admin@example.com")
+    _grant_site_admin("journey.admin@example.com")
+    http = TestClient(app)
+    _start_callback(
+        http,
+        Auth0Identity(sub="auth0|journey-2", email="journey.two@example.com", email_verified=False),
+    )
+    saved = http.post(
+        "/auth/completar-perfil",
+        data={"name": "Azi", "username": "azi_flow"},
+        follow_redirects=False,
+    )
+    assert saved.status_code == 303
+    assert saved.headers["location"] == "/auth/verificar-email"
+    page = http.get("/auth/verificar-email")
+    assert page.status_code == 200
+    assert "Verifique seu e-mail" in page.text
+    assert "journey.two@example.com" in page.text
+    assert "Confira a pasta de spam ou lixo eletrônico." in page.text
+    assert ">Continuar<" in page.text
+    assert "Já verifiquei meu e-mail — Continuar" not in page.text
+    assert 'href="/auth/verificar-email/continuar"' in page.text
+    db = SessionLocal()
+    try:
+        assert db.scalar(select(User).where(User.auth0_sub == "auth0|journey-2")) is None
+        admin_id = db.scalar(select(User.id).where(User.email == "journey.admin@example.com"))
+        notes = list(
+            db.scalars(
+                select(Notification).where(
+                    Notification.user_id == admin_id,
+                    Notification.type == TYPE_REGISTRATION_REQUEST,
+                )
+            )
+        )
+        assert notes == []
+    finally:
+        db.close()
+
+
+def test_same_sub_callback_keeps_profile_draft(monkeypatch):
+    _enable_auth0(monkeypatch)
+    http = TestClient(app)
+    _start_callback(
+        http,
+        Auth0Identity(sub="auth0|draft-keep", email="draft.keep@example.com", email_verified=False),
+    )
+    http.post(
+        "/auth/completar-perfil",
+        data={"name": "Azi Keep", "username": "azi_keep"},
+        follow_redirects=False,
+    )
+    again = _start_callback(
+        http,
+        Auth0Identity(sub="auth0|draft-keep", email="draft.keep@example.com", email_verified=False),
+    )
+    assert again.headers["location"] == "/auth/verificar-email"
+    verify = http.get("/auth/verificar-email")
+    assert verify.status_code == 200
+
+
+def test_other_sub_callback_does_not_inherit_profile_draft(monkeypatch):
+    _enable_auth0(monkeypatch)
+    http = TestClient(app)
+    _start_callback(
+        http,
+        Auth0Identity(sub="auth0|draft-a", email="draft.a@example.com", email_verified=False),
+    )
+    http.post(
+        "/auth/completar-perfil",
+        data={"name": "Pessoa A", "username": "pessoa_a_draft"},
+        follow_redirects=False,
+    )
+    switched = _start_callback(
+        http,
+        Auth0Identity(sub="auth0|draft-b", email="draft.b@example.com", email_verified=False, name="Outro"),
+    )
+    assert switched.headers["location"] == "/auth/completar-perfil"
+    page = http.get("/auth/completar-perfil")
+    assert "pessoa_a_draft" not in page.text
+    assert "Pessoa A" not in page.text
+
+
+def test_continue_unverified_returns_to_verification(monkeypatch):
+    _enable_auth0(monkeypatch)
+    http = TestClient(app)
+    _start_callback(
+        http,
+        Auth0Identity(sub="auth0|still-unv", email="still.unv@example.com", email_verified=False),
+    )
+    http.post(
+        "/auth/completar-perfil",
+        data={"name": "Ainda", "username": "ainda_unv"},
+        follow_redirects=False,
+    )
+    started = http.get("/auth/verificar-email/continuar", follow_redirects=False)
+    assert started.status_code == 303
+    location = started.headers["location"]
+    query = parse_qs(urlparse(location).query)
+    assert query["prompt"] == ["none"]
+    assert "screen_hint" not in query
+    state = query["state"][0]
+    with patch("app.main.redeem_callback", return_value=Auth0Identity(
+        sub="auth0|still-unv", email="still.unv@example.com", email_verified=False
+    )):
+        callback = http.get(f"/callback?code=fake&state={state}", follow_redirects=False)
+    assert callback.headers["location"] == "/auth/verificar-email"
+    db = SessionLocal()
+    try:
+        assert db.scalar(select(User).where(User.auth0_sub == "auth0|still-unv")) is None
+    finally:
+        db.close()
+
+
+def test_silent_auth_error_falls_back_to_interactive_login(monkeypatch):
+    _enable_auth0(monkeypatch)
+    http = TestClient(app)
+    _start_callback(
+        http,
+        Auth0Identity(sub="auth0|silent-fb", email="silent.fb@example.com", email_verified=False),
+    )
+    http.post(
+        "/auth/completar-perfil",
+        data={"name": "Silent", "username": "silent_fb"},
+        follow_redirects=False,
+    )
+    started = http.get("/auth/verificar-email/continuar", follow_redirects=False)
+    query = parse_qs(urlparse(started.headers["location"]).query)
+    fallback = http.get(
+        f"/callback?error=login_required&state={query['state'][0]}",
+        follow_redirects=False,
+    )
+    assert fallback.status_code == 303
+    retry = parse_qs(urlparse(fallback.headers["location"]).query)
+    assert "prompt" not in retry
+    assert retry["client_id"] == ["test-client-id"]
+
+
+def test_continue_verified_creates_user_pending_and_one_notice_per_admin(monkeypatch):
+    _enable_auth0(monkeypatch)
+    admin = TestClient(app)
+    register_active(admin, "flow_site_a", "flow.site.a@example.com")
+    _grant_site_admin("flow.site.a@example.com")
+    admin_b = TestClient(app)
+    register_active(admin_b, "flow_site_b", "flow.site.b@example.com")
+    _grant_site_admin("flow.site.b@example.com")
+    http = TestClient(app)
+    _start_callback(
+        http,
+        Auth0Identity(sub="auth0|flow-ok", email="flow.ok@example.com", email_verified=False),
+    )
+    http.post(
+        "/auth/completar-perfil",
+        data={"name": "Azi", "username": "azi_ok"},
+        follow_redirects=False,
+    )
+    started = http.get("/auth/verificar-email/continuar", follow_redirects=False)
+    state = parse_qs(urlparse(started.headers["location"]).query)["state"][0]
+    with patch("app.main.redeem_callback", return_value=Auth0Identity(
+        sub="auth0|flow-ok", email="flow.ok@example.com", email_verified=True
+    )):
+        callback = http.get(f"/callback?code=fake&state={state}", follow_redirects=False)
+    assert callback.headers["location"] == "/auth/aguardando"
+    waiting = http.get("/auth/aguardando")
+    assert "Aguardando aprovação" in waiting.text
+    db = SessionLocal()
+    try:
+        user = db.scalar(select(User).where(User.auth0_sub == "auth0|flow-ok"))
+        assert user is not None
+        assert user.is_active is False
+        assert user.name == "Azi"
+        assert user.username_key == "azi_ok"
+        requests = list(db.scalars(select(RegistrationRequest).where(RegistrationRequest.user_id == user.id)))
+        assert len(requests) == 1
+        assert requests[0].status == STATUS_PENDING
+        notes = list(
+            db.scalars(
+                select(Notification).where(
+                    Notification.type == TYPE_REGISTRATION_REQUEST,
+                    Notification.related_id == requests[0].id,
+                )
+            )
+        )
+        recipients = {note.user_id for note in notes}
+        assert db.scalar(select(User.id).where(User.email == "flow.site.a@example.com")) in recipients
+        assert db.scalar(select(User.id).where(User.email == "flow.site.b@example.com")) in recipients
+        assert user.id not in recipients
+        assert len({note.user_id for note in notes}) == len(notes)
+    finally:
+        db.close()
+    repeated = _start_callback(
+        http,
+        Auth0Identity(sub="auth0|flow-ok", email="flow.ok@example.com", email_verified=True),
+    )
+    assert repeated.headers["location"] == "/auth/aguardando"
+    db = SessionLocal()
+    try:
+        user = db.scalar(select(User).where(User.auth0_sub == "auth0|flow-ok"))
+        requests = list(db.scalars(select(RegistrationRequest).where(RegistrationRequest.user_id == user.id)))
+        assert len(requests) == 1
+        notes = list(
+            db.scalars(
+                select(Notification).where(
+                    Notification.type == TYPE_REGISTRATION_REQUEST,
+                    Notification.related_id == requests[0].id,
+                )
+            )
+        )
+        assert len(notes) == len({note.user_id for note in notes})
+    finally:
+        db.close()
+
+
+def test_username_taken_during_verification_returns_to_profile(monkeypatch):
+    _enable_auth0(monkeypatch)
+    http = TestClient(app)
+    _start_callback(
+        http,
+        Auth0Identity(sub="auth0|taken-wait", email="taken.wait@example.com", email_verified=False),
+    )
+    http.post(
+        "/auth/completar-perfil",
+        data={"name": "Espera", "username": "espera_nick"},
+        follow_redirects=False,
+    )
+    register_active(TestClient(app), "espera_nick", "espera.nick@example.com")
+    started = http.get("/auth/verificar-email/continuar", follow_redirects=False)
+    state = parse_qs(urlparse(started.headers["location"]).query)["state"][0]
+    with patch("app.main.redeem_callback", return_value=Auth0Identity(
+        sub="auth0|taken-wait", email="taken.wait@example.com", email_verified=True
+    )):
+        callback = http.get(f"/callback?code=fake&state={state}", follow_redirects=False)
+    assert callback.headers["location"] == "/auth/completar-perfil"
+    page = http.get("/auth/completar-perfil")
+    assert page.status_code == 200
+    assert "já está em uso" in page.text
+    db = SessionLocal()
+    try:
+        assert db.scalar(select(User).where(User.auth0_sub == "auth0|taken-wait")) is None
+        assert db.scalar(select(User).where(User.email == "taken.wait@example.com")) is None
+    finally:
+        db.close()
+
+
+def test_legacy_unverified_then_verified_auto_links_same_id(monkeypatch):
+    _enable_auth0(monkeypatch)
+    http = TestClient(app)
+    register_active(http, "legado_flow", "legado.flow@example.com")
+    db = SessionLocal()
+    try:
+        user = db.scalar(select(User).where(User.email == "legado.flow@example.com"))
+        user_id = user.id
+        assert user.auth0_sub is None
+    finally:
+        db.close()
+    http.post("/logout", follow_redirects=False)
+    first = _start_callback(
+        http,
+        Auth0Identity(sub="auth0|legado-flow", email="legado.flow@example.com", email_verified=False),
+    )
+    assert first.headers["location"] == "/auth/verificar-email"
+    profile = http.get("/auth/completar-perfil", follow_redirects=False)
+    assert profile.headers["location"] == "/auth/verificar-email"
+    started = http.get("/auth/verificar-email/continuar", follow_redirects=False)
+    state = parse_qs(urlparse(started.headers["location"]).query)["state"][0]
+    with patch("app.main.redeem_callback", return_value=Auth0Identity(
+        sub="auth0|legado-flow", email="legado.flow@example.com", email_verified=True
+    )):
+        callback = http.get(f"/callback?code=fake&state={state}", follow_redirects=False)
+    assert callback.headers["location"] == "/"
+    db = SessionLocal()
+    try:
+        user = db.scalar(select(User).where(User.email == "legado.flow@example.com"))
+        assert user.id == user_id
+        assert user.auth0_sub == "auth0|legado-flow"
+        assert db.scalar(select(RegistrationRequest).where(RegistrationRequest.user_id == user_id)) is None
+        assert (
+            db.scalar(
+                select(Notification).where(
+                    Notification.actor_user_id == user_id,
+                    Notification.type == TYPE_REGISTRATION_REQUEST,
+                )
+            )
+            is None
+        )
+    finally:
+        db.close()
+
+
+def test_auth0_pendente_redirects_into_new_verification_flow(monkeypatch):
+    _enable_auth0(monkeypatch)
+    http = TestClient(app)
+    _start_callback(
+        http,
+        Auth0Identity(sub="auth0|alias-pend", email="alias.pend@example.com", email_verified=False),
+    )
+    http.post(
+        "/auth/completar-perfil",
+        data={"name": "Alias", "username": "alias_pend"},
+        follow_redirects=False,
+    )
+    aliased = http.get("/auth/pendente", follow_redirects=False)
+    assert aliased.status_code == 303
+    assert aliased.headers["location"] == "/auth/verificar-email"

@@ -98,10 +98,12 @@
   {% else %}
   <header class="top">
     <a class="logo" href="/">Watch Club</a>
+    {% block public_nav %}
     <nav class="flex items-center gap-4">
       <a href="/auth/login">Entrar</a>
       <a class="btn btn-secondary" href="/auth/signup">Criar conta</a>
     </nav>
+    {% endblock %}
   </header>
   {% endif %}
       <main>

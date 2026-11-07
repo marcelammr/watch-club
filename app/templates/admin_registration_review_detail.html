@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "macros/avatar.html" import user_avatar %}
+{% block title %}Revisão · Administração · Watch Club{% endblock %}
+{% block page_heading %}Revisão{% endblock %}
+{% block content %}
+<p class="muted"><a href="/admin/cadastros?aba=revisoes">Revisões</a></p>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+
+<section class="card narrow registration-detail">
+  <div class="registration-person">
+    {{ user_avatar(person, 'md') }}
+    <div>
+      <h1>{{ person.name }}</h1>
+      <p class="muted">@{{ person.username }}</p>
+      <p class="muted">{{ person.email }}</p>
+    </div>
+  </div>
+  <p class="muted">Pedido em {{ item.request.created_at|when }} · Recusado {% if item.request.decided_at %}{{ item.request.decided_at|when }}{% else %}—{% endif %}{% if item.request.decided_by %} · {{ item.request.decided_by.name }}{% endif %}</p>
+  <blockquote class="review-quote">{{ item.message }}</blockquote>
+  <p class="muted">Revisão enviada {{ item.created_at|when }}</p>
+  <p>{{ status_label }}</p>
+  {% if item.status == 'pending' %}
+  <div class="auth-gate-actions">
+    <form {% if ui_preview %}onsubmit="return false"{% else %}action="/admin/cadastros/revisoes/{{ item.id }}/aprovar-acesso" method="post"{% endif %}>
+      <button class="btn btn-primary" type="submit">Aprovar acesso</button>
+    </form>
+    <form {% if ui_preview %}onsubmit="return false"{% else %}action="/admin/cadastros/revisoes/{{ item.id }}/manter-recusa" method="post"{% endif %}>
+      <button class="btn btn-danger" type="submit">Manter recusa</button>
+    </form>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

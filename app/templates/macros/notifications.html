@@ -27,6 +27,18 @@
         {% endif %}
         <span class="muted notice-when">{{ note.created_at|notice_when }}</span>
       </span>
+    {% elif note.type == 'registration_review' %}
+      {% if actor %}
+        {{ user_avatar(actor, 'sm') }}
+      {% endif %}
+      <span class="notice-copy">
+        {% if actor %}
+          <span class="notice-title"><strong>{{ actor.name }}</strong> (@{{ actor.username }}) solicitou revisão da solicitação de cadastro.</span>
+        {% else %}
+          <span class="notice-title">Nova solicitação de revisão</span>
+        {% endif %}
+        <span class="muted notice-when">{{ note.created_at|notice_when }}</span>
+      </span>
     {% else %}
       {% if actor %}
         {{ user_avatar(actor, 'sm') }}

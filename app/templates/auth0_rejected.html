@@ -1,15 +1,18 @@
 {% extends "base.html" %}
+{% from "macros/auth_gate.html" import auth_gate_icon, auth_gate_id %}
 {% block title %}Solicitação não aprovada · Watch Club{% endblock %}
 {% block page_heading %}Watch Club{% endblock %}
 {% block body_class %}auth-page{% endblock %}
+{% block public_nav %}{% endblock %}
 {% block content %}
-<section class="card narrow">
+<section class="card narrow auth-gate">
+  {{ auth_gate_icon('reject') }}
   <h1>Solicitação não aprovada</h1>
-  <p>Sua solicitação de cadastro no Watch Club não foi aprovada.</p>
-  {% if profile %}
-  <p class="muted">{{ profile.name }} · @{{ profile.username }}</p>
-  {% endif %}
-  <p class="muted">Você pode sair desta conta neste computador.</p>
-  <p><a class="btn btn-ghost" href="/auth/logout">Sair</a></p>
+  <p>O acesso não foi aprovado desta vez.</p>
+  {{ auth_gate_id(profile) }}
+  <div class="auth-gate-actions">
+    <a class="btn btn-primary" href="{% if ui_preview %}/dev/acesso/revisao{% else %}/auth/revisao{% endif %}">Solicitar revisão</a>
+    <a class="btn btn-ghost" href="{% if ui_preview %}#{% else %}/auth/logout{% endif %}">Sair</a>
+  </div>
 </section>
 {% endblock %}

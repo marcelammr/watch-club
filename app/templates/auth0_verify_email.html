@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "macros/signup_progress.html" import signup_progress %}
+{% from "macros/auth_gate.html" import auth_gate_icon %}
+{% block title %}Verifique seu e-mail · Watch Club{% endblock %}
+{% block page_heading %}Watch Club{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block public_nav %}{% endblock %}
+{% block content %}
+<section class="card narrow auth-gate">
+  {{ signup_progress(signup_step) }}
+  {{ auth_gate_icon('mail') }}
+  <h1>Verifique seu e-mail</h1>
+  {% if identity.email %}
+  <p>Enviamos uma mensagem para <strong>{{ identity.email }}</strong>.</p>
+  {% else %}
+  <p>Confirme seu e-mail no Auth0 para continuar.</p>
+  {% endif %}
+  <p class="muted">Não encontrou? Confira a pasta de spam ou lixo eletrônico.</p>
+  <div class="auth-gate-actions">
+    <a class="btn btn-primary" href="{% if ui_preview %}#{% else %}/auth/verificar-email/continuar{% endif %}">Continuar</a>
+  </div>
+  <p class="muted auth-gate-leave"><a href="{% if ui_preview %}#{% else %}/auth/logout{% endif %}">Sair e trocar de conta</a></p>
+</section>
+{% endblock %}

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/avatar.html" import user_avatar %}
 {% block title %}Solicitação · Administração · Watch Club{% endblock %}
 {% block page_heading %}Solicitação{% endblock %}
 {% block content %}
@@ -6,19 +7,26 @@
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
 
-<section class="card narrow">
-  <h1>{{ person.name }}</h1>
-  <p>@{{ person.username }}</p>
-  <p>{{ person.email }}</p>
-  <p class="muted">Enviado em {{ item.created_at|when }}</p>
-  <p>Status: {{ status_label }}</p>
+<section class="card narrow registration-detail">
+  <div class="registration-person">
+    {{ user_avatar(person, 'md') }}
+    <div>
+      <h1>{{ person.name }}</h1>
+      <p class="muted">@{{ person.username }}</p>
+      <p class="muted">{{ person.email }}</p>
+    </div>
+  </div>
+  <p class="muted">Enviado {{ item.created_at|when }}</p>
+  <p>{{ status_label }}</p>
   {% if item.status == 'pending' %}
-  <form action="/admin/cadastros/{{ item.id }}/aprovar" method="post">
-    <button class="btn btn-primary" type="submit">Aprovar</button>
-  </form>
-  <form action="/admin/cadastros/{{ item.id }}/recusar" method="post">
-    <button class="btn btn-danger" type="submit">Recusar</button>
-  </form>
+  <div class="auth-gate-actions">
+    <form {% if ui_preview %}onsubmit="return false"{% else %}action="/admin/cadastros/{{ item.id }}/aprovar" method="post"{% endif %}>
+      <button class="btn btn-primary" type="submit">Aprovar</button>
+    </form>
+    <form {% if ui_preview %}onsubmit="return false"{% else %}action="/admin/cadastros/{{ item.id }}/recusar" method="post"{% endif %}>
+      <button class="btn btn-danger" type="submit">Recusar</button>
+    </form>
+  </div>
   {% endif %}
 </section>
 {% endblock %}

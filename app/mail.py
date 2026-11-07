@@ -65,6 +65,31 @@ def send_registration_approved_email(to_email: str, name: str) -> None:
     _send_email(to_email, "Seu acesso ao Watch Club foi aprovado", body)
 
 
+def send_registration_review_approved_email(to_email: str, name: str) -> None:
+    url = login_url()
+    display = (name or "").strip() or "olá"
+    body = (
+        f"Olá, {display}!\n\n"
+        "Sua solicitação de revisão foi analisada e o acesso ao Watch Club foi aprovado.\n\n"
+        "Agora você já pode entrar na sua conta e aproveitar o Watch Club.\n\n"
+        f"Entrar no Watch Club:\n{url}\n\n"
+        "Até logo,\n"
+        "Watch Club\n"
+    )
+    _send_email(to_email, "Sua revisão de acesso ao Watch Club foi aprovada", body)
+
+
+def send_registration_review_rejected_email(to_email: str, name: str) -> None:
+    display = (name or "").strip() or "olá"
+    body = (
+        f"Olá, {display}.\n\n"
+        "Sua solicitação de revisão foi analisada e o acesso ao Watch Club continua não aprovado.\n\n"
+        "Até logo,\n"
+        "Watch Club\n"
+    )
+    _send_email(to_email, "Sobre sua revisão de acesso ao Watch Club", body)
+
+
 def send_registration_rejected_email(to_email: str, name: str) -> None:
     display = (name or "").strip() or "olá"
     body = (

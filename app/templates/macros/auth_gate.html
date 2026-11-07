@@ -1,0 +1,30 @@
+{% macro auth_gate_icon(kind) %}
+<span class="auth-gate-icon" aria-hidden="true">
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    {% if kind == 'mail' %}
+    <rect x="3.5" y="5.5" width="17" height="13" rx="2"/>
+    <path d="M4 7l8 6 8-6"/>
+    {% elif kind == 'reject' %}
+    <circle cx="12" cy="12" r="8.5"/>
+    <path d="M9 9l6 6M15 9l-6 6"/>
+    {% elif kind == 'review' %}
+    <path d="M5 5.5h10A1.5 1.5 0 0 1 16.5 7v8.5A1.5 1.5 0 0 1 15 17H8l-3 2.5V7A1.5 1.5 0 0 1 6.5 5.5Z"/>
+    <path d="M8 9h5M8 12h3"/>
+    {% elif kind == 'expire' %}
+    <circle cx="12" cy="13" r="7"/>
+    <path d="M12 9.5V13l2.2 1.4"/>
+    <path d="M9 4.5h6"/>
+    {% else %}
+    <circle cx="12" cy="12" r="8.5"/>
+    <path d="M12 8v4.2"/>
+    <path d="M12 16.2h.01"/>
+    {% endif %}
+  </svg>
+</span>
+{% endmacro %}
+
+{% macro auth_gate_id(profile) %}
+{% if profile %}
+<p class="muted auth-gate-id">{{ profile.name }} · @{{ profile.username }}</p>
+{% endif %}
+{% endmacro %}

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Vitrine DEV · acesso{% endblock %}
+{% block page_heading %}Watch Club{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block public_nav %}{% endblock %}
+{% block content %}
+<section class="card narrow auth-gate">
+  <p class="muted dev-preview-note">Vitrine temporária de visual. Dados fictícios. Não grava banco, não chama Auth0, não envia e-mail. Desative WATCH_CLUB_UI_PREVIEW antes do deploy.</p>
+  <h1>Acesso / cadastro</h1>
+  <p>Abra cada estado para conferir o visual.</p>
+  <ul class="people">
+    {% for slug, label in screens %}
+    <li>
+      <a class="person-row" href="/dev/acesso/{{ slug }}">{{ label }}</a>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}

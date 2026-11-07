@@ -69,6 +69,24 @@ class RegistrationRequest(Base):
     decided_by: Mapped[User | None] = relationship(foreign_keys=[decided_by_user_id])
 
 
+class RegistrationReview(Base):
+    __tablename__ = "registration_reviews"
+    __table_args__ = (UniqueConstraint("registration_request_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    registration_request_id: Mapped[int] = mapped_column(ForeignKey("registration_requests.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    decided_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+
+    request: Mapped[RegistrationRequest] = relationship(foreign_keys=[registration_request_id])
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
+    decided_by: Mapped[User | None] = relationship(foreign_keys=[decided_by_user_id])
+
+
 class AccountInvite(Base):
     __tablename__ = "account_invites"
 

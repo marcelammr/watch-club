@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "macros/auth_gate.html" import auth_gate_icon %}
+{% block title %}Solicitar revisão · Watch Club{% endblock %}
+{% block page_heading %}Watch Club{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block public_nav %}{% endblock %}
+{% block content %}
+<section class="card narrow auth-gate">
+  {{ auth_gate_icon('review') }}
+  <h1>Solicitar revisão</h1>
+  <p>Se quiser, diga por que reconsiderar.</p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <form {% if ui_preview %}onsubmit="return false"{% else %}action="/auth/revisao" method="post"{% endif %}>
+    <label>Mensagem
+      <textarea class="js-review-message" name="message" required maxlength="{{ message_max }}" rows="5">{{ message or '' }}</textarea>
+    </label>
+    <p class="muted">Até {{ message_max }} caracteres <span class="js-review-count"></span></p>
+    <div class="auth-gate-actions">
+      <button class="btn btn-primary" type="submit">Enviar revisão</button>
+      <a class="btn btn-ghost" href="{% if ui_preview %}/dev/acesso/nao-aprovado{% else %}/auth/nao-aprovado{% endif %}">Voltar</a>
+    </div>
+  </form>
+  <p class="muted auth-gate-leave"><a href="{% if ui_preview %}#{% else %}/auth/logout{% endif %}">Sair</a></p>
+</section>
+<script>
+  (function () {
+    var area = document.querySelector(".js-review-message");
+    var out = document.querySelector(".js-review-count");
+    if (!area || !out) return;
+    function tick() {
+      out.textContent = "(" + area.value.length + "/" + area.maxLength + ")";
+    }
+    area.addEventListener("input", tick);
+    tick();
+  })();
+</script>
+{% endblock %}

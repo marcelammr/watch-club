@@ -1,13 +1,16 @@
 {% extends "base.html" %}
+{% from "macros/signup_progress.html" import signup_progress %}
 {% block title %}Complete seu perfil · Watch Club{% endblock %}
 {% block page_heading %}Watch Club{% endblock %}
 {% block body_class %}auth-page{% endblock %}
+{% block public_nav %}{% endblock %}
 {% block content %}
-<section class="card narrow">
+<section class="card narrow auth-gate">
+  {{ signup_progress(signup_step) }}
   <h1>Complete seu perfil</h1>
-  <p>Antes de continuar, escolha como você quer aparecer no Watch Club.</p>
+  <p>Escolha como você aparece no Watch Club.</p>
   {% if identity.email %}
-  <p class="muted">E-mail verificado: {{ identity.email }}</p>
+  <p class="muted">{{ identity.email }}</p>
   {% endif %}
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
   {% if suggestions %}
@@ -18,7 +21,7 @@
     {% endfor %}
   </div>
   {% endif %}
-  <form action="/auth/completar-perfil" method="post">
+  <form {% if ui_preview %}onsubmit="return false"{% else %}action="/auth/completar-perfil" method="post"{% endif %}>
     <label>Nome
       <input name="name" required maxlength="80" value="{{ form.name or '' }}" autocomplete="name">
     </label>
@@ -29,9 +32,11 @@
       </span>
     </label>
     <p class="muted">Seu @ é único e será usado para encontrar seu perfil.</p>
-    <button class="btn btn-primary" type="submit">Continuar</button>
+    <div class="auth-gate-actions">
+      <button class="btn btn-primary" type="submit">Continuar</button>
+    </div>
   </form>
-  <p class="muted"><a href="/auth/logout">Sair e trocar de conta</a></p>
+  <p class="muted auth-gate-leave"><a href="{% if ui_preview %}#{% else %}/auth/logout{% endif %}">Sair e trocar de conta</a></p>
 </section>
 <script>
   document.querySelectorAll(".js-username-suggestion").forEach(function (chip) {

@@ -32,6 +32,8 @@ SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 EMAIL_FROM = os.getenv("EMAIL_FROM", "watch-club@localhost")
 EMAIL_DEV_SHOW_LINK = os.getenv("EMAIL_DEV_SHOW_LINK", "true").lower() in {"1", "true", "yes"}
+# Temporary visual showcase for the access/signup polish. Default OFF. Remove before deploy.
+WATCH_CLUB_UI_PREVIEW = os.getenv("WATCH_CLUB_UI_PREVIEW", "false").lower() in {"1", "true", "yes"}
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 FACEBOOK_CLIENT_ID = os.getenv("FACEBOOK_CLIENT_ID", "")
