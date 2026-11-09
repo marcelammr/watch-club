@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import UploadFile
 
-from app.config import BASE_DIR
+from app.config import uploads_dir
 
 COVER_COLORS = [
     "#3A2348",
@@ -21,7 +21,8 @@ COVER_COLORS = [
 COVER_PRESETS = tuple({"hex": color, "label": color} for color in COVER_COLORS)
 DEFAULT_COVER = COVER_COLORS[0]
 HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
-UPLOAD_DIR = BASE_DIR / "app" / "static" / "uploads" / "clubs"
+def _upload_dir() -> Path:
+    return uploads_dir() / "clubs"
 ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 MAX_BYTES = 2 * 1024 * 1024
 
@@ -41,9 +42,10 @@ async def save_cover_image(upload: UploadFile | None) -> str | None:
     data = await upload.read()
     if not data or len(data) > MAX_BYTES:
         return None
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    dest = _upload_dir()
+    dest.mkdir(parents=True, exist_ok=True)
     name = f"{secrets.token_hex(12)}{suffix}"
-    (UPLOAD_DIR / name).write_bytes(data)
+    (dest / name).write_bytes(data)
     return name
 
 

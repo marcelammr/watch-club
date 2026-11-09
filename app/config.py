@@ -45,6 +45,7 @@ AUTH0_CLIENT_ID = (os.getenv("AUTH0_CLIENT_ID") or "").strip()
 AUTH0_CLIENT_SECRET = (os.getenv("AUTH0_CLIENT_SECRET") or "").strip()
 AUTH0_CONNECTION = (os.getenv("AUTH0_CONNECTION") or "Username-Password-Authentication").strip()
 BIO_MAX = 300
+DEFAULT_UPLOADS_DIR = BASE_DIR / "app" / "static" / "uploads"
 
 
 def _auth0_setting(name: str) -> str:
@@ -74,3 +75,10 @@ def auth0_connection() -> str:
 
 def auth0_enabled() -> bool:
     return bool(auth0_domain() and auth0_client_id() and auth0_client_secret())
+
+
+def uploads_dir() -> Path:
+    raw = (os.getenv("WATCH_CLUB_UPLOADS_DIR") or "").strip()
+    if not raw:
+        return DEFAULT_UPLOADS_DIR
+    return Path(raw).expanduser()

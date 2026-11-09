@@ -6,9 +6,10 @@ from pathlib import Path
 
 from fastapi import UploadFile
 
-from app.config import BASE_DIR
+from app.config import uploads_dir
 
-UPLOAD_DIR = BASE_DIR / "app" / "static" / "uploads" / "avatars"
+def _upload_dir() -> Path:
+    return uploads_dir() / "avatars"
 ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 ALLOWED_MIME = {
     "image/jpeg",
@@ -27,8 +28,9 @@ def stored_upload_path(filename: str | None) -> Path | None:
     name = (filename or "").strip()
     if not STORED_NAME.match(name):
         return None
-    path = (UPLOAD_DIR / name).resolve()
-    if path.parent != UPLOAD_DIR.resolve() or not path.is_file():
+    dest = _upload_dir()
+    path = (dest / name).resolve()
+    if path.parent != dest.resolve() or not path.is_file():
         return None
     return path
 
@@ -84,7 +86,8 @@ async def save_avatar_photo(upload: UploadFile | None) -> str | None:
     if suffix and suffix != sniffed and not (suffix in {".jpg", ".jpeg"} and sniffed == ".jpg"):
         if suffix != sniffed:
             return None
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    dest = _upload_dir()
+    dest.mkdir(parents=True, exist_ok=True)
     name = f"{secrets.token_hex(12)}{sniffed}"
-    (UPLOAD_DIR / name).write_bytes(data)
+    (dest / name).write_bytes(data)
     return name

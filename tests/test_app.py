@@ -677,6 +677,9 @@ def test_club_cover_image_upload_and_type_limit():
         db.close()
     room = owner.get(f"/clubs/{club_id}")
     assert f"/static/uploads/clubs/{image_name}" in room.text
+    served = owner.get(f"/static/uploads/clubs/{image_name}")
+    assert served.status_code == 200
+    assert served.content == TINY_PNG
     settings = owner.get(f"/clubs/{club_id}/config")
     assert 'id="cover-crop-dialog"' in settings.text
     assert "/static/js/cover-crop.js" in settings.text
@@ -768,6 +771,12 @@ def test_club_icon_image_optional_upload_and_independence():
     room = owner.get(f"/clubs/{club_id}")
     assert f"/static/uploads/clubs/{cover_name}" in room.text
     assert f"/static/uploads/club-icons/{icon_name}" in room.text
+    cover_file = owner.get(f"/static/uploads/clubs/{cover_name}")
+    icon_file = owner.get(f"/static/uploads/club-icons/{icon_name}")
+    assert cover_file.status_code == 200
+    assert cover_file.content == TINY_PNG
+    assert icon_file.status_code == 200
+    assert icon_file.content == TINY_PNG
     assert "club-mark" in room.text
     empty_room = owner.get(f"/clubs/{empty_id}")
     assert "club-icon-fallback" in empty_room.text
@@ -1681,6 +1690,16 @@ def test_avatar_registry_upload_and_fallback():
         follow_redirects=False,
     )
     assert photo.status_code == 303
+    db = SessionLocal()
+    try:
+        stored = db.scalar(select(User).where(User.username_key == "avatar_sys"))
+        assert stored.avatar_type == "upload"
+        avatar_name = stored.avatar_value
+    finally:
+        db.close()
+    served_avatar = person.get(f"/static/uploads/avatars/{avatar_name}")
+    assert served_avatar.status_code == 200
+    assert served_avatar.content == PNG_1X1
     photo_page = person.get("/conta")
     assert "/static/uploads/avatars/" in photo_page.text
     assert photo_page.text.count(".png") >= 1

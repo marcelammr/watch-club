@@ -87,7 +87,6 @@ TYPE_UPLOAD = "upload"
 PROVIDER_WATCHCLUB = "watchclub"
 PROVIDER_TYGER = "tyger"
 STATIC_AVATARS = BASE_DIR / "app" / "static" / "avatars"
-UPLOAD_AVATARS = BASE_DIR / "app" / "static" / "uploads" / "avatars"
 FALLBACK_URL = f"/static/avatars/{DEFAULT_AVATAR}.svg"
 
 TYGER_AVATARS = [

@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.routing import Mount
 
 from app.accounts import (
     auth0_followup_path,
@@ -166,7 +167,7 @@ from app.discovery import (
 from app.covers import COVER_COLORS, COVER_PRESETS, cover_image_url, save_cover_image, valid_cover_color
 from app.markup import format_chat, pin_preview
 from app import config as app_config
-from app.config import BASE_DIR, BIO_MAX, EMAIL_DEV_SHOW_LINK, SECRET_KEY, SESSION_HTTPS_ONLY
+from app.config import BASE_DIR, BIO_MAX, EMAIL_DEV_SHOW_LINK, SECRET_KEY, SESSION_HTTPS_ONLY, uploads_dir
 from app.dev_preview import register_ui_preview_routes
 from app.db import Base, close_exclusive_session, engine, exclusive_write_session, get_db
 from app.invites import (
@@ -312,7 +313,21 @@ app.add_middleware(
     same_site="lax",
     https_only=SESSION_HTTPS_ONLY,
 )
-app.mount("/static", StaticFiles(directory=BASE_DIR / "app" / "static"), name="static")
+
+
+def mount_static_files(application: FastAPI) -> None:
+    application.router.routes = [
+        route
+        for route in application.router.routes
+        if not (isinstance(route, Mount) and route.path in {"/static", "/static/uploads"})
+    ]
+    uploads_root = uploads_dir()
+    uploads_root.mkdir(parents=True, exist_ok=True)
+    application.mount("/static/uploads", StaticFiles(directory=str(uploads_root)), name="uploads")
+    application.mount("/static", StaticFiles(directory=str(BASE_DIR / "app" / "static")), name="static")
+
+
+mount_static_files(app)
 templates = Jinja2Templates(
     directory=str(BASE_DIR / "app" / "templates"),
     context_processors=[header_notification_context],
