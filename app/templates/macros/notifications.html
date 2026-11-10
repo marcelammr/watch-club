@@ -27,6 +27,30 @@
         {% endif %}
         <span class="muted notice-when">{{ note.created_at|notice_when }}</span>
       </span>
+    {% elif note.type == 'friend_request' %}
+      {% if actor %}
+        {{ user_avatar(actor, 'sm') }}
+      {% endif %}
+      <span class="notice-copy">
+        <span class="notice-title">Nova solicitação de amizade</span>
+        {% if actor %}
+          <span class="muted">@{{ actor.username }} enviou uma solicitação de amizade.</span>
+        {% endif %}
+        <span class="muted notice-when">{{ note.created_at|notice_when }}</span>
+      </span>
+    {% elif note.type == 'suggestion' %}
+      {% if actor %}
+        {{ user_avatar(actor, 'sm') }}
+      {% endif %}
+      <span class="notice-copy">
+        <span class="notice-title">Nova sugestão recebida</span>
+        {% if actor and item.suggestion %}
+          <span class="muted">@{{ actor.username }} enviou uma sugestão: “{{ item.suggestion.title }}”</span>
+        {% elif actor %}
+          <span class="muted">@{{ actor.username }} enviou uma sugestão.</span>
+        {% endif %}
+        <span class="muted notice-when">{{ note.created_at|notice_when }}</span>
+      </span>
     {% elif note.type == 'registration_review' %}
       {% if actor %}
         {{ user_avatar(actor, 'sm') }}

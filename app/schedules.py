@@ -4,11 +4,12 @@ from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.accounts import utcnow
-from app.models import ClubMember, ClubSchedule, ClubScheduleSeries, ClubShow
+from app.catalog import is_last_numbered_episode, numbered_episodes_by_season
+from app.models import ClubMember, ClubSchedule, ClubScheduleSeries, ClubShow, Show
 
 CLUB_TZ = ZoneInfo("America/Sao_Paulo")
 WEEKDAYS = ("Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom")
@@ -34,6 +35,9 @@ REPEAT_STEPS = {REPEAT_WEEKLY: 7, REPEAT_BIWEEKLY: 14}
 MAX_OCCURRENCES = 52
 MAX_SPAN_DAYS = 366
 PROGRAM_PENDING = "Programa não definido"
+SCOPE_THIS = "this"
+SCOPE_FOLLOWING = "following"
+SCOPE_CHOICES = (SCOPE_THIS, SCOPE_FOLLOWING)
 
 
 def parse_meeting_title(raw: str | None) -> str:
@@ -95,7 +99,7 @@ def occurrence_dates(start: date, until: date, step_days: int) -> list[date]:
     return days
 
 
-def parse_optional_int(raw: str | None, label: str) -> int | None:
+def parse_optional_int(raw: str | None, label: str, *, minimum: int = 1) -> int | None:
     text = (raw or "").strip()
     if not text:
         return None
@@ -103,9 +107,75 @@ def parse_optional_int(raw: str | None, label: str) -> int | None:
         value = int(text)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"{label} inválido.") from None
-    if value < 1 or value > 999:
+    if value < minimum or value > 999:
         raise HTTPException(status_code=400, detail=f"{label} inválido.")
     return value
+
+
+def parse_program_scope(raw: str | None, *, recurring: bool) -> str:
+    value = (raw or SCOPE_THIS).strip().lower()
+    if value not in SCOPE_CHOICES:
+        value = SCOPE_THIS
+    if not recurring:
+        return SCOPE_THIS
+    return value
+
+
+def _clear_program(item: ClubSchedule) -> None:
+    item.show_id = None
+    item.season_number = None
+    item.episode_number = None
+
+
+def _set_program(
+    item: ClubSchedule, show_id: int | None, season_number: int | None, episode_number: int | None
+) -> None:
+    item.show_id = show_id
+    item.season_number = season_number
+    item.episode_number = episode_number
+
+
+def _later_occurrences(db: Session, item: ClubSchedule) -> list[ClubSchedule]:
+    if not item.series_id:
+        return []
+    return list(
+        db.scalars(
+            select(ClubSchedule)
+            .where(
+                ClubSchedule.series_id == item.series_id,
+                ClubSchedule.id != item.id,
+                or_(
+                    ClubSchedule.starts_at > item.starts_at,
+                    and_(ClubSchedule.starts_at == item.starts_at, ClubSchedule.id > item.id),
+                ),
+            )
+            .order_by(ClubSchedule.starts_at.asc(), ClubSchedule.id.asc())
+        ).all()
+    )
+
+
+def parse_program_episode(
+    db: Session, show_id: int | None, season_raw: str | None, episode_raw: str | None
+) -> tuple[int | None, int | None]:
+    season_number = parse_optional_int(season_raw, "Temporada", minimum=0)
+    episode_number = parse_optional_int(episode_raw, "Episódio", minimum=1)
+    if show_id is None:
+        return None, None
+    show = db.get(Show, show_id)
+    if show is None or show.kind == "filme":
+        return None, None
+    structure = numbered_episodes_by_season(db, show_id)
+    if not structure:
+        return season_number, episode_number
+    if season_number is None and episode_number is None:
+        return None, None
+    if season_number is None or season_number not in structure:
+        raise HTTPException(status_code=400, detail="Escolha uma temporada válida desta obra.")
+    if episode_number is None:
+        return season_number, None
+    if episode_number not in structure[season_number]:
+        raise HTTPException(status_code=400, detail="Escolha um episódio válido desta temporada.")
+    return season_number, episode_number
 
 
 def wall_to_utc(date_value: str, time_value: str) -> datetime:
@@ -142,7 +212,9 @@ def format_schedule_detail(value: datetime | None) -> str:
 
 def format_episode_line(season_number: int | None, episode_number: int | None) -> str:
     parts: list[str] = []
-    if season_number is not None:
+    if season_number == 0:
+        parts.append("Especiais")
+    elif season_number is not None:
         parts.append(f"Temporada {season_number}")
     if episode_number is not None:
         parts.append(f"Episódio {episode_number}")
@@ -422,8 +494,7 @@ def create_schedule(
     start_local = utc_to_local(wall_to_utc(date_value, time_value))
     start_day = start_local.date()
     time_local = start_local.strftime("%H:%M")
-    season_number = parse_optional_int(season_raw, "Temporada")
-    episode_number = parse_optional_int(episode_raw, "Episódio")
+    season_number, episode_number = parse_program_episode(db, resolved_show, season_raw, episode_raw)
     note_text = (notes or "").strip()[:NOTES_MAX]
     title_text = parse_meeting_title(title)
     repeat_value = parse_repeat(repeat)
@@ -445,12 +516,16 @@ def create_schedule(
         )
         db.add(series)
         db.flush()
+    ended_on_first = bool(
+        resolved_show and is_last_numbered_episode(db, resolved_show, season_number, episode_number)
+    )
     first: ClubSchedule | None = None
     for index, day in enumerate(days):
+        later_and_done = index > 0 and ended_on_first
         item = ClubSchedule(
             club_id=club_id,
             series_id=series.id if series else None,
-            show_id=resolved_show,
+            show_id=None if later_and_done else resolved_show,
             title="" if series else title_text,
             starts_at=wall_to_utc(day.isoformat(), time_local),
             season_number=season_number if index == 0 else None,
@@ -473,15 +548,28 @@ def set_schedule_program(
     show_id: int | None,
     season_raw: str | None = None,
     episode_raw: str | None = None,
+    scope_raw: str | None = None,
 ) -> ClubSchedule:
     item = _get_schedule(db, club_id, schedule_id)
-    item.show_id = resolve_club_show(db, club_id, show_id)
-    if item.show_id is None:
-        item.season_number = None
-        item.episode_number = None
+    resolved_show = resolve_club_show(db, club_id, show_id)
+    if resolved_show is None:
+        season_number, episode_number = None, None
     else:
-        item.season_number = parse_optional_int(season_raw, "Temporada")
-        item.episode_number = parse_optional_int(episode_raw, "Episódio")
+        season_number, episode_number = parse_program_episode(
+            db, resolved_show, season_raw, episode_raw
+        )
+    _set_program(item, resolved_show, season_number, episode_number)
+    scope = parse_program_scope(scope_raw, recurring=bool(item.series_id))
+    if scope == SCOPE_FOLLOWING:
+        later = _later_occurrences(db, item)
+        ended = bool(resolved_show) and is_last_numbered_episode(
+            db, resolved_show, season_number, episode_number
+        )
+        for other in later:
+            if resolved_show is None or ended:
+                _clear_program(other)
+            else:
+                _set_program(other, resolved_show, None, None)
     db.commit()
     db.refresh(item)
     return item

@@ -63,9 +63,14 @@ def test_logged_in_shell_and_clubes_page():
     assert 'href="/mensagens"' in home.text
     assert 'aria-label="Configurações"' in home.text
     assert 'aria-label="Administração"' not in home.text
+    assert 'aria-label="Caixinha de sugestão"' in home.text
     assert 'aria-label="Sobre"' in home.text
     assert 'href="/conta"' in home.text
+    assert 'href="/sugestoes"' in home.text
     assert 'href="/sobre"' in home.text
+    foot = home.text.split('aria-label="Preferências"', 1)[1].split("</nav>", 1)[0]
+    assert foot.find('href="/conta"') < foot.find('href="/sugestoes"') < foot.find('href="/sobre"')
+    assert "Caixinha<br>de sugestão" in foot or "Caixinha<br/>de sugestão" in foot
     assert 'aria-label="Notificações"' in home.text
     assert 'href="/amigos"' in home.text
     assert "Assistir juntos" in home.text

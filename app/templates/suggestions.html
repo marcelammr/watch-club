@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Caixinha de sugestão · Watch Club{% endblock %}
+{% block page_heading %}Caixinha de sugestão{% endblock %}
+{% block content %}
+<section class="suggestion-page">
+  <h1>Caixinha de sugestão</h1>
+  <p class="muted">Tem uma ideia para melhorar o Watch Club? Conta pra gente.</p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+
+  <form class="suggestion-form js-once" action="/sugestoes" method="post">
+    <label>Título
+      <input type="text" name="title" maxlength="{{ title_max }}" required autocomplete="off" placeholder="Ex.: Filtro na agenda">
+    </label>
+    <label>Descrição
+      <textarea name="description" maxlength="{{ description_max }}" rows="6" required placeholder="Conte o que você gostaria de ver no Watch Club." class="suggestion-textarea"></textarea>
+    </label>
+    <p class="muted">Título até {{ title_max }} caracteres. Descrição até {{ description_max }} caracteres.</p>
+    <button class="btn btn-primary" type="submit">Enviar sugestão</button>
+  </form>
+
+  <section aria-labelledby="minhas-sugestoes-title">
+    <h2 id="minhas-sugestoes-title" class="text-lg font-semibold">Minhas sugestões</h2>
+    {% if items %}
+    <ul class="suggestion-list">
+      {% for item in items %}
+      <li class="suggestion-item">
+        <div class="suggestion-item-head">
+          <h3>{{ item.title }}</h3>
+          <span class="chip suggestion-chip is-{{ item.status }}">{{ status_labels.get(item.status, item.status) }}</span>
+        </div>
+        <p class="suggestion-body">{{ item.description }}</p>
+        <p class="muted suggestion-meta">{{ item.created_at|when }}</p>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted">Você ainda não enviou sugestões.</p>
+    {% endif %}
+  </section>
+</section>
+<script>
+  document.querySelectorAll("form.js-once").forEach(function (form) {
+    form.addEventListener("submit", function () {
+      var btn = form.querySelector("[type=submit]");
+      if (btn) btn.disabled = true;
+    });
+  });
+</script>
+{% endblock %}

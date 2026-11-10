@@ -413,6 +413,7 @@
                     data-show-id="{{ item.show_id or '' }}"
                     data-season="{{ item.season_number or '' }}"
                     data-episode="{{ item.episode_number or '' }}"
+                    data-recurring="{{ '1' if item.series_id else '' }}"
                     data-title="{{ 'Alterar programa' if item.show_id else 'Definir programa' }}"
                   >{{ 'Alterar programa' if item.show_id else 'Definir programa' }}</button>
                   <button
@@ -648,6 +649,7 @@
 </dialog>
 {% endif %}
 {% if tab == 'agendamentos' and can_schedules %}
+<script type="application/json" id="program-catalog">{{ program_catalog|default({})|tojson }}</script>
 <dialog class="leave-dialog schedule-dialog" id="add-schedule-dialog" aria-labelledby="add-schedule-dialog-title">
   <h2 id="add-schedule-dialog-title">Novo agendamento</h2>
   <form action="/clubs/{{ club.id }}/agendamentos" method="post">
@@ -670,16 +672,22 @@
       <input type="date" name="until">
     </label>
     <label>Programa
-      <select name="show_id">
+      <select name="show_id" class="js-program-show">
         <option value="">Nenhum — programa não definido</option>
         {% for link in club.shows %}
           <option value="{{ link.show.id }}">{{ link.show.name }}</option>
         {% endfor %}
       </select>
     </label>
-    <div class="schedule-form-row js-schedule-episode">
-      <label>Temporada <input type="number" name="season_number" min="1" max="999" inputmode="numeric" placeholder="Opcional"></label>
-      <label>Episódio <input type="number" name="episode_number" min="1" max="999" inputmode="numeric" placeholder="Opcional"></label>
+    <div class="schedule-form-row js-episode-fields">
+      <label>Temporada
+        <select name="season_number" class="js-season-select" hidden disabled></select>
+        <input type="number" name="season_number" class="js-season-input" min="0" max="999" inputmode="numeric" placeholder="Opcional">
+      </label>
+      <label>Episódio
+        <select name="episode_number" class="js-episode-select" hidden disabled></select>
+        <input type="number" name="episode_number" class="js-episode-input" min="1" max="999" inputmode="numeric" placeholder="Opcional">
+      </label>
     </div>
     <label>Observação <textarea name="notes" rows="2" maxlength="200" placeholder="Opcional"></textarea></label>
     <div class="leave-dialog-actions">
@@ -700,10 +708,27 @@
           {% endfor %}
         </select>
       </label>
-      <div class="schedule-form-row">
-        <label>Temporada <input type="number" name="season_number" class="js-program-season" min="1" max="999" inputmode="numeric" placeholder="Opcional"></label>
-        <label>Episódio <input type="number" name="episode_number" class="js-program-episode" min="1" max="999" inputmode="numeric" placeholder="Opcional"></label>
+      <div class="schedule-form-row js-episode-fields">
+        <label>Temporada
+          <select name="season_number" class="js-season-select" hidden disabled></select>
+          <input type="number" name="season_number" class="js-season-input js-program-season" min="0" max="999" inputmode="numeric" placeholder="Opcional">
+        </label>
+        <label>Episódio
+          <select name="episode_number" class="js-episode-select" hidden disabled></select>
+          <input type="number" name="episode_number" class="js-episode-input js-program-episode" min="1" max="999" inputmode="numeric" placeholder="Opcional">
+        </label>
       </div>
+      <fieldset class="program-scope js-program-scope" hidden>
+        <legend>Aplicar programa em</legend>
+        <label class="program-scope-option">
+          <input type="radio" name="scope" value="this" class="js-program-scope-this" checked>
+          Somente este encontro
+        </label>
+        <label class="program-scope-option">
+          <input type="radio" name="scope" value="following" class="js-program-scope-following">
+          Este e os próximos encontros
+        </label>
+      </fieldset>
       <div class="leave-dialog-actions">
         <button type="button" class="btn btn-ghost js-program-cancel">Cancelar</button>
         <button class="btn btn-primary" type="submit">Salvar</button>
@@ -962,9 +987,93 @@
         if (event.target === dialog) dialog.close();
       });
     }
+    let catalog = {};
+    const catalogNode = document.getElementById("program-catalog");
+    if (catalogNode) {
+      try { catalog = JSON.parse(catalogNode.textContent || "{}"); } catch (err) { catalog = {}; }
+    }
+    function fillSelect(select, items, placeholder) {
+      select.innerHTML = "";
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = placeholder;
+      select.appendChild(empty);
+      items.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = String(item[0]);
+        option.textContent = item[1];
+        select.appendChild(option);
+      });
+    }
+    function syncEpisodeFields(root, showId, seasonVal, episodeVal) {
+      if (!root) return;
+      const info = catalog[String(showId || "")] || null;
+      const seasonSelect = root.querySelector(".js-season-select");
+      const seasonInput = root.querySelector(".js-season-input");
+      const episodeSelect = root.querySelector(".js-episode-select");
+      const episodeInput = root.querySelector(".js-episode-input");
+      const isMovie = Boolean(info && info.kind === "filme");
+      const guided = Boolean(info && info.seasons);
+      root.hidden = isMovie;
+      const controls = [seasonSelect, seasonInput, episodeSelect, episodeInput];
+      if (isMovie) {
+        controls.forEach((el) => {
+          if (!el) return;
+          el.disabled = true;
+          el.value = "";
+        });
+        return;
+      }
+      if (guided) {
+        seasonInput.disabled = true;
+        seasonInput.hidden = true;
+        episodeInput.disabled = true;
+        episodeInput.hidden = true;
+        seasonSelect.hidden = false;
+        seasonSelect.disabled = false;
+        episodeSelect.hidden = false;
+        const seasons = Object.keys(info.seasons).map(Number).sort((a, b) => a - b);
+        fillSelect(seasonSelect, seasons.map((n) => [n, n === 0 ? "Especiais" : ("Temporada " + n)]), "Opcional");
+        if (seasonVal !== "" && seasonVal != null && info.seasons[String(seasonVal)]) {
+          seasonSelect.value = String(seasonVal);
+        }
+        const chosen = seasonSelect.value;
+        const eps = chosen ? (info.seasons[chosen] || []) : [];
+        fillSelect(episodeSelect, eps.map((n) => [n, "Episódio " + n]), "Opcional");
+        episodeSelect.disabled = !chosen;
+        if (chosen && episodeVal !== "" && episodeVal != null && eps.indexOf(Number(episodeVal)) !== -1) {
+          episodeSelect.value = String(episodeVal);
+        }
+      } else {
+        seasonSelect.disabled = true;
+        seasonSelect.hidden = true;
+        episodeSelect.disabled = true;
+        episodeSelect.hidden = true;
+        seasonInput.hidden = false;
+        seasonInput.disabled = false;
+        episodeInput.hidden = false;
+        episodeInput.disabled = false;
+        seasonInput.value = seasonVal || "";
+        episodeInput.value = episodeVal || "";
+      }
+    }
+    function wireShowEpisode(form) {
+      if (!form) return;
+      const show = form.querySelector(".js-program-show");
+      const fields = form.querySelector(".js-episode-fields");
+      const seasonSelect = form.querySelector(".js-season-select");
+      const apply = () => syncEpisodeFields(fields, show ? show.value : "", seasonSelect ? seasonSelect.value : "", "");
+      if (show) show.addEventListener("change", () => syncEpisodeFields(fields, show.value, "", ""));
+      if (seasonSelect && !seasonSelect.dataset.bound) {
+        seasonSelect.dataset.bound = "1";
+        seasonSelect.addEventListener("change", apply);
+      }
+      apply();
+    }
     const dialog = document.getElementById("add-schedule-dialog");
     if (dialog) {
       wireDialog(dialog);
+      wireShowEpisode(dialog.querySelector("form"));
       document.querySelectorAll(".js-add-schedule-open").forEach((btn) => {
         btn.addEventListener("click", () => dialog.showModal());
       });
@@ -989,16 +1098,23 @@
       programDialog.querySelectorAll(".js-program-cancel").forEach((btn) => {
         btn.addEventListener("click", () => programDialog.close());
       });
+      if (programForm) wireShowEpisode(programForm);
       document.querySelectorAll(".js-set-program").forEach((btn) => {
         btn.addEventListener("click", () => {
           if (programForm) {
             programForm.action = btn.dataset.action;
             const show = programForm.querySelector(".js-program-show");
-            const season = programForm.querySelector(".js-program-season");
-            const episode = programForm.querySelector(".js-program-episode");
             if (show) show.value = btn.dataset.showId || "";
-            if (season) season.value = btn.dataset.season || "";
-            if (episode) episode.value = btn.dataset.episode || "";
+            syncEpisodeFields(
+              programForm.querySelector(".js-episode-fields"),
+              btn.dataset.showId || "",
+              btn.dataset.season || "",
+              btn.dataset.episode || ""
+            );
+            const scopeBox = programForm.querySelector(".js-program-scope");
+            const scopeThis = programForm.querySelector(".js-program-scope-this");
+            if (scopeBox) scopeBox.hidden = btn.dataset.recurring !== "1";
+            if (scopeThis) scopeThis.checked = true;
           }
           const heading = document.getElementById("program-schedule-dialog-title");
           if (heading) heading.textContent = btn.dataset.title || "Definir programa";

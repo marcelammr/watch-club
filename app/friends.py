@@ -103,6 +103,10 @@ def send_invite(db: Session, from_id: int, to_id: int) -> Friendship:
             status=PENDING,
         )
         db.add(row)
+        db.flush()
+        from app.notifications import notify_friend_request
+
+        notify_friend_request(db, from_id, to_id, row.id)
         db.commit()
         return row
     if row.status == ACCEPTED:

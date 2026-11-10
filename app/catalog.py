@@ -104,6 +104,69 @@ def can_refresh_catalog(show: Show) -> bool:
     return show_source(show) in {SOURCE_TVMAZE, SOURCE_TMDB}
 
 
+def numbered_episodes_by_season(db: Session, show_id: int) -> dict[int, list[int]]:
+    rows = db.execute(
+        select(Episode.season_number, Episode.number).where(
+            Episode.show_id == show_id,
+            Episode.number.is_not(None),
+        )
+    )
+    seasons: dict[int, list[int]] = {}
+    for season_number, number in rows:
+        if number is None:
+            continue
+        bucket = seasons.setdefault(season_number, [])
+        if number not in bucket:
+            bucket.append(number)
+    for numbers in seasons.values():
+        numbers.sort()
+    return seasons
+
+
+def last_numbered_episode(structure: dict[int, list[int]]) -> tuple[int, int] | None:
+    if not structure:
+        return None
+    season = max(structure)
+    numbers = structure.get(season) or []
+    if not numbers:
+        return None
+    return season, numbers[-1]
+
+
+def is_last_numbered_episode(db: Session, show_id: int, season_number: int | None, episode_number: int | None) -> bool:
+    if season_number is None or episode_number is None:
+        return False
+    return last_numbered_episode(numbered_episodes_by_season(db, show_id)) == (season_number, episode_number)
+
+
+def program_catalog_for_shows(db: Session, show_ids: list[int]) -> dict[str, dict]:
+    unique_ids = [show_id for show_id in dict.fromkeys(show_ids) if show_id]
+    if not unique_ids:
+        return {}
+    shows = list(db.scalars(select(Show).where(Show.id.in_(unique_ids))))
+    episodes = list(
+        db.scalars(
+            select(Episode).where(Episode.show_id.in_(unique_ids), Episode.number.is_not(None))
+        )
+    )
+    by_show: dict[int, dict[int, list[int]]] = {}
+    for episode in episodes:
+        bucket = by_show.setdefault(episode.show_id, {}).setdefault(episode.season_number, [])
+        if episode.number not in bucket:
+            bucket.append(episode.number)
+    catalog: dict[str, dict] = {}
+    for show in shows:
+        payload: dict = {"kind": show.kind}
+        seasons = by_show.get(show.id)
+        if seasons:
+            payload["seasons"] = {
+                str(number): sorted(episodes_in_season)
+                for number, episodes_in_season in sorted(seasons.items())
+            }
+        catalog[str(show.id)] = payload
+    return catalog
+
+
 def valid_kind(value: str | None) -> str:
     if value in CONTENT_KINDS:
         return value

@@ -35,18 +35,24 @@
   <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4.5 6.5v5c0 5 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.5 7.5-9.5v-5Z"/><path d="M9 12l2 2 4-4"/></svg>
 {% elif name == 'settings' %}
   <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.7.9 1.2 1.6 1.3H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1.1z"/></svg>
+{% elif name == 'mailbox' %}
+  <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h16v8.5A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5V10Z"/><path d="M4 10.5C4 7.5 6.2 5 9.5 5H14c2.8 0 5 2.2 5 5"/><path d="M8.5 10V7.5"/><path d="M8.5 7.5h4.5"/></svg>
 {% else %}
   <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 19v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1"/><circle cx="10" cy="8" r="3"/><path d="M20 19v-1a3.5 3.5 0 0 0-2.6-3.4"/><path d="M16.5 5.2a3 3 0 0 1 0 5.6"/></svg>
 {% endif %}
 {% endmacro %}
 
-{% macro nav_link(href, label, icon, active, badge='') %}
+{% macro nav_link(href, label, icon, active, badge='', label_lines=None) %}
 <a class="app-nav-link{% if active %} is-on{% endif %}" href="{{ href }}" title="{{ label }}" aria-label="{{ label }}">
   <span class="app-nav-icon-wrap">
     {{ nav_icon(icon) }}
     {% if badge %}<span class="app-nav-badge">{{ badge }}</span>{% endif %}
   </span>
+  {% if label_lines %}
+  <span class="app-nav-label is-multiline">{% for line in label_lines %}{% if not loop.first %}<br>{% endif %}{{ line }}{% endfor %}</span>
+  {% else %}
   <span class="app-nav-label">{{ label }}</span>
+  {% endif %}
 </a>
 {% endmacro %}
 
@@ -71,6 +77,7 @@
     {{ nav_link('/admin', 'Administração', 'admin', path == '/admin' or path.startswith('/admin/')) }}
     {% endif %}
     {{ nav_link('/conta', 'Configurações', 'settings', path == '/conta' or path.startswith('/conta/')) }}
+    {{ nav_link('/sugestoes', 'Caixinha de sugestão', 'mailbox', path == '/sugestoes' or path.startswith('/sugestoes/'), label_lines=('Caixinha', 'de sugestão')) }}
     {{ nav_link('/sobre', 'Sobre', 'info', path == '/sobre') }}
   </nav>
 </aside>

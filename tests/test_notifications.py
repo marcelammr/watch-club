@@ -8,12 +8,15 @@ from app.notifications import (
     JOIN_STATE_JOINED,
     JOIN_STATE_PENDING,
     JOIN_STATE_RESOLVED,
+    TYPE_FRIEND_REQUEST,
     TYPE_JOIN_ACCEPTED,
     TYPE_JOIN_REQUEST,
     join_request_state,
     list_notifications,
     mark_all_read,
     mark_read,
+    notification_cards,
+    notification_destination,
     unread_count,
 )
 from app.roles import PERM_JOINS, PERM_TAG
@@ -822,4 +825,70 @@ def test_user_clears_only_own_notifications_and_keeps_related_entities():
     empty_page = owner.get("/notificacoes")
     assert "Nenhuma notificação por enquanto." in empty_page.text
     assert "Limpar notificações" not in empty_page.text
+
+
+def test_friend_request_notifies_recipient_only_once():
+    host = TestClient(app)
+    register_active(host, "ntf_fr_a", "ntf.fr.a@example.com", name="Amiga A")
+    guest = TestClient(app)
+    register_active(guest, "ntf_fr_b", "ntf.fr.b@example.com", name="Amiga B")
+    a_id = _user_id("ntf_fr_a")
+    b_id = _user_id("ntf_fr_b")
+
+    sent = host.post("/amigos/ntf_fr_b/convidar", data={"next": "/amigos"}, follow_redirects=False)
+    assert sent.status_code == 303
+    again = host.post("/amigos/ntf_fr_b/convidar", data={"next": "/amigos"}, follow_redirects=False)
+    assert again.status_code == 303
+    assert "error=" in again.headers["location"]
+
+    db = SessionLocal()
+    try:
+        notes = list(
+            db.scalars(
+                select(Notification).where(
+                    Notification.type == TYPE_FRIEND_REQUEST,
+                    Notification.related_id.is_not(None),
+                )
+            )
+        )
+        mine = [item for item in notes if item.user_id == b_id]
+        assert len(mine) == 1
+        note = mine[0]
+        assert note.actor_user_id == a_id
+        assert note.read_at is None
+        assert notification_destination(note) == "/amigos"
+        assert unread_count(db, b_id) >= 1
+        assert db.scalar(
+            select(Notification.id).where(
+                Notification.user_id == a_id, Notification.type == TYPE_FRIEND_REQUEST
+            )
+        ) is None
+        cards = notification_cards(db, b_id)
+        friend_card = next(card for card in cards if card["notification"].type == TYPE_FRIEND_REQUEST)
+        assert friend_card["unread"] is True
+        note_id = note.id
+    finally:
+        db.close()
+
+    inbox = guest.get("/notificacoes")
+    assert "Nova solicitação de amizade" in inbox.text
+    assert "@ntf_fr_a enviou uma solicitação de amizade." in inbox.text
+    opened = guest.get(f"/notificacoes/{note_id}", follow_redirects=False)
+    assert opened.status_code == 303
+    assert opened.headers["location"] == "/amigos"
+    amigos = guest.get("/amigos")
+    assert "Solicitações de amizade" in amigos.text
+    assert "@ntf_fr_a" in amigos.text
+    accepted = guest.post("/amigos/ntf_fr_a/aceitar", data={"next": "/amigos"}, follow_redirects=False)
+    assert accepted.status_code == 303
+    assert "error=" not in accepted.headers["location"]
+    db = SessionLocal()
+    try:
+        assert unread_count(db, a_id) == 0 or db.scalar(
+            select(Notification.id).where(
+                Notification.user_id == a_id, Notification.type == TYPE_FRIEND_REQUEST
+            )
+        ) is None
+    finally:
+        db.close()
 

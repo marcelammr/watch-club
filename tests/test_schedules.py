@@ -7,9 +7,9 @@ from app.accounts import utcnow
 from app.catalog import WATCHED
 from app.db import SessionLocal, engine
 from app.main import app
-from app.models import Club, ClubMember, ClubSchedule, ClubScheduleSeries, ClubShow, User
+from app.models import Club, ClubMember, ClubSchedule, ClubScheduleSeries, ClubShow, Episode, Season, Show, User
 from app.roles import PERM_SCHEDULES, PERM_TAG, ROLE_SUPPORT, can
-from app.schema import migrate_schema
+from app.schema import _backfill_series_show_ids, migrate_schema
 from app.schedules import (
     MAX_OCCURRENCES,
     format_episode_compact,
@@ -94,6 +94,7 @@ def test_schedule_schema_and_wall_clock():
     assert format_schedule_when(starts) == "Seg · 19:00"
     assert format_episode_line(2, 3) == "Temporada 2 · Episódio 3"
     assert format_episode_line(None, 2) == "Episódio 2"
+    assert format_episode_line(0, 1) == "Especiais · Episódio 1"
     assert format_episode_compact(2, 3) == "T2 E3"
     admin = ClubMember(role="admin", support_perms="")
     support = ClubMember(role=ROLE_SUPPORT, support_perms=PERM_SCHEDULES)
@@ -1139,7 +1140,7 @@ def test_legacy_recurring_show_id_is_backfilled_onto_later_occurrences():
         series_id = series.id
     finally:
         db.close()
-    migrate_schema()
+    _backfill_series_show_ids()
     items = [
         item
         for item in _club_schedules(club_id)
@@ -1314,3 +1315,324 @@ def test_club_agenda_calendar_is_visible_without_schedule_permission():
     assert f"Próximo encontro: {format_schedule_detail(wall_to_utc('2027-11-03', '20:00'))}" in _watch_row(
         watching.text, "Rivals"
     )
+
+
+def _seed_numbered_episodes(show_id: int, seasons: dict[int, int], tvmaze_base: int) -> None:
+    db = SessionLocal()
+    try:
+        n = 0
+        for season, count in seasons.items():
+            db.add(Season(show_id=show_id, number=season, episode_count=count))
+            for number in range(1, count + 1):
+                n += 1
+                db.add(
+                    Episode(
+                        show_id=show_id,
+                        tvmaze_id=tvmaze_base + n,
+                        season_number=season,
+                        number=number,
+                        name=f"E{number}",
+                    )
+                )
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_schedule_episode_follows_real_season_structure():
+    owner = TestClient(app)
+    register_active(owner, "agenda_eps", "agenda.eps@example.com")
+    club_id, _code = _create_club(owner, "Clube Estrutura")
+    show_id = _add_title(owner, club_id, "The Bear")
+    _seed_numbered_episodes(show_id, {0: 2, 1: 8, 2: 10}, 811000)
+    page = owner.get(f"/clubs/{club_id}?aba=agendamentos")
+    assert page.status_code == 200
+    catalog = page.text.split('id="program-catalog">', 1)[1].split("</script>", 1)[0]
+    assert f'"{show_id}"' in catalog
+    assert '"0": [1, 2]' in catalog
+    assert '"1": [1, 2, 3, 4, 5, 6, 7, 8]' in catalog
+    assert '"2": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]' in catalog
+    assert "20" not in catalog.split(f'"{show_id}"', 1)[1].split("}", 2)[0] + "}"
+
+    ok = owner.post(
+        f"/clubs/{club_id}/agendamentos",
+        data={
+            "show_id": str(show_id),
+            "date": "2027-08-01",
+            "time": "20:00",
+            "season_number": "2",
+            "episode_number": "10",
+        },
+        follow_redirects=False,
+    )
+    assert ok.status_code == 303
+    assert "error=" not in ok.headers["location"]
+    special = owner.post(
+        f"/clubs/{club_id}/agendamentos",
+        data={
+            "show_id": str(show_id),
+            "date": "2027-08-02",
+            "time": "20:00",
+            "season_number": "0",
+            "episode_number": "1",
+        },
+        follow_redirects=False,
+    )
+    assert special.status_code == 303
+    assert "error=" not in special.headers["location"]
+
+    bad_season = owner.post(
+        f"/clubs/{club_id}/agendamentos",
+        data={
+            "show_id": str(show_id),
+            "date": "2027-08-03",
+            "time": "20:00",
+            "season_number": "20",
+            "episode_number": "1",
+        },
+        follow_redirects=False,
+    )
+    assert "error=" in bad_season.headers["location"]
+    bad_episode = owner.post(
+        f"/clubs/{club_id}/agendamentos",
+        data={
+            "show_id": str(show_id),
+            "date": "2027-08-04",
+            "time": "20:00",
+            "season_number": "1",
+            "episode_number": "10",
+        },
+        follow_redirects=False,
+    )
+    assert "error=" in bad_episode.headers["location"]
+
+    items = _club_schedules(club_id)
+    assert [(item.season_number, item.episode_number) for item in items] == [(2, 10), (0, 1)]
+    listing = owner.get(f"/clubs/{club_id}?aba=agendamentos")
+    assert "Especiais · Episódio 1" in listing.text
+    assert "Temporada 2 · Episódio 10" in listing.text
+
+
+def test_schedule_without_catalog_keeps_manual_fallback_and_movies_ignore_episode():
+    owner = TestClient(app)
+    register_active(owner, "agenda_fb", "agenda.fb@example.com")
+    club_id, _code = _create_club(owner, "Clube Fallback")
+    series_id = _add_title(owner, club_id, "Obra Manual")
+    movie_id = _add_title(owner, club_id, "Um Filme")
+    db = SessionLocal()
+    try:
+        db.get(Show, movie_id).kind = "filme"
+        db.commit()
+    finally:
+        db.close()
+
+    page = owner.get(f"/clubs/{club_id}?aba=agendamentos")
+    catalog = page.text.split('id="program-catalog">', 1)[1].split("</script>", 1)[0]
+    assert f'"{series_id}"' in catalog
+    assert '"seasons"' not in catalog.split(f'"{series_id}"', 1)[1].split("}", 1)[0]
+    assert '"kind": "filme"' in catalog
+
+    manual = owner.post(
+        f"/clubs/{club_id}/agendamentos",
+        data={
+            "show_id": str(series_id),
+            "date": "2027-09-01",
+            "time": "19:00",
+            "season_number": "2",
+            "episode_number": "3",
+        },
+        follow_redirects=False,
+    )
+    assert "error=" not in manual.headers["location"]
+    movie = owner.post(
+        f"/clubs/{club_id}/agendamentos",
+        data={
+            "show_id": str(movie_id),
+            "date": "2027-09-02",
+            "time": "19:00",
+            "season_number": "1",
+            "episode_number": "1",
+        },
+        follow_redirects=False,
+    )
+    assert "error=" not in movie.headers["location"]
+    items = _club_schedules(club_id)
+    by_show = {item.show_id: item for item in items}
+    assert by_show[series_id].season_number == 2
+    assert by_show[series_id].episode_number == 3
+    assert by_show[movie_id].season_number is None
+    assert by_show[movie_id].episode_number is None
+
+
+def test_missing_season_zero_is_not_invented():
+    owner = TestClient(app)
+    register_active(owner, "agenda_s0", "agenda.s0@example.com")
+    club_id, _code = _create_club(owner, "Clube Sem Especiais")
+    show_id = _add_title(owner, club_id, "Só Temporadas")
+    _seed_numbered_episodes(show_id, {1: 6}, 812000)
+    page = owner.get(f"/clubs/{club_id}?aba=agendamentos")
+    catalog = page.text.split('id="program-catalog">', 1)[1].split("</script>", 1)[0]
+    show_blob = catalog.split(f'"{show_id}"', 1)[1]
+    assert '"0"' not in show_blob.split("}", 2)[0]
+    rejected = owner.post(
+        f"/clubs/{club_id}/agendamentos",
+        data={
+            "show_id": str(show_id),
+            "date": "2027-10-01",
+            "time": "20:00",
+            "season_number": "0",
+            "episode_number": "1",
+        },
+        follow_redirects=False,
+    )
+    assert "error=" in rejected.headers["location"]
+    db = SessionLocal()
+    try:
+        assert db.scalar(select(ClubSchedule.id).where(ClubSchedule.club_id == club_id)) is None
+    finally:
+        db.close()
+
+
+def test_program_scope_this_and_following_and_final_episode_clears_later():
+    owner = TestClient(app)
+    register_active(owner, "agenda_scope", "agenda.scope@example.com")
+    club_id, _code = _create_club(owner, "Clube Escopo")
+    show_a = _add_title(owner, club_id, "Série A")
+    show_b = _add_title(owner, club_id, "Série B")
+    _seed_numbered_episodes(show_a, {1: 2}, 813000)
+    created = owner.post(
+        f"/clubs/{club_id}/agendamentos",
+        data={
+            "show_id": str(show_a),
+            "date": "2027-11-11",
+            "time": "20:00",
+            "repeat": "weekly",
+            "until": "2027-12-02",
+        },
+        follow_redirects=False,
+    )
+    assert created.status_code == 303
+    items = _club_schedules(club_id)
+    assert len(items) == 4
+    first, second, third, fourth = items
+    db = SessionLocal()
+    try:
+        later = db.get(ClubSchedule, third.id)
+        later.notes = "manter observação"
+        db.commit()
+    finally:
+        db.close()
+
+    only_this = owner.post(
+        f"/clubs/{club_id}/agendamentos/{second.id}/programa",
+        data={"show_id": str(show_b), "scope": "this"},
+        follow_redirects=False,
+    )
+    assert "error=" not in only_this.headers["location"]
+    after_this = _club_schedules(club_id)
+    assert [item.show_id for item in after_this] == [show_a, show_b, show_a, show_a]
+
+    following = owner.post(
+        f"/clubs/{club_id}/agendamentos/{second.id}/programa",
+        data={"show_id": str(show_a), "season_number": "1", "episode_number": "1", "scope": "following"},
+        follow_redirects=False,
+    )
+    assert "error=" not in following.headers["location"]
+    after_follow = _club_schedules(club_id)
+    assert after_follow[0].show_id == show_a
+    assert after_follow[1].show_id == show_a
+    assert after_follow[1].season_number == 1
+    assert after_follow[1].episode_number == 1
+    assert after_follow[2].show_id == show_a
+    assert after_follow[2].season_number is None
+    assert after_follow[2].notes == "manter observação"
+    assert after_follow[3].show_id == show_a
+
+    finale = owner.post(
+        f"/clubs/{club_id}/agendamentos/{third.id}/programa",
+        data={"show_id": str(show_a), "season_number": "1", "episode_number": "2", "scope": "following"},
+        follow_redirects=False,
+    )
+    assert "error=" not in finale.headers["location"]
+    ended = _club_schedules(club_id)
+    assert ended[0].show_id == show_a
+    assert ended[1].show_id == show_a
+    assert ended[2].show_id == show_a
+    assert ended[2].season_number == 1
+    assert ended[2].episode_number == 2
+    assert ended[3].show_id is None
+    page = owner.get(f"/clubs/{club_id}?aba=agendamentos")
+    assert "Este e os próximos encontros" in page.text
+    assert "Programa não definido" in page.text
+
+    next_show = owner.post(
+        f"/clubs/{club_id}/agendamentos/{fourth.id}/programa",
+        data={"show_id": str(show_b), "scope": "following"},
+        follow_redirects=False,
+    )
+    assert "error=" not in next_show.headers["location"]
+    resumed = _club_schedules(club_id)
+    assert resumed[2].show_id == show_a
+    assert resumed[3].show_id == show_b
+
+
+def test_create_recurrence_with_final_episode_leaves_later_undefined():
+    owner = TestClient(app)
+    register_active(owner, "agenda_endcreate", "agenda.endcreate@example.com")
+    club_id, _code = _create_club(owner, "Clube Fim na Criação")
+    show_id = _add_title(owner, club_id, "Minissérie")
+    _seed_numbered_episodes(show_id, {1: 1}, 814000)
+    created = owner.post(
+        f"/clubs/{club_id}/agendamentos",
+        data={
+            "show_id": str(show_id),
+            "date": "2027-12-01",
+            "time": "20:00",
+            "season_number": "1",
+            "episode_number": "1",
+            "repeat": "weekly",
+            "until": "2027-12-15",
+        },
+        follow_redirects=False,
+    )
+    assert created.status_code == 303
+    items = _club_schedules(club_id)
+    assert items[0].show_id == show_id
+    assert items[0].season_number == 1
+    assert items[0].episode_number == 1
+    assert all(item.show_id is None for item in items[1:])
+
+
+def test_movie_program_following_does_not_use_episodes():
+    owner = TestClient(app)
+    register_active(owner, "agenda_movie_scope", "agenda.movie.scope@example.com")
+    club_id, _code = _create_club(owner, "Clube Filme Escopo")
+    movie_id = _add_title(owner, club_id, "O Filme")
+    db = SessionLocal()
+    try:
+        db.get(Show, movie_id).kind = "filme"
+        db.commit()
+    finally:
+        db.close()
+    owner.post(
+        f"/clubs/{club_id}/agendamentos",
+        data={
+            "date": "2027-12-01",
+            "time": "20:00",
+            "repeat": "weekly",
+            "until": "2027-12-15",
+        },
+        follow_redirects=False,
+    )
+    items = _club_schedules(club_id)
+    owner.post(
+        f"/clubs/{club_id}/agendamentos/{items[1].id}/programa",
+        data={"show_id": str(movie_id), "season_number": "1", "episode_number": "1", "scope": "following"},
+        follow_redirects=False,
+    )
+    updated = _club_schedules(club_id)
+    assert updated[0].show_id is None
+    assert updated[1].show_id == movie_id
+    assert updated[1].season_number is None
+    assert updated[2].show_id == movie_id
+    assert updated[2].season_number is None

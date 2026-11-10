@@ -411,6 +411,22 @@ class DirectMessage(Base):
     sender: Mapped[User] = relationship(foreign_keys=[sender_id])
 
 
+class Suggestion(Base):
+    __tablename__ = "suggestions"
+    __table_args__ = (Index("ix_suggestions_user_created", "user_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(80), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="sent", index=True)
+    is_archived: Mapped[bool] = mapped_column(default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+
+    user: Mapped[User] = relationship()
+
+
 class NewsItem(Base):
     __tablename__ = "news_items"
 

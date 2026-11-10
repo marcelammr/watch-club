@@ -84,6 +84,7 @@ from app.catalog import (
     parse_genres,
     premiere_year,
     parse_member_limit,
+    program_catalog_for_shows,
     list_join_requests,
     compose_news_layout,
     pack_news_rest,
@@ -197,7 +198,7 @@ from app.friends import (
     send_invite,
     unfriend,
 )
-from app.models import AccountInvite, Club, ClubMember, ClubShow, EmailToken, User
+from app.models import AccountInvite, Club, ClubMember, ClubShow, EmailToken, Suggestion, User
 from app.oauth import (
     facebook_authorize_url,
     facebook_enabled,
@@ -287,6 +288,17 @@ from app.search import (
 )
 from app.schema import migrate_schema
 from app.security import hash_password, make_join_code, verify_password
+from app.suggestions import (
+    DESCRIPTION_MAX,
+    STATUS_LABELS as SUGGESTION_STATUS_LABELS,
+    STATUSES as SUGGESTION_STATUSES,
+    TITLE_MAX,
+    archive_suggestion,
+    create_suggestion,
+    list_admin_suggestions,
+    list_own_suggestions,
+    set_suggestion_status,
+)
 from app.services.news import FEED_KIND_LABELS, format_news_when, format_news_when_short
 from app.usernames import (
     NICKNAME_DAYS,
@@ -1708,15 +1720,7 @@ def _admin_http_redirect(exc: HTTPException, fallback: str = "/"):
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_home(request: Request):
-    db = db_session()
-    try:
-        user = login_required(request, db)
-        require_site_admin(user)
-        return templates.TemplateResponse(request, "admin.html", {"user": user})
-    except HTTPException as exc:
-        return _admin_http_redirect(exc)
-    finally:
-        db.close()
+    return admin_registrations(request)
 
 
 @app.get("/admin/cadastros", response_class=HTMLResponse)
@@ -2013,6 +2017,116 @@ def about_page(request: Request):
             "about.html",
             {"user": current_user(request, db)},
         )
+    finally:
+        db.close()
+
+
+def _suggestion_page(request: Request, db, user, **extra):
+    return templates.TemplateResponse(
+        request,
+        "suggestions.html",
+        {
+            "user": user,
+            "items": list_own_suggestions(db, user.id),
+            "status_labels": SUGGESTION_STATUS_LABELS,
+            "title_max": TITLE_MAX,
+            "description_max": DESCRIPTION_MAX,
+            "error": extra.get("error") or request.query_params.get("error"),
+            "ok": extra.get("ok") or request.query_params.get("ok"),
+        },
+    )
+
+
+@app.get("/sugestoes", response_class=HTMLResponse)
+def suggestions_page(request: Request):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        return _suggestion_page(request, db, user)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/sugestoes")
+def create_suggestion_route(request: Request, title: str = Form(""), description: str = Form("")):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        create_suggestion(db, user, title, description)
+        return RedirectResponse("/sugestoes?ok=" + quote("Sugestão enviada"), status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 400:
+            return RedirectResponse("/sugestoes?error=" + quote(str(exc.detail)), status_code=303)
+        raise
+    finally:
+        db.close()
+
+
+@app.get("/admin/sugestoes", response_class=HTMLResponse)
+def admin_suggestions_page(request: Request):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        require_site_admin(user)
+        archived = (request.query_params.get("aba") or "") == "arquivadas"
+        raw_open = (request.query_params.get("sugestao") or "").strip()
+        open_id = int(raw_open) if raw_open.isdigit() else None
+        if open_id:
+            target = db.get(Suggestion, open_id)
+            if target and target.is_archived and not archived:
+                return RedirectResponse(f"/admin/sugestoes?aba=arquivadas&sugestao={open_id}", status_code=303)
+            if target and not target.is_archived and archived:
+                return RedirectResponse(f"/admin/sugestoes?sugestao={open_id}", status_code=303)
+        return templates.TemplateResponse(
+            request,
+            "admin_suggestions.html",
+            {
+                "user": user,
+                "items": list_admin_suggestions(db, archived=archived),
+                "archived": archived,
+                "open_id": open_id,
+                "status_labels": SUGGESTION_STATUS_LABELS,
+                "statuses": [(key, SUGGESTION_STATUS_LABELS[key]) for key in SUGGESTION_STATUSES],
+                "error": request.query_params.get("error"),
+                "ok": request.query_params.get("ok"),
+            },
+        )
+    except HTTPException as exc:
+        return _admin_http_redirect(exc, "/admin/sugestoes")
+    finally:
+        db.close()
+
+
+@app.post("/admin/sugestoes/{suggestion_id}/status")
+def admin_suggestion_status(request: Request, suggestion_id: int, status: str = Form(""), next: str = Form("")):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        set_suggestion_status(db, user, suggestion_id, status)
+        dest = _safe_next(next, f"/admin/sugestoes?sugestao={suggestion_id}")
+        join = "&" if "?" in dest else "?"
+        return RedirectResponse(dest + join + "ok=" + quote("Status atualizado"), status_code=303)
+    except HTTPException as exc:
+        return _admin_http_redirect(exc, "/admin/sugestoes")
+    finally:
+        db.close()
+
+
+@app.post("/admin/sugestoes/{suggestion_id}/arquivar")
+def admin_suggestion_archive(request: Request, suggestion_id: int):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        archive_suggestion(db, user, suggestion_id)
+        return RedirectResponse("/admin/sugestoes?ok=" + quote("Sugestão arquivada"), status_code=303)
+    except HTTPException as exc:
+        return _admin_http_redirect(exc, "/admin/sugestoes")
     finally:
         db.close()
 
@@ -2364,6 +2478,11 @@ async def club_detail(
         stamp_display_tags(db, stamp_users)
         online_count = sum(1 for item in members if presence_of(item.user) == "online")
         join_requests = list_join_requests(db, club.id) if caps["can_joins"] and club.is_closed else []
+        program_catalog = (
+            program_catalog_for_shows(db, [link.show_id for link in club.shows])
+            if tab == "agendamentos" and caps["can_schedules"]
+            else {}
+        )
         return templates.TemplateResponse(
             request,
             "club.html",
@@ -2397,6 +2516,7 @@ async def club_detail(
                 "friend_ids": friend_id_set(db, user.id),
                 "online_count": online_count,
                 "join_requests": join_requests,
+                "program_catalog": program_catalog,
                 "members_by_user": {item.user_id: item for item in members},
                 "member_groups": grouped_club_members(members),
                 "user_clubs": _member_club_nav(db, user.id),
@@ -3072,12 +3192,19 @@ def set_club_schedule_program(
     show_id: str = Form(""),
     season_number: str = Form(""),
     episode_number: str = Form(""),
+    scope: str = Form("this"),
 ):
     return _schedule_write_redirect(
         request,
         club_id,
         lambda db, _user: set_schedule_program(
-            db, club_id, schedule_id, parse_optional_show_id(show_id), season_number, episode_number
+            db,
+            club_id,
+            schedule_id,
+            parse_optional_show_id(show_id),
+            season_number,
+            episode_number,
+            scope,
         ),
     )
 
@@ -3449,6 +3576,7 @@ def api_command(request: Request):
                     {"label": "Agenda", "href": "/agenda"},
                     {"label": "Meus Clubes", "href": "/clubes"},
                     {"label": "Configurações", "href": "/conta"},
+                    {"label": "Caixinha de sugestão", "href": "/sugestoes"},
                     {"label": "Criar um clube", "href": "/clubs/novo"},
                     {"label": "Meu perfil", "href": f"/u/{user.username}"},
                     {"label": "Amigos", "href": "/amigos"},

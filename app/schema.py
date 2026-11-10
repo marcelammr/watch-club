@@ -386,11 +386,11 @@ def migrate_schema() -> None:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE club_shows ADD COLUMN watch_status VARCHAR(20) DEFAULT 'watching'"))
     _migrate_club_schedules()
-    _backfill_series_show_ids()
     _seed_catalog_categories()
     _ensure_user_show_favorites()
     _ensure_club_message_show_id()
     _ensure_direct_message_read_at()
+    _ensure_suggestions()
 
 
 def _migrate_club_schedules() -> None:
@@ -521,6 +521,38 @@ def _ensure_club_message_show_id() -> None:
         connection.execute(text("ALTER TABLE club_messages ADD COLUMN show_id INTEGER"))
         connection.execute(
             text("CREATE INDEX IF NOT EXISTS ix_club_messages_show_id ON club_messages (show_id)")
+        )
+
+
+def _ensure_suggestions() -> None:
+    inspector = inspect(engine)
+    if "suggestions" in inspector.get_table_names():
+        return
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE suggestions (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    title VARCHAR(80) NOT NULL,
+                    description TEXT NOT NULL,
+                    status VARCHAR(16) NOT NULL DEFAULT 'sent',
+                    is_archived BOOLEAN NOT NULL DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    FOREIGN KEY(user_id) REFERENCES users (id)
+                )
+                """
+            )
+        )
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_suggestions_user_id ON suggestions (user_id)"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_suggestions_status ON suggestions (status)"))
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_suggestions_user_created "
+                "ON suggestions (user_id, created_at)"
+            )
         )
 
 

@@ -10,13 +10,17 @@ from app.accounts import utcnow
 from app.club_tags import stamp_display_tags
 from app.db import SessionLocal
 from app.friends import unread_dm_badge, unread_dm_count
-from app.models import Club, ClubJoinRequest, ClubMember, Notification, User
+from app.models import Club, ClubJoinRequest, ClubMember, Notification, Suggestion, User
 from app.roles import PERM_JOINS, can
 
 TYPE_JOIN_REQUEST = "join_request"
 TYPE_JOIN_ACCEPTED = "join_request_accepted"
 TYPE_REGISTRATION_REQUEST = "registration_request"
 TYPE_REGISTRATION_REVIEW = "registration_review"
+TYPE_SUGGESTION = "suggestion"
+TYPE_FRIEND_REQUEST = "friend_request"
+ADMIN_NOTICE_TYPES = {TYPE_REGISTRATION_REQUEST, TYPE_REGISTRATION_REVIEW, TYPE_SUGGESTION}
+NON_JOIN_NOTICE_TYPES = ADMIN_NOTICE_TYPES | {TYPE_FRIEND_REQUEST}
 JOIN_STATE_PENDING = "pending"
 JOIN_STATE_JOINED = "joined"
 JOIN_STATE_RESOLVED = "resolved"
@@ -115,6 +119,63 @@ def notify_registration_review(db: Session, actor_user_id: int, review_id: int) 
     return created
 
 
+def notify_friend_request(db: Session, actor_user_id: int, recipient_id: int, friendship_id: int) -> Notification | None:
+    if actor_user_id == recipient_id:
+        return None
+    already = db.scalar(
+        select(Notification.id).where(
+            Notification.user_id == recipient_id,
+            Notification.type == TYPE_FRIEND_REQUEST,
+            Notification.related_id == friendship_id,
+        )
+    )
+    if already:
+        return None
+    item = Notification(
+        user_id=recipient_id,
+        type=TYPE_FRIEND_REQUEST,
+        club_id=None,
+        actor_user_id=actor_user_id,
+        related_id=friendship_id,
+        created_at=utcnow(),
+    )
+    db.add(item)
+    db.flush()
+    return item
+
+
+def notify_suggestion(db: Session, actor_user_id: int, suggestion_id: int) -> list[Notification]:
+    already = set(
+        db.scalars(
+            select(Notification.user_id).where(
+                Notification.type == TYPE_SUGGESTION,
+                Notification.related_id == suggestion_id,
+            )
+        )
+    )
+    admins = list(
+        db.scalars(select(User).where(User.is_site_admin.is_(True), User.is_active.is_(True)))
+    )
+    created: list[Notification] = []
+    now = utcnow()
+    for admin in admins:
+        if admin.id == actor_user_id or admin.id in already:
+            continue
+        item = Notification(
+            user_id=admin.id,
+            type=TYPE_SUGGESTION,
+            club_id=None,
+            actor_user_id=actor_user_id,
+            related_id=suggestion_id,
+            created_at=now,
+        )
+        db.add(item)
+        created.append(item)
+    if created:
+        db.flush()
+    return created
+
+
 def notify_join_accepted(db: Session, club_id: int, requester_id: int, actor_id: int) -> Notification:
     item = Notification(
         user_id=requester_id,
@@ -190,6 +251,12 @@ def notification_destination(notification: Notification) -> str:
         if notification.related_id:
             return f"/admin/cadastros/revisoes/{notification.related_id}"
         return "/admin/cadastros?aba=revisoes"
+    if notification.type == TYPE_SUGGESTION:
+        if notification.related_id:
+            return f"/admin/sugestoes?sugestao={notification.related_id}"
+        return "/admin/sugestoes"
+    if notification.type == TYPE_FRIEND_REQUEST:
+        return "/amigos"
     if notification.club_id:
         return f"/clubs/{notification.club_id}"
     return "/notificacoes"
@@ -329,7 +396,7 @@ def notification_cards(db: Session, user_id: int, limit: int = DEFAULT_LIST_LIMI
     subject_ids = {
         join_subject_id(item)
         for item in rows
-        if item.type not in {TYPE_REGISTRATION_REQUEST, TYPE_REGISTRATION_REVIEW}
+        if item.type not in NON_JOIN_NOTICE_TYPES
     }
     joined: set[tuple[int, int]] = set()
     if club_ids and subject_ids:
@@ -342,9 +409,15 @@ def notification_cards(db: Session, user_id: int, limit: int = DEFAULT_LIST_LIMI
                 )
             )
         }
+    suggestion_ids = {row.related_id for row in rows if row.type == TYPE_SUGGESTION and row.related_id}
+    suggestions = (
+        {row.id: row for row in db.scalars(select(Suggestion).where(Suggestion.id.in_(suggestion_ids)))}
+        if suggestion_ids
+        else {}
+    )
     cards = []
     for item in rows:
-        if item.type in {TYPE_REGISTRATION_REQUEST, TYPE_REGISTRATION_REVIEW}:
+        if item.type in NON_JOIN_NOTICE_TYPES:
             state = ""
             can_manage = False
         else:
@@ -361,6 +434,7 @@ def notification_cards(db: Session, user_id: int, limit: int = DEFAULT_LIST_LIMI
                 "notification": item,
                 "actor": actors.get(item.actor_user_id),
                 "club": clubs.get(item.club_id),
+                "suggestion": suggestions.get(item.related_id) if item.type == TYPE_SUGGESTION else None,
                 "state": state,
                 "can_manage": can_manage,
                 "unread": item.read_at is None,
