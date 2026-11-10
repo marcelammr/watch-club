@@ -57,7 +57,13 @@
             {% if day_key and day_key != prev_day %}
               <p class="chat-day-mark" data-day="{{ day_key }}"><span>{{ item.created_at|chat_day_label }}</span></p>
             {% endif %}
-            <article class="chat-item{% if follow %} is-follow{% endif %}{% if mine %} is-mine{% endif %}">
+            <article class="chat-item{% if follow %} is-follow{% endif %}{% if mine %} is-mine{% endif %}{% if report_select_ids and item.id in report_select_ids %} is-report-on{% endif %}" data-message-id="{{ item.id }}">
+              {% if report_select_ids %}
+                <label class="chat-report-pick">
+                  <input type="checkbox" name="message_ids" value="{{ item.id }}" form="dm-report-select"{% if item.id in report_select_ids %} checked{% endif %}>
+                  <span class="visually-hidden">Incluir mensagem na denúncia</span>
+                </label>
+              {% endif %}
               {% if follow %}
                 <span class="chat-gutter" aria-hidden="true"></span>
               {% else %}
@@ -72,18 +78,34 @@
                 </p>
                 <p class="chat-body">{{ item.body }}</p>
               </div>
-              {% if mine %}
-                <form class="chat-msg-actions chat-pin-action" action="/mensagens/{{ person.username }}/{{ item.id }}/apagar" method="post" onsubmit="return confirm('Tem certeza que deseja apagar esta mensagem?')">
+              <div class="chat-msg-actions">
+                {% if not mine %}
+                  <a class="chat-pin-msg" href="/mensagens/{{ person.username }}?selecionar={{ item.id }}" title="Denunciar mensagem">Denunciar</a>
+                {% endif %}
+                {% if mine %}
+                <form class="chat-pin-action" action="/mensagens/{{ person.username }}/{{ item.id }}/apagar" method="post" onsubmit="return confirm('Tem certeza que deseja apagar esta mensagem?')">
                   <button type="submit" class="chat-pin-msg" aria-label="Apagar mensagem" title="Apagar mensagem">Apagar</button>
                 </form>
-              {% endif %}
+                {% endif %}
+              </div>
             </article>
           {% else %}
             <p class="muted">Nenhuma mensagem ainda. Diga oi.</p>
           {% endfor %}
         </div>
       </div>
-      {% if are_friends %}
+      {% if report_select_ids %}
+        <form id="dm-report-select" class="chat-report-bar" action="/denunciar/mensagens-dm" method="post">
+          <input type="hidden" name="username" value="{{ person.username }}">
+          <input type="hidden" name="next_url" value="/mensagens/{{ person.username }}">
+          <p><span class="js-report-count">{{ report_select_ids|length }}</span> mensagem(ns) selecionada(s) · máximo {{ max_report_messages }}</p>
+          <button class="btn btn-primary" type="submit">Continuar</button>
+          <a class="btn btn-ghost" href="/mensagens/{{ person.username }}">Cancelar</a>
+        </form>
+      {% endif %}
+      {% if blocked_peer %}
+        <p class="muted dm-locked">Você bloqueou esta conversa. O histórico permanece, mas ninguém envia novas mensagens enquanto o bloqueio existir.</p>
+      {% elif are_friends %}
         <form class="chat-form" action="/mensagens/{{ person.username }}" method="post">
           <div class="dm-composer">
             {{ emoji_picker('Emoji') }}
@@ -114,6 +136,26 @@
 <script>
   const log = document.querySelector(".chat-log");
   if (log) log.scrollTop = log.scrollHeight;
+
+  (function () {
+    const form = document.getElementById("dm-report-select");
+    if (!form) return;
+    const max = {{ max_report_messages or 20 }};
+    const count = form.querySelector(".js-report-count");
+    form.addEventListener("change", function (event) {
+      const box = event.target;
+      if (!box || box.name !== "message_ids") return;
+      const checked = form.querySelectorAll('input[name="message_ids"]:checked');
+      if (checked.length > max) {
+        box.checked = false;
+        window.alert("Você já selecionou o máximo de " + max + " mensagens.");
+        return;
+      }
+      const item = box.closest(".chat-item");
+      if (item) item.classList.toggle("is-report-on", box.checked);
+      if (count) count.textContent = String(form.querySelectorAll('input[name="message_ids"]:checked').length);
+    });
+  })();
 
   (function () {
     const input = document.querySelector(".js-dm-input");

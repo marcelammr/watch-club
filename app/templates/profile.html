@@ -36,7 +36,9 @@
       {% if error %}<p class="error">{{ error }}</p>{% endif %}
       {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
       <div class="friend-actions">
-        {% if relation == 'none' %}
+        {% if blocked_by_me %}
+          <p class="muted">Você bloqueou este usuário.</p>
+        {% elif relation == 'none' %}
           <form action="/amigos/{{ person.username }}/convidar" method="post">
             <input type="hidden" name="next" value="/u/{{ person.username }}">
             <button class="btn btn-primary" type="submit">Adicionar amigo</button>
@@ -67,6 +69,19 @@
         {% if relation != 'friends' and has_history %}
           <p><a class="btn btn-ghost" href="/mensagens/{{ person.username }}">Ver conversa</a></p>
         {% endif %}
+        <div class="safety-actions">
+          <a class="btn btn-ghost" href="/denunciar?tipo=user&amp;id={{ person.id }}&amp;next=/u/{{ person.username }}">Denunciar</a>
+          {% if blocked_by_me %}
+            <form action="/conta/bloqueios/{{ person.username }}/remover" method="post">
+              <button class="btn btn-ghost" type="submit">Desbloquear</button>
+            </form>
+          {% else %}
+            <form action="/u/{{ person.username }}/bloquear" method="post">
+              <input type="hidden" name="next" value="/u/{{ person.username }}">
+              <button class="btn btn-ghost" type="submit">Bloquear usuário</button>
+            </form>
+          {% endif %}
+        </div>
       </div>
     {% endif %}
   </div>

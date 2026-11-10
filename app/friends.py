@@ -93,6 +93,9 @@ def incoming_invites(db: Session, user_id: int) -> list[User]:
 def send_invite(db: Session, from_id: int, to_id: int) -> Friendship:
     if from_id == to_id:
         raise HTTPException(status_code=400, detail="Você não pode adicionar a si mesmo")
+    from app.blocks import BLOCKED_FRIEND, assert_not_blocked
+
+    assert_not_blocked(db, from_id, to_id, BLOCKED_FRIEND)
     row = friendship_between(db, from_id, to_id)
     if row is None:
         low, high = pair_ids(from_id, to_id)
@@ -119,6 +122,9 @@ def send_invite(db: Session, from_id: int, to_id: int) -> Friendship:
 
 
 def accept_invite(db: Session, viewer_id: int, other: int) -> None:
+    from app.blocks import BLOCKED_FRIEND, assert_not_blocked
+
+    assert_not_blocked(db, viewer_id, other, BLOCKED_FRIEND)
     row = friendship_between(db, viewer_id, other)
     if not row or row.status != PENDING or row.requested_by_id == viewer_id:
         raise HTTPException(status_code=400, detail="Não há pedido para aceitar")
@@ -297,11 +303,20 @@ def delete_dm(db: Session, viewer_id: int, other_id: int, message_id: int) -> No
 def post_dm(db: Session, sender_id: int, recipient_id: int, body: str) -> DirectMessage:
     if sender_id == recipient_id:
         raise HTTPException(status_code=400, detail="Não é possível enviar mensagem para si mesmo")
+    from app.blocks import BLOCKED_DM, assert_no_blocked_mention, assert_not_blocked
+    from app.moderation import SURFACE_CHAT, enforce_text
+    from app.models import User as AccountUser
+
+    assert_not_blocked(db, sender_id, recipient_id, BLOCKED_DM)
     if relation_status(db, sender_id, recipient_id) != "friends":
         raise HTTPException(status_code=403, detail="Só amigos podem enviar mensagens")
     text = (body or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Escreva uma mensagem")
+    assert_no_blocked_mention(db, sender_id, text)
+    sender = db.get(AccountUser, sender_id)
+    if sender is not None:
+        enforce_text(db, sender, text, surface=SURFACE_CHAT, origin="dm")
     message = DirectMessage(sender_id=sender_id, recipient_id=recipient_id, body=text[:2000])
     db.add(message)
     db.commit()

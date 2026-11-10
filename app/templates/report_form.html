@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% from "macros/avatar.html" import user_avatar %}
+{% block title %}Denunciar · Watch Club{% endblock %}
+{% block page_heading %}Denunciar{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Denunciar {{ target_label|lower }}</h1>
+  <p class="muted">A denúncia descreve uma situação. Relacionar alguém ao caso não significa considerar essa pessoa culpada. O conteúdo não é removido automaticamente e a outra pessoa não vê quem denunciou.</p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+  {% if club and target_type == 'club' %}
+    <p class="muted">Clube: <strong>{{ club.name }}</strong></p>
+  {% endif %}
+
+  <fieldset class="report-fieldset">
+    <legend>Usuários envolvidos</legend>
+    {% if people %}
+      <ul class="report-chip-list">
+        {% for item in people %}
+          <li class="report-chip">
+            {{ user_avatar(item.user, 'sm') }}
+            <span>{{ item.user.name }} <span class="muted">@{{ item.user.username }}</span></span>
+            {% if item.locked %}
+              <span class="muted">evidência</span>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+      <p class="muted">{{ people|length }} usuário{% if people|length != 1 %}s{% endif %} selecionado{% if people|length != 1 %}s{% endif %}</p>
+    {% else %}
+      <p class="muted">Nenhum perfil relacionado. Você pode denunciar o clube em si ou adicionar membros envolvidos.</p>
+    {% endif %}
+  </fieldset>
+
+  <form class="report-add-user" action="/denunciar/envolvido" method="post">
+    <input type="hidden" name="tipo" value="{{ target_type }}">
+    <input type="hidden" name="alvo" value="{{ target_id }}">
+    <input type="hidden" name="next" value="{{ next }}">
+    <input type="hidden" name="club_scope" value="{{ club_scope_id or 0 }}">
+    {% for message_id in message_ids %}
+      <input type="hidden" name="message_ids" value="{{ message_id }}">
+    {% endfor %}
+    {% for item in people %}
+      <input type="hidden" name="user_ids" value="{{ item.user.id }}">
+    {% endfor %}
+    <label>Adicionar outro usuário
+      <span class="report-add-row">
+        <input name="username" maxlength="30" placeholder="@username" autocomplete="off">
+        <button class="btn btn-secondary" type="submit">Adicionar</button>
+      </span>
+    </label>
+  </form>
+
+  <form action="/denunciar" method="post" enctype="multipart/form-data" class="report-submit">
+    <input type="hidden" name="tipo" value="{{ target_type }}">
+    <input type="hidden" name="alvo" value="{{ target_id }}">
+    <input type="hidden" name="next" value="{{ next }}">
+    <input type="hidden" name="club_scope" value="{{ club_scope_id or 0 }}">
+    {% for message_id in message_ids %}
+      <input type="hidden" name="message_ids" value="{{ message_id }}">
+    {% endfor %}
+    {% for item in people %}
+      <input type="hidden" name="user_ids" value="{{ item.user.id }}">
+    {% endfor %}
+
+    {% if messages %}
+      <fieldset class="report-fieldset">
+        <legend>Mensagens relacionadas</legend>
+        <p class="muted">Essas mensagens serão preservadas como evidência interna, mesmo se forem apagadas depois.</p>
+        <ol class="report-thread">
+          {% for item in messages %}
+            <li>
+              <p class="muted">@{{ item.author_username }} · {{ item.created_at[11:16] if item.created_at else '' }}</p>
+              <p>{{ item.body }}</p>
+            </li>
+          {% endfor %}
+        </ol>
+      </fieldset>
+    {% endif %}
+
+    <label>Motivo
+      <select name="reason" required>
+        {% for key, label in reasons %}
+          <option value="{{ key }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Explique o que aconteceu *
+      <textarea name="explanation" rows="4" minlength="{{ note_min }}" maxlength="{{ note_max }}" required placeholder="Descreva brevemente a situação e por que este conteúdo ou usuário está sendo denunciado."></textarea>
+    </label>
+    <p class="muted">Mínimo de {{ note_min }} caracteres. Máximo de {{ note_max }}.</p>
+    <label>Evidências adicionais (opcional)
+      <input class="js-report-files" type="file" name="evidence" accept="image/jpeg,image/png,image/webp,image/gif" multiple>
+    </label>
+    <p class="muted">Até {{ max_files }} prints, 5 MB cada. Eles complementam o snapshot interno e não o substituem.</p>
+    <ul class="report-file-list js-report-file-list" hidden></ul>
+    <button class="btn btn-primary" type="submit">Enviar denúncia</button>
+    <a class="btn btn-ghost" href="{{ next }}">Cancelar</a>
+  </form>
+</section>
+<script>
+  (function () {
+    const input = document.querySelector(".js-report-files");
+    const list = document.querySelector(".js-report-file-list");
+    if (!input || !list || !window.DataTransfer) return;
+    function paint(files) {
+      list.innerHTML = "";
+      if (!files.length) {
+        list.hidden = true;
+        return;
+      }
+      list.hidden = false;
+      files.forEach(function (file, index) {
+        const item = document.createElement("li");
+        item.textContent = file.name + " ";
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "btn btn-ghost";
+        button.textContent = "Remover";
+        button.addEventListener("click", function () {
+          const next = new DataTransfer();
+          files.forEach(function (kept, keptIndex) {
+            if (keptIndex !== index) next.items.add(kept);
+          });
+          input.files = next.files;
+          paint(Array.from(input.files || []));
+        });
+        item.appendChild(button);
+        list.appendChild(item);
+      });
+    }
+    input.addEventListener("change", function () {
+      paint(Array.from(input.files || []));
+    });
+  })();
+</script>
+{% endblock %}

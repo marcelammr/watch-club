@@ -13,7 +13,7 @@ from app.schedules import utc_to_local, wall_to_utc
 from tests.test_app import register_active
 
 
-def test_enter_sends_defaults_off_and_persists_per_user():
+def test_enter_sends_defaults_on_and_persists_per_user():
     inspector = inspect(engine)
     user_cols = {column["name"] for column in inspector.get_columns("users")}
     assert "enter_sends" in user_cols
@@ -27,8 +27,8 @@ def test_enter_sends_defaults_off_and_persists_per_user():
     try:
         user = db.scalar(select(User).where(User.email == "enter.host@example.com"))
         peer = db.scalar(select(User).where(User.email == "enter.other@example.com"))
-        assert user.enter_sends is False
-        assert peer.enter_sends is False
+        assert user.enter_sends is True
+        assert peer.enter_sends is True
     finally:
         db.close()
 
@@ -38,14 +38,14 @@ def test_enter_sends_defaults_off_and_persists_per_user():
     assert 'role="switch"' in settings.text
     assert "js-enter-sends" in settings.text
     assert ">Salvar<" not in settings.text.split("<h2>Conversas</h2>", 1)[1].split("<h2>Tag exibida</h2>", 1)[0]
-    assert 'data-enter-sends="0"' in settings.text
+    assert 'data-enter-sends="1"' in settings.text
     assert 'class="btn btn-secondary"' in settings.text
     assert "Salvar perfil" in settings.text
 
     created = host.post("/clubs", data={"name": "Clube Enter"}, follow_redirects=False)
     club_id = int(created.headers["location"].rsplit("/", 1)[-1])
     chat = host.get(f"/clubs/{club_id}?aba=chat")
-    assert 'data-enter-sends="0"' in chat.text
+    assert 'data-enter-sends="1"' in chat.text
     assert "/static/js/chat-composer.js" in chat.text
 
     ignored = host.post(
@@ -58,63 +58,63 @@ def test_enter_sends_defaults_off_and_persists_per_user():
     db = SessionLocal()
     try:
         user = db.scalar(select(User).where(User.email == "enter.host@example.com"))
-        assert not user.enter_sends
+        assert user.enter_sends is True
     finally:
         db.close()
 
     saved = host.post(
         "/conta/conversas",
-        data={"enter_sends": "1"},
+        data={"enter_sends": "0"},
         headers={"x-watchclub-pref": "1"},
     )
     assert saved.status_code == 200
-    assert saved.json() == {"ok": True, "enter_sends": True}
+    assert saved.json() == {"ok": True, "enter_sends": False}
 
     db = SessionLocal()
     try:
         user = db.scalar(select(User).where(User.email == "enter.host@example.com"))
         peer = db.scalar(select(User).where(User.email == "enter.other@example.com"))
-        assert bool(user.enter_sends) is True
-        assert not peer.enter_sends
+        assert bool(user.enter_sends) is False
+        assert peer.enter_sends is True
         host_id = user.id
     finally:
         db.close()
 
     after = host.get("/conta")
-    assert 'data-enter-sends="1"' in after.text
+    assert 'data-enter-sends="0"' in after.text
     assert 'name="enter_sends"' in after.text
-    assert "checked" in after.text.split('name="enter_sends"', 1)[1][:80]
+    assert 'aria-checked="false"' in after.text.split('name="enter_sends"', 1)[1][:120]
     chat_on = host.get(f"/clubs/{club_id}?aba=chat")
-    assert 'data-enter-sends="1"' in chat_on.text
+    assert 'data-enter-sends="0"' in chat_on.text
 
     inbox = host.get("/mensagens")
-    assert 'data-enter-sends="1"' in inbox.text
+    assert 'data-enter-sends="0"' in inbox.text
     assert "/static/js/chat-composer.js" in inbox.text
 
     other_view = other.get("/conta")
-    assert 'data-enter-sends="0"' in other_view.text
+    assert 'data-enter-sends="1"' in other_view.text
     db = SessionLocal()
     try:
         peer = db.scalar(select(User).where(User.email == "enter.other@example.com"))
-        assert peer.enter_sends is False
-        assert db.get(User, host_id).enter_sends is True
+        assert peer.enter_sends is True
+        assert db.get(User, host_id).enter_sends is False
     finally:
         db.close()
 
     off = host.post(
         "/conta/conversas",
-        data={"enter_sends": "0"},
+        data={"enter_sends": "1"},
         headers={"x-watchclub-pref": "1"},
     )
     assert off.status_code == 200
-    assert off.json()["enter_sends"] is False
+    assert off.json()["enter_sends"] is True
     db = SessionLocal()
     try:
         user = db.scalar(select(User).where(User.email == "enter.host@example.com"))
-        assert not user.enter_sends
+        assert user.enter_sends is True
     finally:
         db.close()
-    assert 'data-enter-sends="0"' in host.get("/conta").text
+    assert 'data-enter-sends="1"' in host.get("/conta").text
 
 
 def test_club_chat_uses_shared_day_separators():

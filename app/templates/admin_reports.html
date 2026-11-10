@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% from "macros/admin_nav.html" import admin_sections %}
+{% block title %}Denúncias · Administração · Watch Club{% endblock %}
+{% block page_heading %}Denúncias{% endblock %}
+{% block body_class %}admin-ui{% endblock %}
+{% block content %}
+{{ admin_sections('denuncias') }}
+<nav class="watch-tabs" aria-label="Filas de denúncias">
+  <a class="watch-tab{% if aba == 'pendentes' %} is-on{% endif %}" href="/admin/denuncias"{% if aba == 'pendentes' %} aria-current="page"{% endif %}>Pendentes</a>
+  <a class="watch-tab{% if aba == 'resolvidas' %} is-on{% endif %}" href="/admin/denuncias?aba=resolvidas"{% if aba == 'resolvidas' %} aria-current="page"{% endif %}>Resolvidas</a>
+  <a class="watch-tab{% if aba == 'contestacoes' %} is-on{% endif %}" href="/admin/denuncias?aba=contestacoes"{% if aba == 'contestacoes' %} aria-current="page"{% endif %}>Contestações</a>
+</nav>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+
+{% if aba != 'contestacoes' %}
+  {% if cases %}
+  <ul class="suggestion-list">
+    {% for item in cases %}
+    <li>
+      <details class="suggestion-item" id="caso-{{ item.id }}"{% if open_id == item.id %} open{% endif %}>
+        <summary class="suggestion-summary">
+          <span class="suggestion-summary-copy">
+            <span class="suggestion-title">{{ reason_labels.get(item.reason, item.reason) }}</span>
+            <span class="muted">{{ target_labels.get(item.target_type, item.target_type) }} · {% if item.reported_user %}@{{ item.reported_user.username }}{% else %}—{% endif %} · {{ item.report_count }} denúncia{% if item.report_count != 1 %}s{% endif %} · {{ item.updated_at|when }}</span>
+          </span>
+          <span class="chip suggestion-chip">{{ item.status }}</span>
+          <span class="suggestion-chevron" aria-hidden="true">›</span>
+        </summary>
+        <div class="suggestion-panel">
+          {% set snap = snapshots.get(item.id, {}) %}
+          {% set involved = item.involved_users or [] %}
+          <p class="muted">Usuários envolvidos</p>
+          {% if involved %}
+            <ul class="report-admin-people">
+              {% for row in involved %}
+                <li>
+                  <p>@{{ row.user.username if row.user else '—' }} · {{ outcome_labels.get(row.outcome, row.outcome) }}{% if row.locked %} · evidência{% endif %}</p>
+                  {% if aba == 'pendentes' %}
+                    <div class="suggestion-admin-actions">
+                      <form action="/admin/denuncias/{{ item.id }}/envolvidos/{{ row.user_id }}/nada" method="post">
+                        <button class="btn btn-ghost" type="submit">Sem violação</button>
+                      </form>
+                      <form action="/admin/denuncias/{{ item.id }}/envolvidos/{{ row.user_id }}/advertir" method="post">
+                        <button class="btn btn-secondary" type="submit">Avisar</button>
+                      </form>
+                      <form action="/admin/denuncias/{{ item.id }}/envolvidos/{{ row.user_id }}/suspender" method="post">
+                        <label class="suggestion-status-label">Suspender
+                          <select name="hours" onchange="this.form.submit()">
+                            <option value="">Escolher prazo</option>
+                            <option value="24">24 horas</option>
+                            <option value="168">7 dias</option>
+                            <option value="720">30 dias</option>
+                            <option value="0">Permanente</option>
+                          </select>
+                        </label>
+                      </form>
+                      <form action="/admin/denuncias/{{ item.id }}/envolvidos/{{ row.user_id }}/banir" method="post">
+                        <button class="btn btn-danger" type="submit">Banir</button>
+                      </form>
+                    </div>
+                  {% endif %}
+                  {% set history = histories.get(row.user_id, []) %}
+                  {% if history %}
+                    <p class="muted">Histórico de @{{ row.user.username if row.user else '—' }}</p>
+                    <ul>
+                      {% for event in history %}
+                        <li>{{ event.created_at|when }} · {{ event.action }} · {{ event.category }}{% if event.reversed_at %} (revertido){% endif %}</li>
+                      {% endfor %}
+                    </ul>
+                  {% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          {% elif item.reported_user %}
+            <p>@{{ item.reported_user.username }}</p>
+            {% set history = histories.get(item.reported_user_id, []) %}
+            {% if history %}
+              <p class="muted">Histórico do usuário</p>
+              <ul>
+                {% for event in history %}
+                  <li>{{ event.created_at|when }} · {{ event.action }} · {{ event.category }}{% if event.reversed_at %} (revertido){% endif %}</li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+          {% endif %}
+          <p class="muted">Evidências preservadas pelo Watch Club</p>
+          {% set preserved = message_snaps.get(item.id, []) %}
+          {% if preserved %}
+            <ol class="report-thread">
+              {% for msg in preserved %}
+                <li>
+                  <p class="muted">@{{ msg.get('author_username') }} · {{ (msg.get('created_at') or '')[11:16] }}</p>
+                  <p class="suggestion-body">{{ msg.get('body') }}</p>
+                </li>
+              {% endfor %}
+            </ol>
+          {% elif snap.get('body') %}
+            <p class="suggestion-body">{{ snap.body }}</p>
+          {% else %}
+            <p class="suggestion-body">{% for key, value in snap.items() %}{{ key }}: {{ value }}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+          {% endif %}
+          <p class="muted">Evidências adicionais enviadas pelo denunciante</p>
+          {% set ns = namespace(files=0) %}
+          {% for row in item.reports %}
+            {% for file in row.attachments %}
+              {% set ns.files = ns.files + 1 %}
+              <p><a href="/denuncias/anexos/{{ file.id }}">Print {{ ns.files }}</a></p>
+            {% endfor %}
+          {% endfor %}
+          {% if ns.files == 0 %}
+            <p class="muted">Nenhum print adicional.</p>
+          {% endif %}
+          {% if item.reports %}
+            <p class="muted">Denunciantes (uso administrativo)</p>
+            <ul>
+              {% for row in item.reports %}
+                <li>@{{ row.reporter.username if row.reporter else '—' }} · {{ reason_labels.get(row.reason, row.reason) }}{% if row.explanation %} — {{ row.explanation }}{% endif %}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+          {% if aba == 'pendentes' %}
+          <div class="suggestion-admin-actions">
+            <form action="/admin/denuncias/{{ item.id }}/ignorar" method="post">
+              <button class="btn btn-ghost" type="submit">Ignorar caso</button>
+            </form>
+            <form action="/admin/denuncias/{{ item.id }}/remover" method="post">
+              <button class="btn btn-ghost" type="submit">Remover conteúdo</button>
+            </form>
+            <form action="/admin/denuncias/{{ item.id }}/advertir" method="post">
+              <button class="btn btn-secondary" type="submit">Advertir (alvo principal)</button>
+            </form>
+            <form action="/admin/denuncias/{{ item.id }}/suspender" method="post">
+              <label class="suggestion-status-label">Suspender alvo principal
+                <select name="hours" onchange="this.form.submit()">
+                  <option value="">Escolher prazo</option>
+                  <option value="24">24 horas</option>
+                  <option value="168">7 dias</option>
+                  <option value="720">30 dias</option>
+                  <option value="0">Permanente</option>
+                </select>
+              </label>
+            </form>
+          </div>
+          {% endif %}
+        </div>
+      </details>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+    <p class="muted">{% if aba == 'resolvidas' %}Nenhuma denúncia resolvida.{% else %}Nenhuma denúncia pendente.{% endif %}</p>
+  {% endif %}
+{% else %}
+  {% set queue = appeals %}
+  {% if queue %}
+  <ul class="suggestion-list">
+    {% for item in queue %}
+    <li>
+      <details class="suggestion-item" id="contestacao-{{ item.id }}"{% if open_id == item.id %} open{% endif %}>
+        <summary class="suggestion-summary">
+          <span class="suggestion-summary-copy">
+            <span class="suggestion-title">@{{ item.user.username if item.user else '—' }}</span>
+            <span class="muted">{{ item.reason }} · {{ item.created_at|when }}</span>
+          </span>
+          <span class="chip suggestion-chip">{{ item.status }}</span>
+          <span class="suggestion-chevron" aria-hidden="true">›</span>
+        </summary>
+        <div class="suggestion-panel">
+          <p class="suggestion-body">{{ item.explanation }}</p>
+          {% if item.event %}
+            <p class="muted">Evidência interna</p>
+            <p class="suggestion-body">{{ item.event.evidence }}</p>
+            <p class="muted">{{ item.event.origin }} · {{ item.event.category }} · {{ item.event.action }} · {{ item.event.created_at|when }}</p>
+          {% endif %}
+          {% for file in item.attachments %}
+            <p><a href="/contestacoes/{{ item.id }}/anexo/{{ file.filename }}">Anexo</a></p>
+          {% endfor %}
+          <div class="suggestion-admin-actions">
+            <form action="/admin/contestacoes/{{ item.id }}/manter" method="post">
+              <button class="btn btn-secondary" type="submit">Manter penalidade</button>
+            </form>
+            <form action="/admin/contestacoes/{{ item.id }}/remover" method="post">
+              <button class="btn btn-danger" type="submit">Remover penalidade</button>
+            </form>
+          </div>
+        </div>
+      </details>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+    <p class="muted">Nenhuma contestação pendente.</p>
+  {% endif %}
+{% endif %}
+{% endblock %}

@@ -21,8 +21,20 @@ COVER_COLORS = [
 COVER_PRESETS = tuple({"hex": color, "label": color} for color in COVER_COLORS)
 DEFAULT_COVER = COVER_COLORS[0]
 HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
+STORED_NAME = re.compile(r"^[a-f0-9]{24}\.(jpg|jpeg|png|webp|gif)$")
 def _upload_dir() -> Path:
     return uploads_dir() / "clubs"
+
+
+def stored_cover_path(filename: str | None) -> Path | None:
+    name = (filename or "").strip()
+    if not STORED_NAME.match(name):
+        return None
+    dest = _upload_dir()
+    path = (dest / name).resolve()
+    if path.parent != dest.resolve() or not path.is_file():
+        return None
+    return path
 ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 MAX_BYTES = 2 * 1024 * 1024
 

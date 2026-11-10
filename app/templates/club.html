@@ -166,11 +166,13 @@
         {{ club.members|length }} membro{% if club.members|length != 1 %}s{% endif %} · {{ online_count }} online
       </button>
       {% if club.description %}<p class="club-lead">{{ club.description }}</p>{% endif %}
+      <p><a class="muted" href="/denunciar?tipo=club&amp;id={{ club.id }}&amp;next=/clubs/{{ club.id }}">Denunciar clube</a></p>
     </div>
     <nav class="club-side-nav">
       <a class="club-side-link {% if tab == 'chat' %}is-on{% endif %}" href="/clubs/{{ club.id }}?aba=chat">Bate-papo</a>
       <a class="club-side-link {% if tab == 'assistindo' %}is-on{% endif %}" href="/clubs/{{ club.id }}?aba=assistindo">Assistindo</a>
       <a class="club-side-link {% if tab == 'agendamentos' %}is-on{% endif %}" href="/clubs/{{ club.id }}?aba=agendamentos">Agendamentos</a>
+      <a class="club-side-link {% if tab == 'denuncias' %}is-on{% endif %}" href="/clubs/{{ club.id }}?aba=denuncias">Denúncias</a>
       {% if is_admin %}
         <a class="club-side-link is-quiet" href="/clubs/{{ club.id }}/config">Configurações</a>
       {% elif can_tag %}
@@ -233,7 +235,13 @@
             {% if new_day %}
               <p class="chat-day-mark" data-day="{{ day_key }}"><span>{{ item.created_at|chat_day_label }}</span></p>
             {% endif %}
-            <article class="chat-item{% if follow %} is-follow{% endif %}{% if pinned_message and pinned_message.id == item.id %} is-pinned{% endif %}" id="msg-{{ item.id }}">
+            <article class="chat-item{% if follow %} is-follow{% endif %}{% if pinned_message and pinned_message.id == item.id %} is-pinned{% endif %}{% if report_select_ids and item.id in report_select_ids %} is-report-on{% endif %}" id="msg-{{ item.id }}" data-message-id="{{ item.id }}">
+              {% if report_select_ids %}
+                <label class="chat-report-pick">
+                  <input type="checkbox" name="message_ids" value="{{ item.id }}" form="club-report-select"{% if item.id in report_select_ids %} checked{% endif %}>
+                  <span class="visually-hidden">Incluir mensagem na denúncia</span>
+                </label>
+              {% endif %}
               {% if follow %}
                 <span class="chat-gutter" aria-hidden="true"></span>
               {% else %}
@@ -249,7 +257,16 @@
                     <span class="chat-meta-when muted">{{ item.created_at|chat_clock }}</span>
                   </p>
                 {% endif %}
+                {% if item.removed_at %}
+                <p class="chat-body muted">Mensagem removida pela moderação</p>
+                {% elif blocked_user_ids is defined and item.user_id in blocked_user_ids %}
+                <details class="chat-blocked">
+                  <summary>Mensagem de usuário bloqueado — Mostrar</summary>
+                  <p class="chat-body">{{ item.body|chat_format }}</p>
+                </details>
+                {% else %}
                 <p class="chat-body">{{ item.body|chat_format }}</p>
+                {% endif %}
                 {% if item.show %}
                   <a class="chat-show-card" href="/clubs/{{ club.id }}/shows/{{ item.show.id }}">
                     {% if item.show.image_url %}
@@ -265,8 +282,11 @@
                 {% endif %}
               </div>
               {% set can_delete = item.user_id == user.id or can_moderate_chat %}
-              {% if can_delete or is_admin %}
+              {% if can_delete or is_admin or item.user_id != user.id %}
                 <div class="chat-msg-actions">
+                  {% if item.user_id != user.id %}
+                    <a class="chat-pin-msg" href="/clubs/{{ club.id }}?aba=chat&amp;selecionar={{ item.id }}#msg-{{ item.id }}" title="Denunciar mensagem">Denunciar</a>
+                  {% endif %}
                   {% if can_delete %}
                     <form class="chat-pin-action" action="/clubs/{{ club.id }}/mensagens/{{ item.id }}/apagar" method="post" onsubmit="return confirm('Tem certeza que deseja apagar esta mensagem?')">
                       <button type="submit" class="chat-pin-msg" aria-label="Apagar mensagem" title="Apagar mensagem">Apagar</button>
@@ -291,6 +311,15 @@
           {% endfor %}
         </div>
         </div>
+        {% if report_select_ids %}
+          <form id="club-report-select" class="chat-report-bar" action="/denunciar/mensagens" method="post">
+            <input type="hidden" name="club_id" value="{{ club.id }}">
+            <input type="hidden" name="next_url" value="/clubs/{{ club.id }}?aba=chat">
+            <p><span class="js-report-count">{{ report_select_ids|length }}</span> mensagem(ns) selecionada(s) · máximo {{ max_report_messages }}</p>
+            <button class="btn btn-primary" type="submit">Continuar</button>
+            <a class="btn btn-ghost" href="/clubs/{{ club.id }}?aba=chat">Cancelar</a>
+          </form>
+        {% endif %}
         <form class="chat-form" action="/clubs/{{ club.id }}/mensagens" method="post">
           <div class="chat-composer">
             <label class="chat-compose">
@@ -452,6 +481,48 @@
             {% endif %}
           {% endfor %}
         </div>
+      </section>
+    {% elif tab == 'denuncias' %}
+      <section class="safety-hub">
+        <h2>Denúncias</h2>
+        <p class="muted">Este atalho vale para {{ club.name }}. Os botões de denunciar na mensagem e no perfil continuam disponíveis.</p>
+        {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+        <section class="card">
+          <h3>Denunciar membro(s)</h3>
+          <p class="muted">Selecione um ou vários membros deste clube. Todos entram no mesmo caso.</p>
+          {% set others = club.members | rejectattr('user_id', 'equalto', user.id) | list %}
+          {% if others %}
+            <form action="/clubs/{{ club.id }}/denuncias/membro" method="post">
+              <fieldset class="report-fieldset">
+                <legend>Perfis envolvidos</legend>
+                {% for item in others %}
+                  {% if item.user %}
+                    <label class="report-member-option">
+                      <input type="checkbox" name="member_user_ids" value="{{ item.user_id }}">
+                      @{{ item.user.username }} · {{ item.user.name }}
+                    </label>
+                  {% endif %}
+                {% endfor %}
+              </fieldset>
+              <button class="btn btn-primary" type="submit">Continuar</button>
+            </form>
+          {% else %}
+            <p class="muted">Não há outros membros neste clube.</p>
+          {% endif %}
+        </section>
+
+        <section class="card">
+          <h3>Denunciar uma mensagem</h3>
+          <p class="muted">Para denunciar mensagens específicas, use Denunciar nas ações da mensagem. Você poderá selecionar outras mensagens relacionadas antes de enviar.</p>
+          <p><a class="btn btn-secondary" href="/clubs/{{ club.id }}?aba=chat">Abrir bate-papo</a></p>
+        </section>
+
+        <section class="card">
+          <h3>Denunciar o clube</h3>
+          <p class="muted">O clube fica como contexto principal. Relacionar membros é opcional.</p>
+          <p><a class="btn btn-secondary" href="/denunciar?tipo=club&amp;id={{ club.id }}&amp;club_scope={{ club.id }}&amp;next={{ ('/clubs/' ~ club.id ~ '?aba=denuncias')|urlencode }}">Denunciar este clube</a></p>
+        </section>
       </section>
     {% else %}
       <section class="watch-panel">
@@ -1196,6 +1267,26 @@
       }
     });
     if (location.hash) flashPinned(location.hash.replace(/^#/, ""));
+  })();
+
+  (function () {
+    const form = document.getElementById("club-report-select");
+    if (!form) return;
+    const max = {{ max_report_messages or 20 }};
+    const count = form.querySelector(".js-report-count");
+    form.addEventListener("change", function (event) {
+      const box = event.target;
+      if (!box || box.name !== "message_ids") return;
+      const checked = form.querySelectorAll('input[name="message_ids"]:checked');
+      if (checked.length > max) {
+        box.checked = false;
+        window.alert("Você já selecionou o máximo de " + max + " mensagens.");
+        return;
+      }
+      const item = box.closest(".chat-item");
+      if (item) item.classList.toggle("is-report-on", box.checked);
+      if (count) count.textContent = String(form.querySelectorAll('input[name="message_ids"]:checked').length);
+    });
   })();
 
   (function () {

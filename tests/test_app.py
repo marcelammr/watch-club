@@ -64,12 +64,16 @@ def test_logged_in_shell_and_clubes_page():
     assert 'aria-label="Configurações"' in home.text
     assert 'aria-label="Administração"' not in home.text
     assert 'aria-label="Caixinha de sugestão"' in home.text
-    assert 'aria-label="Sobre"' in home.text
+    assert 'aria-label="Segurança e denúncias"' in home.text
+    assert 'aria-label="Regras da comunidade"' in home.text
+    assert 'aria-label="Sobre"' not in home.text
     assert 'href="/conta"' in home.text
     assert 'href="/sugestoes"' in home.text
-    assert 'href="/sobre"' in home.text
+    assert 'href="/seguranca"' in home.text
+    assert 'href="/regras"' in home.text
     foot = home.text.split('aria-label="Preferências"', 1)[1].split("</nav>", 1)[0]
-    assert foot.find('href="/conta"') < foot.find('href="/sugestoes"') < foot.find('href="/sobre"')
+    assert 'href="/sobre"' not in foot
+    assert foot.find('href="/conta"') < foot.find('href="/sugestoes"') < foot.find('href="/seguranca"') < foot.find('href="/regras"')
     assert "Caixinha<br>de sugestão" in foot or "Caixinha<br/>de sugestão" in foot
     assert 'aria-label="Notificações"' in home.text
     assert 'href="/amigos"' in home.text
@@ -99,6 +103,11 @@ def test_logged_in_shell_and_clubes_page():
     assert "club-cover-card" not in miss.text
     account = member.get("/conta")
     assert "Sair da sessão" in account.text
+    assert "Sobre o Watch Club" in account.text
+    assert "not endorsed or certified by TMDB" in account.text
+    about = member.get("/sobre", follow_redirects=False)
+    assert about.status_code == 303
+    assert about.headers["location"] == "/conta#sobre"
     guest_home = client.get("/")
     assert "app-sidebar" not in guest_home.text
     assert 'href="/auth/login">Entrar</a>' in guest_home.text

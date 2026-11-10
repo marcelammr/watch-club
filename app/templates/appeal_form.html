@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Solicitar revisão · Watch Club{% endblock %}
+{% block page_heading %}Solicitar revisão{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Solicitar revisão</h1>
+  <p class="muted">Explique por que a decisão parece um erro. Pedir revisão não cancela a penalidade automaticamente.</p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <div class="suggestion-panel">
+    <p class="muted">Evidência interna (você não pode alterar)</p>
+    <p class="suggestion-body">{{ event.evidence }}</p>
+    <p class="muted">{{ event.origin }} · {{ event.category }} · {{ event.created_at|when }}</p>
+  </div>
+  <form action="/contestacoes/{{ event.id }}" method="post" enctype="multipart/form-data">
+    <label>Motivo
+      <select name="reason" required>
+        {% for key, label in reasons %}
+          <option value="{{ key }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Explicação ({{ explanation_min }} a {{ explanation_max }} caracteres)
+      <textarea name="explanation" rows="6" minlength="{{ explanation_min }}" maxlength="{{ explanation_max }}" required></textarea>
+    </label>
+    <label>Imagem opcional
+      <input type="file" name="evidence" accept="image/jpeg,image/png,image/webp,image/gif">
+    </label>
+    <button class="btn btn-primary" type="submit">Enviar revisão</button>
+  </form>
+</section>
+{% endblock %}

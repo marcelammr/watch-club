@@ -49,9 +49,15 @@ def migrate_schema() -> None:
     if "displayed_club_id" not in columns:
         alters.append("ALTER TABLE users ADD COLUMN displayed_club_id INTEGER")
     if "enter_sends" not in columns:
-        alters.append("ALTER TABLE users ADD COLUMN enter_sends BOOLEAN DEFAULT 0")
+        alters.append("ALTER TABLE users ADD COLUMN enter_sends BOOLEAN DEFAULT 1")
     if "is_site_admin" not in columns:
         alters.append("ALTER TABLE users ADD COLUMN is_site_admin BOOLEAN DEFAULT 0")
+    if "suspended_until" not in columns:
+        alters.append("ALTER TABLE users ADD COLUMN suspended_until DATETIME")
+    if "banned_at" not in columns:
+        alters.append("ALTER TABLE users ADD COLUMN banned_at DATETIME")
+    if "had_progression_suspend" not in columns:
+        alters.append("ALTER TABLE users ADD COLUMN had_progression_suspend BOOLEAN DEFAULT 0")
     with engine.begin() as connection:
         for statement in alters:
             connection.execute(text(statement))
@@ -391,6 +397,8 @@ def migrate_schema() -> None:
     _ensure_club_message_show_id()
     _ensure_direct_message_read_at()
     _ensure_suggestions()
+    _ensure_club_message_removed_at()
+    _ensure_safety_tables()
 
 
 def _migrate_club_schedules() -> None:
@@ -594,6 +602,231 @@ def _ensure_user_show_favorites() -> None:
                 "ON user_show_favorites (user_id, created_at)"
             )
         )
+
+
+def _ensure_club_message_removed_at() -> None:
+    inspector = inspect(engine)
+    if "club_messages" not in inspector.get_table_names():
+        return
+    cols = {column["name"] for column in inspector.get_columns("club_messages")}
+    if "removed_at" in cols:
+        return
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE club_messages ADD COLUMN removed_at DATETIME"))
+
+
+def _ensure_safety_tables() -> None:
+    inspector = inspect(engine)
+    tables = inspector.get_table_names()
+    with engine.begin() as connection:
+        if "user_blocks" not in tables:
+            connection.execute(
+                text(
+                    """
+                    CREATE TABLE user_blocks (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        blocker_id INTEGER NOT NULL,
+                        blocked_id INTEGER NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                        FOREIGN KEY(blocker_id) REFERENCES users (id),
+                        FOREIGN KEY(blocked_id) REFERENCES users (id),
+                        UNIQUE (blocker_id, blocked_id)
+                    )
+                    """
+                )
+            )
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_user_blocks_blocker_id ON user_blocks (blocker_id)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_user_blocks_blocked_id ON user_blocks (blocked_id)"))
+        if "report_cases" not in tables:
+            connection.execute(
+                text(
+                    """
+                    CREATE TABLE report_cases (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        target_type VARCHAR(32) NOT NULL,
+                        target_key VARCHAR(80) NOT NULL,
+                        target_id INTEGER,
+                        reported_user_id INTEGER,
+                        reason VARCHAR(40) NOT NULL,
+                        status VARCHAR(16) NOT NULL DEFAULT 'pending',
+                        snapshot_json TEXT NOT NULL DEFAULT '',
+                        report_count INTEGER NOT NULL DEFAULT 1,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                        resolved_at DATETIME,
+                        resolved_by_id INTEGER,
+                        resolution VARCHAR(32),
+                        FOREIGN KEY(reported_user_id) REFERENCES users (id),
+                        FOREIGN KEY(resolved_by_id) REFERENCES users (id)
+                    )
+                    """
+                )
+            )
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_report_cases_target_key ON report_cases (target_key)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_report_cases_status ON report_cases (status)"))
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_report_cases_status_updated "
+                    "ON report_cases (status, updated_at)"
+                )
+            )
+        if "reports" not in tables:
+            connection.execute(
+                text(
+                    """
+                    CREATE TABLE reports (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        case_id INTEGER NOT NULL,
+                        reporter_id INTEGER NOT NULL,
+                        reason VARCHAR(40) NOT NULL,
+                        explanation TEXT NOT NULL DEFAULT '',
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                        FOREIGN KEY(case_id) REFERENCES report_cases (id),
+                        FOREIGN KEY(reporter_id) REFERENCES users (id),
+                        UNIQUE (case_id, reporter_id)
+                    )
+                    """
+                )
+            )
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_reports_case_id ON reports (case_id)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_reports_reporter_id ON reports (reporter_id)"))
+        if "moderation_events" not in tables:
+            connection.execute(
+                text(
+                    """
+                    CREATE TABLE moderation_events (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        user_id INTEGER NOT NULL,
+                        category VARCHAR(40) NOT NULL,
+                        origin VARCHAR(32) NOT NULL,
+                        action VARCHAR(24) NOT NULL,
+                        evidence TEXT NOT NULL DEFAULT '',
+                        warning_number INTEGER,
+                        counts BOOLEAN NOT NULL DEFAULT 0,
+                        automatic BOOLEAN NOT NULL DEFAULT 0,
+                        immediate BOOLEAN NOT NULL DEFAULT 0,
+                        sets_progression_suspend BOOLEAN NOT NULL DEFAULT 0,
+                        case_id INTEGER,
+                        actor_id INTEGER,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                        reversed_at DATETIME,
+                        reversed_by_id INTEGER,
+                        FOREIGN KEY(user_id) REFERENCES users (id),
+                        FOREIGN KEY(case_id) REFERENCES report_cases (id),
+                        FOREIGN KEY(actor_id) REFERENCES users (id),
+                        FOREIGN KEY(reversed_by_id) REFERENCES users (id)
+                    )
+                    """
+                )
+            )
+            connection.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_moderation_events_user_id ON moderation_events (user_id)")
+            )
+        if "appeals" not in tables:
+            connection.execute(
+                text(
+                    """
+                    CREATE TABLE appeals (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        event_id INTEGER NOT NULL,
+                        user_id INTEGER NOT NULL,
+                        reason VARCHAR(40) NOT NULL,
+                        explanation TEXT NOT NULL,
+                        status VARCHAR(16) NOT NULL DEFAULT 'pending',
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                        decided_at DATETIME,
+                        decided_by_id INTEGER,
+                        FOREIGN KEY(event_id) REFERENCES moderation_events (id),
+                        FOREIGN KEY(user_id) REFERENCES users (id),
+                        FOREIGN KEY(decided_by_id) REFERENCES users (id),
+                        UNIQUE (event_id)
+                    )
+                    """
+                )
+            )
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_appeals_user_id ON appeals (user_id)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_appeals_status ON appeals (status)"))
+        if "appeal_attachments" not in tables:
+            connection.execute(
+                text(
+                    """
+                    CREATE TABLE appeal_attachments (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        appeal_id INTEGER NOT NULL,
+                        filename VARCHAR(80) NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                        FOREIGN KEY(appeal_id) REFERENCES appeals (id)
+                    )
+                    """
+                )
+            )
+            connection.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_appeal_attachments_appeal_id ON appeal_attachments (appeal_id)")
+            )
+        if "report_case_users" not in tables:
+            connection.execute(
+                text(
+                    """
+                    CREATE TABLE report_case_users (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        case_id INTEGER NOT NULL,
+                        user_id INTEGER NOT NULL,
+                        source VARCHAR(16) NOT NULL DEFAULT 'added',
+                        locked BOOLEAN NOT NULL DEFAULT 0,
+                        outcome VARCHAR(16) NOT NULL DEFAULT 'pending',
+                        snapshot_json TEXT NOT NULL DEFAULT '',
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                        FOREIGN KEY(case_id) REFERENCES report_cases (id),
+                        FOREIGN KEY(user_id) REFERENCES users (id),
+                        UNIQUE (case_id, user_id)
+                    )
+                    """
+                )
+            )
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_report_case_users_case_id ON report_case_users (case_id)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_report_case_users_user_id ON report_case_users (user_id)"))
+        if "report_case_messages" not in tables:
+            connection.execute(
+                text(
+                    """
+                    CREATE TABLE report_case_messages (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        case_id INTEGER NOT NULL,
+                        kind VARCHAR(24) NOT NULL,
+                        source_id INTEGER,
+                        author_id INTEGER,
+                        snapshot_json TEXT NOT NULL DEFAULT '',
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                        FOREIGN KEY(case_id) REFERENCES report_cases (id)
+                    )
+                    """
+                )
+            )
+            connection.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_report_case_messages_case_id ON report_case_messages (case_id)")
+            )
+        if "report_attachments" not in tables:
+            connection.execute(
+                text(
+                    """
+                    CREATE TABLE report_attachments (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        report_id INTEGER NOT NULL,
+                        case_id INTEGER NOT NULL,
+                        filename VARCHAR(80) NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                        FOREIGN KEY(report_id) REFERENCES reports (id),
+                        FOREIGN KEY(case_id) REFERENCES report_cases (id)
+                    )
+                    """
+                )
+            )
+            connection.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_report_attachments_report_id ON report_attachments (report_id)")
+            )
+            connection.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_report_attachments_case_id ON report_attachments (case_id)")
+            )
 
 
 def _seed_catalog_categories() -> None:

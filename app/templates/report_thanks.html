@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "macros/avatar.html" import user_avatar %}
+{% block title %}Denúncia enviada · Watch Club{% endblock %}
+{% block page_heading %}Denúncia enviada{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Denúncia enviada</h1>
+  <p>Obrigado. A administração vai analisar o caso. Nada foi removido ou punido só por causa desta denúncia.</p>
+  {% if block_people %}
+    <p>Deseja também bloquear algum dos usuários envolvidos? O bloqueio é opcional e individual.</p>
+    <ul class="report-chip-list">
+      {% for person in block_people %}
+        <li class="report-chip">
+          {{ user_avatar(person, 'sm') }}
+          <span>{{ person.name }} <span class="muted">@{{ person.username }}</span></span>
+          <form action="/u/{{ person.username }}/bloquear" method="post">
+            <input type="hidden" name="next" value="{{ next }}">
+            <button class="btn btn-secondary" type="submit">Bloquear</button>
+          </form>
+        </li>
+      {% endfor %}
+    </ul>
+    <p><a class="btn btn-ghost" href="{{ next }}">Agora não</a></p>
+  {% else %}
+    <p><a class="btn btn-primary" href="{{ next }}">Voltar</a></p>
+  {% endif %}
+</section>
+{% endblock %}

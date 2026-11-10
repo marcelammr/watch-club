@@ -45,7 +45,7 @@ def _person(**extra):
         "presence": "offline",
         "presence_pref": "offline",
         "last_seen": None,
-        "enter_sends": False,
+        "enter_sends": True,
         "is_active": True,
         "is_site_admin": True,
         "display_tag": None,

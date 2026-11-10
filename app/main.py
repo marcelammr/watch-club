@@ -39,7 +39,7 @@ from app.auth0_oidc import (
     pkce_pair,
     redeem_callback,
 )
-from app.avatar_uploads import delete_upload, save_avatar_photo
+from app.avatar_uploads import delete_upload, save_avatar_photo, stored_upload_path
 from app.avatars import (
     AVATARS,
     avatar_initials,
@@ -154,7 +154,7 @@ from app.club_tags import (
     tag_payload,
 )
 from app.colors import COLOR_PRESETS, DEFAULT_HEX, GRADIENT_DIRECTIONS, valid_hex
-from app.club_icons import club_icon_initials, club_icon_url, delete_club_icon, save_club_icon
+from app.club_icons import club_icon_initials, club_icon_url, delete_club_icon, save_club_icon, stored_icon_path
 from app.discovery import (
     KIND_LABELS,
     MAX_CATEGORIES,
@@ -165,7 +165,7 @@ from app.discovery import (
     grouped_catalog,
     load_catalog,
 )
-from app.covers import COVER_COLORS, COVER_PRESETS, cover_image_url, save_cover_image, valid_cover_color
+from app.covers import COVER_COLORS, COVER_PRESETS, cover_image_url, save_cover_image, stored_cover_path, valid_cover_color
 from app.markup import format_chat, pin_preview
 from app import config as app_config
 from app.config import BASE_DIR, BIO_MAX, EMAIL_DEV_SHOW_LINK, SECRET_KEY, SESSION_HTTPS_ONLY, uploads_dir
@@ -299,6 +299,71 @@ from app.suggestions import (
     list_own_suggestions,
     set_suggestion_status,
 )
+from app.moderation import (
+    AccountRestricted,
+    ORIGIN_ADMIN,
+    SURFACE_PUBLIC_NAME,
+    SURFACE_PUBLIC_TEXT,
+    apply_violation,
+    counting_violation_count,
+    enforce_image,
+    enforce_text,
+    is_restricted,
+    restriction_kind,
+    restriction_path_allowed,
+    reverse_event,
+    user_moderation_history,
+)
+from app.blocks import (
+    are_blocked,
+    block_user,
+    ids_blocked_by,
+    list_blocked_users,
+    unblock_user,
+)
+from app.reports import (
+    APPEAL_KEPT,
+    APPEAL_REASON_LABELS,
+    APPEAL_REASONS,
+    APPEAL_REMOVED,
+    EXPLANATION_MAX,
+    EXPLANATION_MIN,
+    MAX_REPORT_ATTACHMENTS,
+    MAX_REPORT_MESSAGES,
+    OWN_STATUS_LABELS,
+    PENALTY_ACTION_LABELS,
+    REPORT_NOTE_MAX,
+    REPORT_NOTE_MIN,
+    REASON_LABELS,
+    REASONS,
+    TARGET_CLUB_MESSAGE,
+    TARGET_DM,
+    TARGET_LABELS,
+    USER_OUTCOME_LABELS,
+    can_view_report_attachment,
+    chronological_message_snapshots,
+    create_appeal,
+    create_report,
+    get_appeal,
+    get_case,
+    get_report_attachment,
+    list_appeals,
+    list_cases,
+    list_own_reports,
+    load_snapshot,
+    locate_club_member_for_report,
+    locate_member_club,
+    locate_user_for_report,
+    own_report_counts,
+    parse_id_list,
+    preview_report,
+    remove_reported_content,
+    resolve_case,
+    save_appeal_image,
+    save_report_evidence_image,
+    stored_appeal_path,
+    stored_report_evidence_path,
+)
 from app.services.news import FEED_KIND_LABELS, format_news_when, format_news_when_short
 from app.usernames import (
     NICKNAME_DAYS,
@@ -325,6 +390,13 @@ app.add_middleware(
     same_site="lax",
     https_only=SESSION_HTTPS_ONLY,
 )
+
+
+@app.exception_handler(AccountRestricted)
+async def account_restricted_handler(request: Request, _exc: AccountRestricted):
+    if request.headers.get("x-watchclub-pref") == "1" or request.headers.get("x-watchclub-notice") == "1":
+        return JSONResponse({"ok": False, "error": "conta restrita"}, status_code=403)
+    return RedirectResponse("/conta-restrita", status_code=303)
 
 
 def mount_static_files(application: FastAPI) -> None:
@@ -437,6 +509,8 @@ def login_required(request: Request, db: Session) -> User:
     user = current_user(request, db)
     if not user:
         raise HTTPException(status_code=401, detail="Faça login")
+    if is_restricted(user) and not restriction_path_allowed(request.url.path):
+        raise AccountRestricted()
     return user
 
 
@@ -655,6 +729,8 @@ def _club_tab(aba: str | None) -> str:
         return "chat"
     if aba == "agendamentos":
         return "agendamentos"
+    if aba == "denuncias":
+        return "denuncias"
     return "assistindo"
 
 
@@ -1962,7 +2038,7 @@ def new_club_form(request: Request):
         return templates.TemplateResponse(
             request,
             "club_form.html",
-            {"user": user, "club": None, "error": None, "mode": "create"},
+            {"user": user, "club": None, "error": request.query_params.get("error"), "mode": "create"},
         )
     except HTTPException:
         return RedirectResponse("/login", status_code=303)
@@ -1984,15 +2060,28 @@ async def create_club(
     db = db_session()
     try:
         user = login_required(request, db)
+        club_name = name.strip()
+        club_description = description.strip()
+        club_rules = rules.strip()
+        enforce_text(db, user, club_name, surface=SURFACE_PUBLIC_NAME, origin="club")
+        enforce_text(db, user, club_description, surface=SURFACE_PUBLIC_TEXT, origin="club")
+        enforce_text(db, user, club_rules, surface=SURFACE_PUBLIC_TEXT, origin="club")
         image_name = await save_cover_image(cover_file)
         icon_name = await save_club_icon(icon_file)
+        for stored_name, locator, origin in (
+            (image_name, stored_cover_path, "club_cover"),
+            (icon_name, stored_icon_path, "club_icon"),
+        ):
+            path = locator(stored_name) if stored_name else None
+            if path:
+                enforce_image(db, user, path.read_bytes(), mime="image/*", origin=origin)
         club = Club(
-            name=name.strip(),
+            name=club_name,
             join_code=make_join_code(),
             owner_id=user.id,
             is_closed=bool(is_closed),
-            description=description.strip(),
-            rules=rules.strip(),
+            description=club_description,
+            rules=club_rules,
             cover_color=valid_cover_color(cover_color),
             cover_image=image_name,
             icon_image=icon_name,
@@ -2002,8 +2091,12 @@ async def create_club(
         db.add(ClubMember(club_id=club.id, user_id=user.id, role=ROLE_ADMIN, support_perms=""))
         db.commit()
         return RedirectResponse(f"/clubs/{club.id}", status_code=303)
-    except HTTPException:
-        return RedirectResponse("/login", status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 400:
+            return RedirectResponse("/clubs/novo?error=" + quote(str(exc.detail)), status_code=303)
+        raise
     finally:
         db.close()
 
@@ -2012,10 +2105,235 @@ async def create_club(
 def about_page(request: Request):
     db = db_session()
     try:
+        user = current_user(request, db)
+        if user:
+            return RedirectResponse("/conta#sobre", status_code=303)
         return templates.TemplateResponse(
             request,
             "about.html",
-            {"user": current_user(request, db)},
+            {"user": None},
+        )
+    finally:
+        db.close()
+
+
+@app.get("/regras", response_class=HTMLResponse)
+def community_rules_page(request: Request):
+    db = db_session()
+    try:
+        user = current_user(request, db)
+        if user and is_restricted(user):
+            return templates.TemplateResponse(request, "community_rules.html", {"user": user})
+        return templates.TemplateResponse(
+            request,
+            "community_rules.html",
+            {"user": user},
+        )
+    finally:
+        db.close()
+
+
+@app.get("/seguranca", response_class=HTMLResponse)
+def safety_hub(request: Request):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        events = [
+            item
+            for item in user_moderation_history(db, user.id)
+            if item.counts and item.action in {"warn", "suspend", "ban"}
+        ]
+        reports = list_own_reports(db, user.id)
+        return templates.TemplateResponse(
+            request,
+            "safety.html",
+            {
+                "user": user,
+                "reports": reports,
+                "report_counts": {item.id: own_report_counts(item) for item in reports},
+                "blocked_users": list_blocked_users(db, user.id),
+                "events": events,
+                "reason_labels": REASON_LABELS,
+                "target_labels": TARGET_LABELS,
+                "status_labels": OWN_STATUS_LABELS,
+                "action_labels": PENALTY_ACTION_LABELS,
+                "error": request.query_params.get("error"),
+                "ok": request.query_params.get("ok"),
+            },
+        )
+    except HTTPException:
+        return RedirectResponse("/login", status_code=303)
+    finally:
+        db.close()
+
+
+def _session_user_ids(request: Request) -> list[int]:
+    try:
+        return parse_id_list(request.session.get("report_user_ids") or [])
+    except HTTPException:
+        return []
+
+
+@app.get("/seguranca/denunciar/usuario", response_class=HTMLResponse)
+def safety_pick_user(request: Request):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        selected_ids = _session_user_ids(request)
+        selected = [db.get(User, item) for item in selected_ids]
+        selected = [item for item in selected if item and item.is_active]
+        return templates.TemplateResponse(
+            request,
+            "safety_pick_user.html",
+            {
+                "user": user,
+                "friends": list_friends(db, user.id),
+                "selected": selected,
+                "error": request.query_params.get("error"),
+            },
+        )
+    except HTTPException:
+        return RedirectResponse("/login", status_code=303)
+    finally:
+        db.close()
+
+
+@app.post("/seguranca/denunciar/usuario")
+def safety_start_user_report(
+    request: Request,
+    username: str = Form(""),
+    action: str = Form("add"),
+    user_id: int = Form(0),
+):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        ids = _session_user_ids(request)
+        if action == "remove":
+            ids = [item for item in ids if item != user_id]
+            request.session["report_user_ids"] = ids
+            return RedirectResponse("/seguranca/denunciar/usuario", status_code=303)
+        if action == "continue":
+            if not ids:
+                raise HTTPException(status_code=400, detail="Adicione pelo menos uma conta")
+            qs = "&".join(f"envolvidos={item}" for item in ids)
+            request.session.pop("report_user_ids", None)
+            return RedirectResponse(
+                f"/denunciar?tipo=user&id={ids[0]}&{qs}&next={quote('/seguranca')}",
+                status_code=303,
+            )
+        person = locate_user_for_report(db, user, username)
+        if person.id not in ids:
+            ids.append(person.id)
+        request.session["report_user_ids"] = ids
+        return RedirectResponse("/seguranca/denunciar/usuario", status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        return RedirectResponse(
+            "/seguranca/denunciar/usuario?error=" + quote(str(exc.detail)),
+            status_code=303,
+        )
+    finally:
+        db.close()
+
+
+@app.get("/seguranca/denunciar/clube", response_class=HTMLResponse)
+def safety_pick_club(request: Request):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        return templates.TemplateResponse(
+            request,
+            "safety_pick_club.html",
+            {
+                "user": user,
+                "clubs": _member_club_nav(db, user.id),
+                "error": request.query_params.get("error"),
+            },
+        )
+    except HTTPException:
+        return RedirectResponse("/login", status_code=303)
+    finally:
+        db.close()
+
+
+@app.post("/seguranca/denunciar/clube")
+def safety_start_club_report(request: Request, club_id: int = Form(0)):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        club = locate_member_club(db, user, club_id)
+        return RedirectResponse(
+            f"/denunciar?tipo=club&id={club.id}&club_scope={club.id}&next={quote('/seguranca')}",
+            status_code=303,
+        )
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        return RedirectResponse(
+            "/seguranca/denunciar/clube?error=" + quote(str(exc.detail)),
+            status_code=303,
+        )
+    finally:
+        db.close()
+
+
+@app.post("/clubs/{club_id}/denuncias/membro")
+def club_start_member_report(
+    request: Request,
+    club_id: int,
+    member_user_id: int = Form(0),
+    member_user_ids: list[str] = Form(default=[]),
+):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        club = require_club_member(db, club_id, user.id)
+        ids = parse_id_list(member_user_ids or ([member_user_id] if member_user_id else []))
+        if not ids:
+            raise HTTPException(status_code=400, detail="Selecione pelo menos um membro")
+        people = [locate_club_member_for_report(db, user, club, item) for item in ids]
+        dest = quote(f"/clubs/{club.id}?aba=denuncias")
+        qs = "&".join(f"envolvidos={item.id}" for item in people)
+        return RedirectResponse(
+            f"/denunciar?tipo=user&id={people[0].id}&{qs}&club_scope={club.id}&next={dest}",
+            status_code=303,
+        )
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 403:
+            return RedirectResponse(f"/clubs/{club_id}", status_code=303)
+        return RedirectResponse(
+            f"/clubs/{club_id}?aba=denuncias&error={quote(str(exc.detail))}",
+            status_code=303,
+        )
+    finally:
+        db.close()
+
+
+@app.get("/conta-restrita", response_class=HTMLResponse)
+def restricted_account_page(request: Request):
+    db = db_session()
+    try:
+        user_id = request.session.get("user_id")
+        user = db.get(User, user_id) if user_id else None
+        if user is None or not user.is_active:
+            return RedirectResponse("/login", status_code=303)
+        kind = restriction_kind(user)
+        if not kind:
+            return RedirectResponse("/", status_code=303)
+        events = [item for item in user_moderation_history(db, user.id) if item.counts and item.reversed_at is None]
+        return templates.TemplateResponse(
+            request,
+            "account_restricted.html",
+            {
+                "user": user,
+                "kind": kind,
+                "events": events,
+                "warning_count": counting_violation_count(db, user.id),
+            },
         )
     finally:
         db.close()
@@ -2131,6 +2449,664 @@ def admin_suggestion_archive(request: Request, suggestion_id: int):
         db.close()
 
 
+def _admin_reports_page(request: Request, db, user, **extra):
+    aba = extra.get("aba") or request.query_params.get("aba") or "pendentes"
+    if aba not in {"pendentes", "resolvidas", "contestacoes"}:
+        aba = "pendentes"
+    open_id = extra.get("open_id")
+    if open_id is None:
+        raw = (request.query_params.get("caso") or request.query_params.get("contestacao") or "").strip()
+        open_id = int(raw) if raw.isdigit() else None
+    if aba == "contestacoes":
+        items = list_appeals(db, pending=True)
+        done = list_appeals(db, pending=False)
+        cases = []
+    else:
+        items = []
+        done = []
+        cases = list_cases(db, resolved=aba == "resolvidas")
+    histories = {}
+    message_snaps = {}
+    for case in cases:
+        people_ids = [row.user_id for row in (case.involved_users or [])]
+        if case.reported_user_id:
+            people_ids.append(case.reported_user_id)
+        for user_id in people_ids:
+            if user_id and user_id not in histories:
+                histories[user_id] = user_moderation_history(db, user_id)
+        message_snaps[case.id] = chronological_message_snapshots(case)
+    return templates.TemplateResponse(
+        request,
+        "admin_reports.html",
+        {
+            "user": user,
+            "aba": aba,
+            "cases": cases,
+            "appeals": items if aba == "contestacoes" else [],
+            "closed_appeals": done if aba == "contestacoes" else [],
+            "open_id": open_id,
+            "reason_labels": REASON_LABELS,
+            "target_labels": TARGET_LABELS,
+            "histories": histories,
+            "snapshots": {case.id: load_snapshot(case.snapshot_json) for case in cases},
+            "message_snaps": message_snaps,
+            "outcome_labels": USER_OUTCOME_LABELS,
+            "error": extra.get("error") or request.query_params.get("error"),
+            "ok": extra.get("ok") or request.query_params.get("ok"),
+        },
+    )
+
+
+@app.get("/admin/denuncias", response_class=HTMLResponse)
+def admin_reports(request: Request):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        require_site_admin(user)
+        return _admin_reports_page(request, db, user)
+    except HTTPException as exc:
+        return _admin_http_redirect(exc, "/admin/denuncias")
+    finally:
+        db.close()
+
+
+def _admin_case_action(request: Request, case_id: int, action: str, hours: str = ""):
+    db = db_session()
+    try:
+        admin = login_required(request, db)
+        require_site_admin(admin)
+        case = get_case(db, case_id)
+        if case.status != "pending":
+            raise HTTPException(status_code=400, detail="Esta denúncia já foi resolvida")
+        person = case.reported_user
+        if action == "ignorar":
+            resolve_case(db, case, admin, "ignored")
+        elif action == "remover":
+            remove_reported_content(db, case)
+            resolve_case(db, case, admin, "removed")
+        elif action == "advertir":
+            if person is None:
+                raise HTTPException(status_code=400, detail="Não há usuário para advertir")
+            apply_violation(
+                db,
+                person,
+                category=case.reason,
+                origin=ORIGIN_ADMIN,
+                evidence=case.snapshot_json,
+                counts=True,
+                case_id=case.id,
+                actor_id=admin.id,
+            )
+            resolve_case(db, case, admin, "warned")
+        elif action == "suspender":
+            if person is None:
+                raise HTTPException(status_code=400, detail="Não há usuário para suspender")
+            mapping = {"24": 24, "168": 168, "720": 720, "0": 0}
+            if hours not in mapping:
+                raise HTTPException(status_code=400, detail="Prazo de suspensão inválido")
+            apply_violation(
+                db,
+                person,
+                category=case.reason,
+                origin=ORIGIN_ADMIN,
+                evidence=case.snapshot_json,
+                counts=True,
+                case_id=case.id,
+                actor_id=admin.id,
+                suspend_hours=mapping[hours],
+            )
+            resolve_case(db, case, admin, "banned" if hours == "0" else "suspended")
+        else:
+            raise HTTPException(status_code=400, detail="Ação inválida")
+        db.commit()
+        return RedirectResponse("/admin/denuncias?ok=" + quote("Denúncia atualizada"), status_code=303)
+    except HTTPException as exc:
+        return _admin_http_redirect(exc, "/admin/denuncias")
+    finally:
+        db.close()
+
+
+@app.post("/admin/denuncias/{case_id}/ignorar")
+def admin_report_ignore(request: Request, case_id: int):
+    return _admin_case_action(request, case_id, "ignorar")
+
+
+@app.post("/admin/denuncias/{case_id}/remover")
+def admin_report_remove(request: Request, case_id: int):
+    return _admin_case_action(request, case_id, "remover")
+
+
+@app.post("/admin/denuncias/{case_id}/advertir")
+def admin_report_warn(request: Request, case_id: int):
+    return _admin_case_action(request, case_id, "advertir")
+
+
+@app.post("/admin/denuncias/{case_id}/suspender")
+def admin_report_suspend(request: Request, case_id: int, hours: str = Form("24")):
+    return _admin_case_action(request, case_id, "suspender", hours)
+
+
+def _admin_case_user_action(request: Request, case_id: int, user_id: int, action: str, hours: str = ""):
+    db = db_session()
+    try:
+        admin = login_required(request, db)
+        require_site_admin(admin)
+        case = get_case(db, case_id)
+        if case.status != "pending":
+            raise HTTPException(status_code=400, detail="Esta denúncia já foi resolvida")
+        person = db.get(User, user_id)
+        involved_ids = {row.user_id for row in (case.involved_users or [])}
+        if case.reported_user_id:
+            involved_ids.add(case.reported_user_id)
+        if person is None or user_id not in involved_ids:
+            raise HTTPException(status_code=400, detail="Este usuário não está neste caso")
+        row = next((item for item in (case.involved_users or []) if item.user_id == user_id), None)
+        evidence = case.snapshot_json
+        if action == "nada":
+            if row:
+                row.outcome = "none"
+        elif action == "advertir":
+            apply_violation(
+                db,
+                person,
+                category=case.reason,
+                origin=ORIGIN_ADMIN,
+                evidence=evidence,
+                counts=True,
+                case_id=case.id,
+                actor_id=admin.id,
+            )
+            if row:
+                row.outcome = "warned"
+        elif action in {"suspender", "banir"}:
+            mapping = {"24": 24, "168": 168, "720": 720, "0": 0}
+            chosen = "0" if action == "banir" else hours
+            if chosen not in mapping:
+                raise HTTPException(status_code=400, detail="Prazo de suspensão inválido")
+            apply_violation(
+                db,
+                person,
+                category=case.reason,
+                origin=ORIGIN_ADMIN,
+                evidence=evidence,
+                counts=True,
+                case_id=case.id,
+                actor_id=admin.id,
+                suspend_hours=mapping[chosen],
+            )
+            if row:
+                row.outcome = "banned" if chosen == "0" else "suspended"
+        else:
+            raise HTTPException(status_code=400, detail="Ação inválida")
+        case.updated_at = utcnow()
+        db.commit()
+        return RedirectResponse(
+            f"/admin/denuncias?caso={case.id}&ok=" + quote("Decisão registrada para este usuário"),
+            status_code=303,
+        )
+    except HTTPException as exc:
+        return _admin_http_redirect(exc, "/admin/denuncias")
+    finally:
+        db.close()
+
+
+@app.post("/admin/denuncias/{case_id}/envolvidos/{user_id}/nada")
+def admin_report_user_none(request: Request, case_id: int, user_id: int):
+    return _admin_case_user_action(request, case_id, user_id, "nada")
+
+
+@app.post("/admin/denuncias/{case_id}/envolvidos/{user_id}/advertir")
+def admin_report_user_warn(request: Request, case_id: int, user_id: int):
+    return _admin_case_user_action(request, case_id, user_id, "advertir")
+
+
+@app.post("/admin/denuncias/{case_id}/envolvidos/{user_id}/suspender")
+def admin_report_user_suspend(request: Request, case_id: int, user_id: int, hours: str = Form("")):
+    return _admin_case_user_action(request, case_id, user_id, "suspender", hours)
+
+
+@app.post("/admin/denuncias/{case_id}/envolvidos/{user_id}/banir")
+def admin_report_user_ban(request: Request, case_id: int, user_id: int):
+    return _admin_case_user_action(request, case_id, user_id, "banir")
+
+
+@app.post("/admin/contestacoes/{appeal_id}/manter")
+def admin_appeal_keep(request: Request, appeal_id: int):
+    db = db_session()
+    try:
+        admin = login_required(request, db)
+        require_site_admin(admin)
+        appeal = get_appeal(db, appeal_id)
+        if appeal.status != "pending":
+            raise HTTPException(status_code=400, detail="Esta contestação já foi decidida")
+        from app.accounts import utcnow as now_utc
+
+        appeal.status = APPEAL_KEPT
+        appeal.decided_at = now_utc()
+        appeal.decided_by_id = admin.id
+        db.commit()
+        return RedirectResponse(
+            "/admin/denuncias?aba=contestacoes&ok=" + quote("Penalidade mantida"),
+            status_code=303,
+        )
+    except HTTPException as exc:
+        return _admin_http_redirect(exc, "/admin/denuncias?aba=contestacoes")
+    finally:
+        db.close()
+
+
+@app.post("/admin/contestacoes/{appeal_id}/remover")
+def admin_appeal_remove(request: Request, appeal_id: int):
+    db = db_session()
+    try:
+        admin = login_required(request, db)
+        require_site_admin(admin)
+        appeal = get_appeal(db, appeal_id)
+        if appeal.status != "pending":
+            raise HTTPException(status_code=400, detail="Esta contestação já foi decidida")
+        reverse_event(db, appeal.event, admin)
+        from app.accounts import utcnow as now_utc
+
+        appeal.status = APPEAL_REMOVED
+        appeal.decided_at = now_utc()
+        appeal.decided_by_id = admin.id
+        db.commit()
+        return RedirectResponse(
+            "/admin/denuncias?aba=contestacoes&ok=" + quote("Penalidade removida"),
+            status_code=303,
+        )
+    except HTTPException as exc:
+        return _admin_http_redirect(exc, "/admin/denuncias?aba=contestacoes")
+    finally:
+        db.close()
+
+
+def _report_query(tipo: str, alvo: int, dest: str, extra: dict | None = None) -> str:
+    parts = [f"tipo={quote(tipo)}", f"id={alvo}", f"next={quote(dest)}"]
+    extra = extra or {}
+    for user_id in extra.get("user_ids") or []:
+        parts.append(f"envolvidos={user_id}")
+    for message_id in extra.get("message_ids") or []:
+        parts.append(f"mensagens={message_id}")
+    if extra.get("club_scope_id"):
+        parts.append(f"club_scope={extra['club_scope_id']}")
+    if extra.get("error"):
+        parts.append(f"error={quote(str(extra['error']))}")
+    return "/denunciar?" + "&".join(parts)
+
+
+@app.get("/denunciar", response_class=HTMLResponse)
+def report_form(request: Request):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        target_type = (request.query_params.get("tipo") or "").strip()
+        raw_id = (request.query_params.get("id") or "").strip()
+        target_id = int(raw_id) if raw_id.isdigit() else 0
+        extra_ids = parse_id_list(list(request.query_params.getlist("envolvidos")))
+        message_ids = parse_id_list(list(request.query_params.getlist("mensagens")))
+        club_scope = request.query_params.get("club_scope") or ""
+        club_scope_id = int(club_scope) if club_scope.isdigit() else 0
+        if target_type not in TARGET_LABELS or not target_id:
+            raise HTTPException(status_code=400, detail="Conteúdo inválido para denúncia")
+        next_url = _safe_next(request.query_params.get("next"), "/")
+        preview = preview_report(
+            db,
+            user,
+            target_type=target_type,
+            target_id=target_id,
+            extra_user_ids=extra_ids,
+            message_ids=message_ids,
+            club_scope_id=club_scope_id or None,
+        )
+        return templates.TemplateResponse(
+            request,
+            "report_form.html",
+            {
+                "user": user,
+                "target_type": preview["target_type"],
+                "target_id": preview["target_id"],
+                "target_label": preview["target_label"],
+                "people": preview["people"],
+                "locked_ids": preview["locked_ids"],
+                "messages": preview["messages"],
+                "message_ids": preview["message_ids"],
+                "club": preview["club"],
+                "club_scope_id": preview["club_scope_id"] or 0,
+                "reasons": [(key, REASON_LABELS[key]) for key in REASONS],
+                "next": next_url,
+                "note_min": REPORT_NOTE_MIN,
+                "note_max": REPORT_NOTE_MAX,
+                "max_files": MAX_REPORT_ATTACHMENTS,
+                "error": request.query_params.get("error"),
+            },
+        )
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        return RedirectResponse("/?error=" + quote(str(exc.detail)), status_code=303)
+    finally:
+        db.close()
+
+
+@app.post("/denunciar/envolvido")
+def report_add_involved(request: Request, username: str = Form(""), tipo: str = Form(""), alvo: int = Form(0), next: str = Form("/"), club_scope: int = Form(0), user_ids: list[str] = Form(default=[]), message_ids: list[str] = Form(default=[])):
+    db = db_session()
+    dest = _safe_next(next, "/")
+    extras = {
+        "user_ids": parse_id_list(user_ids),
+        "message_ids": parse_id_list(message_ids),
+        "club_scope_id": club_scope or None,
+    }
+    try:
+        user = login_required(request, db)
+        if club_scope:
+            club = locate_member_club(db, user, club_scope)
+            person = locate_club_member_for_report(db, user, club, locate_user_for_report(db, user, username).id)
+        else:
+            person = locate_user_for_report(db, user, username)
+        if person.id not in extras["user_ids"]:
+            extras["user_ids"].append(person.id)
+        return RedirectResponse(_report_query(tipo, alvo, dest, extras), status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        extras["error"] = exc.detail
+        return RedirectResponse(_report_query(tipo, alvo, dest, extras), status_code=303)
+    finally:
+        db.close()
+
+
+@app.post("/denunciar/mensagens")
+def report_start_club_messages(
+    request: Request,
+    club_id: int = Form(0),
+    message_ids: list[str] = Form(default=[]),
+    next_url: str = Form(""),
+):
+    db = db_session()
+    dest = _safe_next(next_url, f"/clubs/{club_id}?aba=chat")
+    try:
+        user = login_required(request, db)
+        ids = parse_id_list(message_ids)
+        if not ids:
+            raise HTTPException(status_code=400, detail="Selecione pelo menos uma mensagem")
+        if len(ids) > MAX_REPORT_MESSAGES:
+            raise HTTPException(status_code=400, detail=f"Selecione no máximo {MAX_REPORT_MESSAGES} mensagens")
+        from app.reports import collect_club_messages
+
+        rows = collect_club_messages(db, user, ids)
+        primary = next((item.id for item in rows if item.user_id != user.id), 0)
+        if not primary:
+            raise HTTPException(status_code=400, detail="Selecione ao menos uma mensagem de outra pessoa")
+        extras = {"message_ids": [item.id for item in rows], "club_scope_id": club_id}
+        return RedirectResponse(_report_query(TARGET_CLUB_MESSAGE, primary, dest, extras), status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        return RedirectResponse(dest + ("&" if "?" in dest else "?") + "error=" + quote(str(exc.detail)), status_code=303)
+    finally:
+        db.close()
+
+
+@app.post("/denunciar/mensagens-dm")
+def report_start_dm_messages(
+    request: Request,
+    username: str = Form(""),
+    message_ids: list[str] = Form(default=[]),
+    next_url: str = Form(""),
+):
+    db = db_session()
+    dest = _safe_next(next_url, f"/mensagens/{username}")
+    try:
+        user = login_required(request, db)
+        ids = parse_id_list(message_ids)
+        if not ids:
+            raise HTTPException(status_code=400, detail="Selecione pelo menos uma mensagem")
+        from app.reports import collect_direct_messages
+
+        rows = collect_direct_messages(db, user, ids)
+        primary = next((item.id for item in rows if item.sender_id != user.id), 0)
+        if not primary:
+            raise HTTPException(status_code=400, detail="Selecione ao menos uma mensagem de outra pessoa")
+        extras = {"message_ids": [item.id for item in rows]}
+        return RedirectResponse(_report_query(TARGET_DM, primary, dest, extras), status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        return RedirectResponse(dest + ("&" if "?" in dest else "?") + "error=" + quote(str(exc.detail)), status_code=303)
+    finally:
+        db.close()
+
+
+@app.post("/denunciar")
+async def submit_report(request: Request):
+    form = await request.form()
+    tipo = str(form.get("tipo") or "")
+    reason = str(form.get("reason") or "")
+    explanation = str(form.get("explanation") or "")
+    next = str(form.get("next") or "/")
+    raw_alvo = str(form.get("alvo") or "0")
+    alvo = int(raw_alvo) if raw_alvo.isdigit() else 0
+    raw_scope = str(form.get("club_scope") or "0")
+    club_scope = int(raw_scope) if raw_scope.isdigit() else 0
+    db = db_session()
+    dest = _safe_next(next, "/")
+    extras = {"user_ids": [], "message_ids": [], "club_scope_id": club_scope or None}
+    try:
+        extras["user_ids"] = parse_id_list(list(form.getlist("user_ids")))
+        extras["message_ids"] = parse_id_list(list(form.getlist("message_ids")))
+        user = login_required(request, db)
+        uploads = [
+            item
+            for item in form.getlist("evidence")
+            if item is not None and getattr(item, "filename", None)
+        ]
+        if len(uploads) > MAX_REPORT_ATTACHMENTS:
+            raise HTTPException(status_code=400, detail=f"Envie no máximo {MAX_REPORT_ATTACHMENTS} prints")
+        names = [await save_report_evidence_image(item) for item in uploads]
+        row = create_report(
+            db,
+            user,
+            target_type=tipo,
+            target_id=alvo,
+            reason=reason,
+            explanation=explanation,
+            extra_user_ids=extras["user_ids"],
+            message_ids=extras["message_ids"],
+            attachment_names=names,
+            club_scope_id=club_scope or None,
+        )
+        case = get_case(db, row.case_id)
+        usernames = []
+        for item in case.involved_users or []:
+            if item.user:
+                usernames.append(item.user.username)
+        if not usernames and case.reported_user:
+            usernames.append(case.reported_user.username)
+        qs = "&".join(f"user={quote(name)}" for name in usernames)
+        return RedirectResponse(f"/denunciar/ok?{qs}&next={quote(dest)}", status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        extras["error"] = exc.detail
+        return RedirectResponse(_report_query(tipo, alvo, dest, extras), status_code=303)
+    finally:
+        db.close()
+
+
+@app.get("/denunciar/ok", response_class=HTMLResponse)
+def report_thanks(request: Request):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        names = [item.strip() for item in request.query_params.getlist("user") if item.strip()]
+        people = []
+        for name in names:
+            person = find_active_user(db, name)
+            if person and person.id != user.id:
+                people.append(person)
+        return templates.TemplateResponse(
+            request,
+            "report_thanks.html",
+            {
+                "user": user,
+                "block_username": names[0] if names else "",
+                "block_people": people,
+                "next": _safe_next(request.query_params.get("next"), "/"),
+            },
+        )
+    except HTTPException:
+        return RedirectResponse("/login", status_code=303)
+    finally:
+        db.close()
+
+
+@app.get("/denuncias/anexos/{attachment_id}")
+def report_attachment(request: Request, attachment_id: int):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        item = get_report_attachment(db, attachment_id)
+        if not can_view_report_attachment(user, item):
+            raise HTTPException(status_code=404, detail="Anexo não encontrado")
+        path = stored_report_evidence_path(item.filename)
+        if path is None:
+            raise HTTPException(status_code=404, detail="Anexo não encontrado")
+        suffix = path.suffix.lower()
+        media = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif"}
+        return Response(path.read_bytes(), media_type=media.get(suffix, "application/octet-stream"))
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/u/{username}/bloquear")
+def block_person(request: Request, username: str, next: str = Form("")):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        person = find_active_user(db, username)
+        if not person:
+            raise HTTPException(status_code=404, detail="Perfil não encontrado")
+        block_user(db, user.id, person.id)
+        dest = _safe_next(next, f"/u/{person.username}")
+        sep = "&" if "?" in dest else "?"
+        return RedirectResponse(f"{dest}{sep}ok={quote('Usuário bloqueado')}", status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        return RedirectResponse(f"/u/{username}?error={quote(str(exc.detail))}", status_code=303)
+    finally:
+        db.close()
+
+
+@app.post("/conta/bloqueios/{username}/remover")
+def unblock_person(request: Request, username: str, next: str = Form("")):
+    db = db_session()
+    dest = _safe_next(next, "/conta")
+    try:
+        user = login_required(request, db)
+        person = find_active_user(db, username)
+        if not person:
+            raise HTTPException(status_code=404, detail="Perfil não encontrado")
+        unblock_user(db, user.id, person.id)
+        sep = "&" if "?" in dest else "?"
+        return RedirectResponse(f"{dest}{sep}ok=" + quote("Usuário desbloqueado"), status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        return RedirectResponse(f"{dest}?error={quote(str(exc.detail))}" if "?" not in dest else f"{dest}&error={quote(str(exc.detail))}", status_code=303)
+    finally:
+        db.close()
+
+
+@app.get("/contestacoes/{event_id}", response_class=HTMLResponse)
+def appeal_form(request: Request, event_id: int):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        from app.models import ModerationEvent
+
+        event = db.get(ModerationEvent, event_id)
+        if event is None or event.user_id != user.id:
+            raise HTTPException(status_code=404, detail="Penalidade não encontrada")
+        return templates.TemplateResponse(
+            request,
+            "appeal_form.html",
+            {
+                "user": user,
+                "event": event,
+                "reasons": [(key, APPEAL_REASON_LABELS[key]) for key in APPEAL_REASONS],
+                "explanation_min": EXPLANATION_MIN,
+                "explanation_max": EXPLANATION_MAX,
+                "error": request.query_params.get("error"),
+            },
+        )
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        return RedirectResponse("/?error=" + quote(str(exc.detail)), status_code=303)
+    finally:
+        db.close()
+
+
+@app.post("/contestacoes/{event_id}")
+async def submit_appeal(
+    request: Request,
+    event_id: int,
+    reason: str = Form(""),
+    explanation: str = Form(""),
+    evidence: UploadFile | None = File(None),
+):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        from app.models import ModerationEvent
+
+        event = db.get(ModerationEvent, event_id)
+        if event is None or event.user_id != user.id:
+            raise HTTPException(status_code=404, detail="Penalidade não encontrada")
+        filename = await save_appeal_image(evidence)
+        create_appeal(db, user, event, reason=reason, explanation=explanation, filename=filename)
+        dest = "/conta-restrita" if is_restricted(user) else "/conta"
+        return RedirectResponse(dest + "?ok=" + quote("Solicitação de revisão enviada"), status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        return RedirectResponse(
+            f"/contestacoes/{event_id}?error={quote(str(exc.detail))}",
+            status_code=303,
+        )
+    finally:
+        db.close()
+
+
+@app.get("/contestacoes/{appeal_id}/anexo/{filename}")
+def appeal_attachment(request: Request, appeal_id: int, filename: str):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        appeal = get_appeal(db, appeal_id)
+        if user.id != appeal.user_id and not user.is_site_admin:
+            raise HTTPException(status_code=403, detail="Acesso negado")
+        if not any(item.filename == filename for item in appeal.attachments):
+            raise HTTPException(status_code=404, detail="Anexo não encontrado")
+        path = stored_appeal_path(filename)
+        if path is None:
+            raise HTTPException(status_code=404, detail="Anexo não encontrado")
+        return Response(path.read_bytes(), media_type="image/jpeg")
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        raise
+    finally:
+        db.close()
+
+
 @app.get("/conta", response_class=HTMLResponse)
 def account(request: Request):
     db = db_session()
@@ -2143,6 +3119,7 @@ def account(request: Request):
                 "user": user,
                 "clubs": _user_clubs(db, user.id),
                 "tag_choices": selectable_tags(db, user.id),
+                "blocked_users": list_blocked_users(db, user.id),
                 "error": request.query_params.get("error"),
                 "ok": request.query_params.get("ok"),
                 "suggestions": [],
@@ -2181,6 +3158,7 @@ def update_profile(
                     "user": user,
                     "clubs": clubs,
                     "tag_choices": selectable_tags(db, user.id),
+                    "blocked_users": list_blocked_users(db, user.id),
                     "error": message,
                     "ok": None,
                     "suggestions": suggestions or [],
@@ -2207,6 +3185,14 @@ def update_profile(
                 )
         if email_taken(db, email, exclude_user_id=user.id):
             return account_error("Este e-mail já está em uso")
+        try:
+            enforce_text(db, user, display, surface=SURFACE_PUBLIC_NAME, origin="profile")
+            enforce_text(db, user, key, surface=SURFACE_PUBLIC_NAME, origin="profile")
+            enforce_text(db, user, (bio or "")[:BIO_MAX], surface=SURFACE_PUBLIC_TEXT, origin="profile")
+        except HTTPException as exc:
+            if exc.status_code == 400:
+                return account_error(str(exc.detail))
+            raise
         user.name = display
         if nick_changed:
             user.username = key
@@ -2270,13 +3256,20 @@ async def update_avatar_photo(request: Request, photo: UploadFile | None = File(
         filename = await save_avatar_photo(photo)
         if not filename:
             return RedirectResponse("/conta?error=Envie+uma+imagem+JPG,+PNG,+WEBP+ou+GIF", status_code=303)
+        path = stored_upload_path(filename)
+        if path:
+            enforce_image(db, user, path.read_bytes(), mime="image/*", origin="avatar")
         if user.avatar_type == "upload":
             delete_upload(user.avatar_value)
         set_upload_avatar(user, filename)
         db.commit()
         return RedirectResponse("/conta?ok=Foto+de+perfil+atualizada", status_code=303)
-    except HTTPException:
-        return RedirectResponse("/login", status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 400:
+            return RedirectResponse("/conta?error=" + quote(str(exc.detail)), status_code=303)
+        raise
     finally:
         db.close()
 
@@ -2472,6 +3465,12 @@ async def club_detail(
         members = list(club.members)
         messages = club_messages(db, club.id) if tab == "chat" else []
         pinned_message = load_pinned_message(db, club) if tab == "chat" else None
+        report_select_ids = []
+        if tab == "chat":
+            try:
+                report_select_ids = parse_id_list(list(request.query_params.getlist("selecionar")))
+            except HTTPException:
+                report_select_ids = []
         stamp_users = [item.user for item in members] + [item.user for item in messages]
         if pinned_message and pinned_message.user:
             stamp_users.append(pinned_message.user)
@@ -2498,6 +3497,9 @@ async def club_detail(
                 "tab": tab,
                 "watch_list": "finalizados" if lista == "finalizados" else "assistindo",
                 "messages": messages,
+                "report_select_ids": report_select_ids,
+                "max_report_messages": MAX_REPORT_MESSAGES,
+                "blocked_user_ids": ids_blocked_by(db, user.id) if tab == "chat" else set(),
                 "pinned_message": pinned_message,
                 "watching": watching,
                 "watched": watched,
@@ -2632,8 +3634,18 @@ async def update_club_settings(
                 ),
                 status_code=400,
             )
+        enforce_text(db, user, name.strip(), surface=SURFACE_PUBLIC_NAME, origin="club")
+        enforce_text(db, user, description.strip(), surface=SURFACE_PUBLIC_TEXT, origin="club")
+        enforce_text(db, user, rules.strip(), surface=SURFACE_PUBLIC_TEXT, origin="club")
         image_name = await save_cover_image(cover_file)
         icon_name = await save_club_icon(icon_file)
+        for stored_name, locator, origin in (
+            (image_name, stored_cover_path, "club_cover"),
+            (icon_name, stored_icon_path, "club_icon"),
+        ):
+            path = locator(stored_name) if stored_name else None
+            if path:
+                enforce_image(db, user, path.read_bytes(), mime="image/*", origin=origin)
         club.name = name.strip()
         club.is_closed = bool(is_closed)
         club.description = description.strip()
@@ -3577,6 +4589,8 @@ def api_command(request: Request):
                     {"label": "Meus Clubes", "href": "/clubes"},
                     {"label": "Configurações", "href": "/conta"},
                     {"label": "Caixinha de sugestão", "href": "/sugestoes"},
+                    {"label": "Segurança e denúncias", "href": "/seguranca"},
+                    {"label": "Regras da comunidade", "href": "/regras"},
                     {"label": "Criar um clube", "href": "/clubs/novo"},
                     {"label": "Meu perfil", "href": f"/u/{user.username}"},
                     {"label": "Amigos", "href": "/amigos"},
@@ -3741,12 +4755,20 @@ def _conversations_response(request: Request, db, user, person=None):
     people = [row.person for row in conversations]
     messages = []
     are_friends = False
+    blocked_peer = False
     if person is not None:
         mark_dm_read(db, user.id, person.id)
         are_friends = relation_status(db, user.id, person.id) == "friends"
+        blocked_peer = are_blocked(db, user.id, person.id)
         messages = dm_thread(db, user.id, person.id)
         people = people + [person] + [item.sender for item in messages]
     stamp_display_tags(db, people)
+    report_select_ids = []
+    if person is not None:
+        try:
+            report_select_ids = parse_id_list(list(request.query_params.getlist("selecionar")))
+        except HTTPException:
+            report_select_ids = []
     return templates.TemplateResponse(
         request,
         "direct_chat.html",
@@ -3755,7 +4777,10 @@ def _conversations_response(request: Request, db, user, person=None):
             "person": person,
             "messages": messages,
             "are_friends": are_friends,
+            "blocked_peer": blocked_peer,
             "conversations": conversations,
+            "report_select_ids": report_select_ids,
+            "max_report_messages": MAX_REPORT_MESSAGES,
             "error": request.query_params.get("error"),
         },
     )
@@ -3879,6 +4904,7 @@ def public_profile(request: Request, username: str):
         favorites = list_user_favorites(db, person.id)
         favorite_preview, favorite_more = profile_favorite_preview(favorites)
         relation = relation_status(db, viewer.id, person.id)
+        viewer_blocks = ids_blocked_by(db, viewer.id)
         stamp_display_tags(db, [person])
         context_club, context_role, context_role_label = _club_profile_context(
             db, viewer, person, request.query_params.get("clube")
@@ -3902,6 +4928,7 @@ def public_profile(request: Request, username: str):
                 "status": presence_of(person),
                 "status_label": PRESENCE_LABELS[presence_of(person)],
                 "relation": relation,
+                "blocked_by_me": person.id in viewer_blocks,
                 "has_history": has_dm_history(db, viewer.id, person.id),
                 "context_club": context_club,
                 "context_club_tag": tag_payload(context_club) if context_club else None,

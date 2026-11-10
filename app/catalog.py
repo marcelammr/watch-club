@@ -923,9 +923,16 @@ def post_club_message(
     body: str,
     show_id: int | None = None,
 ) -> ClubMessage:
+    from app.blocks import assert_no_blocked_mention
+    from app.moderation import SURFACE_CHAT, enforce_text
+
     text = (body or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Escreva uma mensagem")
+    assert_no_blocked_mention(db, user_id, text)
+    author = db.get(User, user_id)
+    if author is not None:
+        enforce_text(db, author, text, surface=SURFACE_CHAT, origin="club_chat")
     message = ClubMessage(club_id=club_id, user_id=user_id, body=text[:2000], show_id=show_id)
     db.add(message)
     db.commit()

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Conta restrita · Watch Club{% endblock %}
+{% block page_heading %}Conta restrita{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>{% if kind == 'banned' %}Conta banida{% else %}Conta suspensa{% endif %}</h1>
+  {% if kind == 'banned' %}
+    <p>Sua conta foi banida permanentemente por violar as regras de segurança do Watch Club.</p>
+  {% else %}
+    <p>Sua conta está suspensa até {{ user.suspended_until|when }}.</p>
+  {% endif %}
+  <p class="muted">Você ainda pode ler as <a href="/regras">regras da comunidade</a> e solicitar revisão de uma penalidade, se ainda não o fez.</p>
+  {% if events %}
+    <ul class="suggestion-list">
+      {% for item in events %}
+      <li>
+        <div class="suggestion-item">
+          <div class="suggestion-summary">
+            <span class="suggestion-summary-copy">
+              <span class="suggestion-title">{{ item.action }}{% if item.warning_number %} · aviso {{ item.warning_number }} de 3{% endif %}</span>
+              <span class="muted">{{ item.created_at|when }}</span>
+            </span>
+            <a class="btn btn-ghost" href="/contestacoes/{{ item.id }}">Acredita que houve um erro? Solicitar revisão</a>
+          </div>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  <form action="/logout" method="post"><button class="btn btn-secondary" type="submit">Sair</button></form>
+</section>
+{% endblock %}

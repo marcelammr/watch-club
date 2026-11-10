@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Denunciar um clube · Watch Club{% endblock %}
+{% block page_heading %}Denunciar um clube{% endblock %}
+{% block content %}
+<section class="safety-hub">
+  <p class="crumb"><a href="/seguranca">Segurança e denúncias</a> / Clube</p>
+  <h1>Denunciar um clube</h1>
+  <p class="muted">Escolha um clube de que você participa. Depois você escolhe o motivo no formulário de denúncia.</p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% if clubs %}
+    <form class="card" action="/seguranca/denunciar/clube" method="post">
+      <label>Clube
+        <select name="club_id" required>
+          {% for club in clubs %}
+            <option value="{{ club.id }}">{{ club.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button class="btn btn-primary" type="submit">Continuar</button>
+      <a class="btn btn-ghost" href="/seguranca">Cancelar</a>
+    </form>
+  {% else %}
+    <p class="muted">Você ainda não participa de nenhum clube.</p>
+    <p><a class="btn btn-ghost" href="/seguranca">Voltar</a></p>
+  {% endif %}
+</section>
+{% endblock %}

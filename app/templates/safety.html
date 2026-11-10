@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Segurança e denúncias · Watch Club{% endblock %}
+{% block page_heading %}Segurança e denúncias{% endblock %}
+{% block content %}
+<section class="safety-hub">
+  <h1>Segurança e denúncias</h1>
+  <p class="muted">Encontre denúncias, bloqueios e avisos num só lugar. Se você está olhando o conteúdo problemático, também pode denunciar direto na mensagem, no perfil ou no clube.</p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+
+  <section class="card">
+    <h2>Fazer uma denúncia</h2>
+    <p class="muted">A denúncia precisa estar ligada a um usuário ou clube real. Mensagens específicas continuam sendo denunciadas no próprio chat ou na conversa.</p>
+    <p class="safety-hub-actions">
+      <a class="btn btn-primary" href="/seguranca/denunciar/usuario">Denunciar usuário(s)</a>
+      <a class="btn btn-secondary" href="/seguranca/denunciar/clube">Denunciar um clube</a>
+    </p>
+    <p class="muted">Para denunciar uma mensagem, abra o bate-papo do clube ou a conversa e use Denunciar nessa mensagem.</p>
+  </section>
+
+  <section class="card">
+    <h2>Minhas denúncias</h2>
+    {% if reports %}
+      <ul class="suggestion-list">
+        {% for item in reports %}
+          <li class="suggestion-item">
+            <div class="suggestion-item-head">
+              <h3>{{ reason_labels.get(item.reason, item.reason) }}</h3>
+              <span class="chip suggestion-chip">{{ status_labels.get(item.case.status if item.case else '', item.case.status if item.case else '') }}</span>
+            </div>
+            <p class="muted">{{ target_labels.get(item.case.target_type if item.case else '', 'Conteúdo') }} · {{ item.created_at|when }}</p>
+            {% set counts = report_counts.get(item.id, {}) %}
+            <p class="muted">{{ counts.get('users', 0) }} usuário{% if counts.get('users', 0) != 1 %}s{% endif %} envolvido{% if counts.get('users', 0) != 1 %}s{% endif %} · {{ counts.get('messages', 0) }} mensagem{% if counts.get('messages', 0) != 1 %}s{% endif %} relacionada{% if counts.get('messages', 0) != 1 %}s{% endif %} · {{ counts.get('attachments', 0) }} evidência{% if counts.get('attachments', 0) != 1 %}s{% endif %} adicional{% if counts.get('attachments', 0) != 1 %}is{% endif %}</p>
+            {% if item.explanation %}<p class="suggestion-body">{{ item.explanation }}</p>{% endif %}
+            {% for file in item.attachments %}
+              <p><a href="/denuncias/anexos/{{ file.id }}">Ver evidência adicional</a></p>
+            {% endfor %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">Você ainda não enviou denúncias.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Usuários bloqueados</h2>
+    <p class="muted">Desbloquear não restaura a amizade automaticamente. Também dá para gerenciar isso em Configurações.</p>
+    {% if blocked_users %}
+      <ul class="suggestion-list">
+        {% for person in blocked_users %}
+          <li class="suggestion-item">
+            <div class="suggestion-summary">
+              <span class="suggestion-summary-copy">
+                <a href="/u/{{ person.username }}">{{ person.name }}</a>
+                <span class="muted">@{{ person.username }}</span>
+              </span>
+              <form action="/conta/bloqueios/{{ person.username }}/remover" method="post">
+                <input type="hidden" name="next" value="/seguranca">
+                <button class="btn btn-ghost" type="submit">Desbloquear</button>
+              </form>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">Ninguém bloqueado.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Avisos e contestações</h2>
+    {% if events %}
+      <ul class="suggestion-list">
+        {% for item in events %}
+          <li class="suggestion-item">
+            <div class="suggestion-item-head">
+              <h3>{{ action_labels.get(item.action, item.action) }}{% if item.warning_number %} {{ item.warning_number }} de 3{% endif %}</h3>
+              <span class="muted">{{ item.created_at|when }}</span>
+            </div>
+            {% if item.reversed_at %}
+              <p class="muted">Esta penalidade foi revertida.</p>
+            {% else %}
+              <p><a class="btn btn-ghost" href="/contestacoes/{{ item.id }}">Acredita que houve um erro? Solicitar revisão</a></p>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">Você não tem avisos ou penalidades no momento.</p>
+    {% endif %}
+    <p class="muted">Consulte também as <a href="/regras">regras da comunidade</a>.</p>
+  </section>
+</section>
+{% endblock %}

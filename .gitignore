@@ -11,6 +11,7 @@ __pycache__/
 *.db
 tests/test.sqlite
 .env
+var/
 .pytest_cache/
 .coverage
 htmlcov/

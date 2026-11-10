@@ -122,6 +122,10 @@ def notify_registration_review(db: Session, actor_user_id: int, review_id: int) 
 def notify_friend_request(db: Session, actor_user_id: int, recipient_id: int, friendship_id: int) -> Notification | None:
     if actor_user_id == recipient_id:
         return None
+    from app.blocks import are_blocked
+
+    if are_blocked(db, actor_user_id, recipient_id):
+        return None
     already = db.scalar(
         select(Notification.id).where(
             Notification.user_id == recipient_id,

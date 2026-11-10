@@ -28,10 +28,13 @@ class User(Base):
     last_seen: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     presence: Mapped[str] = mapped_column(String(12), default="offline", nullable=False)
     presence_pref: Mapped[str] = mapped_column(String(12), default="auto", nullable=False)
-    enter_sends: Mapped[bool] = mapped_column(default=False, nullable=False)
+    enter_sends: Mapped[bool] = mapped_column(default=True, nullable=False)
     displayed_club_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     username_changed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     is_site_admin: Mapped[bool] = mapped_column(default=False, nullable=False)
+    suspended_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    banned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    had_progression_suspend: Mapped[bool] = mapped_column(default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     memberships: Mapped[list["ClubMember"]] = relationship(back_populates="user")
@@ -379,6 +382,7 @@ class ClubMessage(Base):
     show_id: Mapped[int | None] = mapped_column(ForeignKey("shows.id"), nullable=True, index=True)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     club: Mapped[Club] = relationship(back_populates="messages")
     user: Mapped[User] = relationship(back_populates="messages")
@@ -500,3 +504,153 @@ class ClubContentTag(Base):
 
     club: Mapped[Club] = relationship(back_populates="content_tags")
     tag: Mapped[ContentTag] = relationship(back_populates="clubs")
+
+
+class UserBlock(Base):
+    __tablename__ = "user_blocks"
+    __table_args__ = (UniqueConstraint("blocker_id", "blocked_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    blocker_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    blocked_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    blocker: Mapped[User] = relationship(foreign_keys=[blocker_id])
+    blocked: Mapped[User] = relationship(foreign_keys=[blocked_id])
+
+
+class ReportCase(Base):
+    __tablename__ = "report_cases"
+    __table_args__ = (Index("ix_report_cases_status_updated", "status", "updated_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    target_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_key: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    target_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reported_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    reason: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False, index=True)
+    snapshot_json: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    report_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    resolved_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    resolution: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    reported_user: Mapped[User | None] = relationship(foreign_keys=[reported_user_id])
+    reports: Mapped[list["Report"]] = relationship(back_populates="case")
+    involved_users: Mapped[list["ReportCaseUser"]] = relationship(back_populates="case")
+    messages: Mapped[list["ReportCaseMessage"]] = relationship(back_populates="case")
+
+
+class Report(Base):
+    __tablename__ = "reports"
+    __table_args__ = (UniqueConstraint("case_id", "reporter_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("report_cases.id"), nullable=False, index=True)
+    reporter_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    reason: Mapped[str] = mapped_column(String(40), nullable=False)
+    explanation: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    case: Mapped[ReportCase] = relationship(back_populates="reports")
+    reporter: Mapped[User] = relationship(foreign_keys=[reporter_id])
+    attachments: Mapped[list["ReportAttachment"]] = relationship(back_populates="report")
+
+
+class ReportCaseUser(Base):
+    __tablename__ = "report_case_users"
+    __table_args__ = (UniqueConstraint("case_id", "user_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("report_cases.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    source: Mapped[str] = mapped_column(String(16), default="added", nullable=False)
+    locked: Mapped[bool] = mapped_column(default=False, nullable=False)
+    outcome: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
+    snapshot_json: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    case: Mapped[ReportCase] = relationship(back_populates="involved_users")
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
+
+
+class ReportCaseMessage(Base):
+    __tablename__ = "report_case_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("report_cases.id"), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    source_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    author_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    snapshot_json: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    case: Mapped[ReportCase] = relationship(back_populates="messages")
+
+
+class ReportAttachment(Base):
+    __tablename__ = "report_attachments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    report_id: Mapped[int] = mapped_column(ForeignKey("reports.id"), nullable=False, index=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("report_cases.id"), nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(String(80), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    report: Mapped[Report] = relationship(back_populates="attachments")
+
+
+class ModerationEvent(Base):
+    __tablename__ = "moderation_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(40), nullable=False)
+    origin: Mapped[str] = mapped_column(String(32), nullable=False)
+    action: Mapped[str] = mapped_column(String(24), nullable=False)
+    evidence: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    warning_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    counts: Mapped[bool] = mapped_column(default=False, nullable=False)
+    automatic: Mapped[bool] = mapped_column(default=False, nullable=False)
+    immediate: Mapped[bool] = mapped_column(default=False, nullable=False)
+    sets_progression_suspend: Mapped[bool] = mapped_column(default=False, nullable=False)
+    case_id: Mapped[int | None] = mapped_column(ForeignKey("report_cases.id"), nullable=True)
+    actor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    reversed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reversed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
+    appeals: Mapped[list["Appeal"]] = relationship(back_populates="event")
+
+
+class Appeal(Base):
+    __tablename__ = "appeals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_id: Mapped[int] = mapped_column(ForeignKey("moderation_events.id"), unique=True, nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    reason: Mapped[str] = mapped_column(String(40), nullable=False)
+    explanation: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    decided_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    event: Mapped[ModerationEvent] = relationship(back_populates="appeals")
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
+    attachments: Mapped[list["AppealAttachment"]] = relationship(back_populates="appeal")
+
+
+class AppealAttachment(Base):
+    __tablename__ = "appeal_attachments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    appeal_id: Mapped[int] = mapped_column(ForeignKey("appeals.id"), nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(String(80), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    appeal: Mapped[Appeal] = relationship(back_populates="attachments")
