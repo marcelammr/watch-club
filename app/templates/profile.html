@@ -5,118 +5,256 @@
 {% block page_heading %}{{ person.name }}{% endblock %}
 {% block body_class %}profile-page{% endblock %}
 {% block content %}
+{% set dest = '/u/' ~ person.username %}
 <p class="crumb"><a href="/">Início</a> / Perfil</p>
-<section class="card profile-head">
-  {{ user_avatar(person, 'lg') }}
-  <div>
-    <h1 class="profile-name">{{ person.name }} {{ club_tag_chip(person.display_tag) }}</h1>
-    <p class="profile-nick">@{{ person.username }}</p>
-    {% if context_club %}
-      <p class="profile-club-context">
-        <span class="profile-club-context-name">{{ context_club.name }} {{ club_tag_chip(context_club_tag) }}</span>
-        <span class="profile-club-context-role">{{ context_role_label }}</span>
-      </p>
+<div class="profile-lab wc-theme-{{ visitor_theme }}">
+  <nav class="wc-tabs" aria-label="Seções do perfil">
+    <a class="wc-tab{% if tab == 'perfil' %} is-on{% endif %}" href="{{ dest }}?aba=perfil"{% if tab == 'perfil' %} aria-current="page"{% endif %}>Perfil</a>
+    <a class="wc-tab{% if tab == 'favoritos' %} is-on{% endif %}" href="{{ dest }}?aba=favoritos"{% if tab == 'favoritos' %} aria-current="page"{% endif %}>Favoritos</a>
+    <a class="wc-tab{% if tab == 'clubes' %} is-on{% endif %}" href="{{ dest }}?aba=clubes"{% if tab == 'clubes' %} aria-current="page"{% endif %}>Clubes</a>
+    {% if is_own_profile %}
+      <a class="wc-tab{% if tab == 'aparencia' %} is-on{% endif %}" href="{{ dest }}?aba=aparencia"{% if tab == 'aparencia' %} aria-current="page"{% endif %}>Aparência</a>
     {% endif %}
-    <p class="status {{ status }}">{{ status_label }}</p>
-    <p class="bio-label">Bio</p>
-    {% if person.bio %}
-      <p class="bio-box">{{ person.bio }}</p>
-    {% else %}
-      <p class="bio-box muted">Sem bio ainda.</p>
-    {% endif %}
-    {% if person.id == user.id %}
-      <a class="profile-edit-btn" href="/conta">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M12 20h9"/>
-          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
-        </svg>
-        Editar perfil
-      </a>
-    {% else %}
+  </nav>
+
+  {% if tab == 'perfil' %}
+  <article class="wc-window profile-head wc-theme-{{ profile_theme }}" data-theme="{{ profile_theme }}">
+    <header class="wc-titlebar">
+      <span class="wc-titlebar-mark" aria-hidden="true">♡</span>
+      <span class="wc-titlebar-label">Perfil</span>
+    </header>
+    <div class="player-card-body">
+      <div class="player-avatar-frame" aria-hidden="false">
+        {{ user_avatar(person, 'lg') }}
+      </div>
+      <div class="player-card-copy">
+        <h1 class="profile-name">{{ person.name }} {{ club_tag_chip(person.display_tag) }}</h1>
+        <p class="profile-nick">@{{ person.username }}</p>
+        {% if context_club %}
+          <p class="profile-club-context">
+            <span class="profile-club-context-name">{{ context_club.name }} {{ club_tag_chip(context_club_tag) }}</span>
+            <span class="profile-club-context-role">{{ context_role_label }}</span>
+          </p>
+        {% endif %}
+        <p class="status {{ status }}">{{ status_label }}</p>
+        <p class="player-level"><span class="player-level-kicker">LV.</span> {{ '%02d'|format(player.level) }}</p>
+        <p class="player-exp-label">EXP</p>
+        <div class="player-exp" role="meter" aria-label="Progresso até o próximo nível" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ player.percent }}">
+          <span class="player-exp-fill" style="width: {{ player.percent }}%"></span>
+        </div>
+        <p class="player-energy-label">Energia</p>
+        <p class="player-energy" aria-label="Energia {{ energy }} de {{ energy_max }}">
+          {% for i in range(energy_max) %}
+            <span class="player-heart{% if i < energy %} is-on{% endif %}" aria-hidden="true">♥</span>
+          {% endfor %}
+        </p>
+        {% if person.profile_status %}
+          <p class="player-status">✦ {{ person.profile_status }}</p>
+        {% elif is_own_profile %}
+          <p class="player-status muted">✦ Sem status ainda</p>
+        {% endif %}
+        {% if is_own_profile %}
+          <form class="player-status-form" action="/u/{{ person.username }}/status" method="post">
+            <input type="hidden" name="next" value="{{ dest }}?aba=perfil">
+            <label>Status
+              <input name="status" maxlength="{{ status_max }}" value="{{ person.profile_status }}" placeholder="Uma frase curta do personagem">
+            </label>
+            <button class="btn btn-secondary" type="submit">Salvar status</button>
+          </form>
+        {% endif %}
+        <p class="bio-label">Bio</p>
+        {% if person.bio %}
+          <p class="bio-box">{{ person.bio }}</p>
+        {% else %}
+          <p class="bio-box muted">Sem bio ainda.</p>
+        {% endif %}
+        <div class="player-stats" aria-label="Player stats">
+          <p class="player-stats-kicker">Player Stats</p>
+          <dl class="player-stats-grid">
+            <div><dt>Clubes</dt><dd>{{ '%02d'|format(stats.clubs) }}</dd></div>
+            <div><dt>Amigos</dt><dd>{{ '%02d'|format(stats.friends) }}</dd></div>
+            <div><dt>Favoritos</dt><dd>{{ '%02d'|format(stats.favorites) }}</dd></div>
+          </dl>
+          <p class="player-member">Membro desde {{ stats.member_since }}</p>
+        </div>
+        {% if person.id == user.id %}
+          <a class="profile-edit-btn" href="/conta">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 20h9"/>
+              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+            </svg>
+            Editar perfil
+          </a>
+        {% else %}
+          {% if error %}<p class="error">{{ error }}</p>{% endif %}
+          {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+          <div class="friend-actions">
+            {% if blocked_by_me %}
+              <p class="muted">Você bloqueou este usuário.</p>
+            {% elif relation == 'none' %}
+              <form action="/amigos/{{ person.username }}/convidar" method="post">
+                <input type="hidden" name="next" value="/u/{{ person.username }}">
+                <button class="btn btn-primary" type="submit">Adicionar amigo</button>
+              </form>
+            {% elif relation == 'outgoing' %}
+              <p class="muted">Pedido enviado</p>
+              <form action="/amigos/{{ person.username }}/recusar" method="post">
+                <input type="hidden" name="next" value="/u/{{ person.username }}">
+                <button class="btn btn-ghost" type="submit">Cancelar pedido</button>
+              </form>
+            {% elif relation == 'incoming' %}
+              <form action="/amigos/{{ person.username }}/aceitar" method="post">
+                <input type="hidden" name="next" value="/u/{{ person.username }}">
+                <button class="btn btn-primary" type="submit">Aceitar amizade</button>
+              </form>
+              <form action="/amigos/{{ person.username }}/recusar" method="post">
+                <input type="hidden" name="next" value="/u/{{ person.username }}">
+                <button class="btn btn-ghost" type="submit">Recusar</button>
+              </form>
+            {% elif relation == 'friends' %}
+              <p class="muted">Vocês são amigos</p>
+              <p><a class="btn btn-primary" href="/mensagens/{{ person.username }}">Mensagem</a></p>
+              <form action="/amigos/{{ person.username }}/desfazer" method="post">
+                <input type="hidden" name="next" value="/u/{{ person.username }}">
+                <button class="btn btn-danger" type="submit">Desfazer amizade</button>
+              </form>
+            {% endif %}
+            {% if relation != 'friends' and has_history %}
+              <p><a class="btn btn-ghost" href="/mensagens/{{ person.username }}">Ver conversa</a></p>
+            {% endif %}
+            <div class="safety-actions">
+              <a class="btn btn-ghost" href="/denunciar?tipo=user&amp;id={{ person.id }}&amp;next=/u/{{ person.username }}">Denunciar</a>
+              {% if blocked_by_me %}
+                <form action="/conta/bloqueios/{{ person.username }}/remover" method="post">
+                  <button class="btn btn-ghost" type="submit">Desbloquear</button>
+                </form>
+              {% else %}
+                <form action="/u/{{ person.username }}/bloquear" method="post">
+                  <input type="hidden" name="next" value="/u/{{ person.username }}">
+                  <button class="btn btn-ghost" type="submit">Bloquear usuário</button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </article>
+  {% endif %}
+
+  {% if tab in ['perfil', 'favoritos'] %}
+  <section class="wc-window profile-shelf" aria-labelledby="profile-favorites-title">
+    <header class="wc-titlebar">
+      <span class="wc-titlebar-mark" aria-hidden="true">♡</span>
+      <button type="button" class="wc-titlebar-label profile-shelf-title js-open-favorites" id="profile-favorites-title" aria-haspopup="dialog" aria-controls="favorites-dialog">Programas favoritos</button>
+      {% if favorites|length %}<span class="muted">{{ favorites|length }}</span>{% endif %}
+      <span class="wc-titlebar-controls" aria-hidden="true"><i></i><i></i><i></i></span>
+    </header>
+    <div class="wc-window-body">
+      {% if favorite_preview %}
+        <ul class="profile-posters">
+          {% for show in favorite_preview %}
+            <li>
+              <a class="profile-poster" href="/shows/{{ show.id }}" title="{{ show.name }}" aria-label="{{ show.name }}">
+                {% if show.image_url %}
+                  <img src="{{ show.image_url }}" alt="">
+                {% else %}
+                  <span class="profile-poster-fallback" aria-hidden="true">🎬</span>
+                {% endif %}
+              </a>
+            </li>
+          {% endfor %}
+          {% if favorite_more %}
+            <li>
+              <button type="button" class="profile-more js-open-favorites" aria-haspopup="dialog" aria-controls="favorites-dialog" title="Ver todos os favoritos" aria-label="Ver mais {{ favorite_more }} favoritos">+{{ favorite_more }}</button>
+            </li>
+          {% endif %}
+        </ul>
+      {% else %}
+        <p class="muted">{% if is_own_profile %}Favorite programas para montar esta fileira.{% else %}Nenhum programa favorito ainda.{% endif %}</p>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if tab in ['perfil', 'clubes'] %}
+  <section class="wc-window profile-shelf" aria-labelledby="profile-clubs-title">
+    <header class="wc-titlebar">
+      <span class="wc-titlebar-mark" aria-hidden="true">★</span>
+      <button type="button" class="wc-titlebar-label profile-shelf-title js-open-clubs" id="profile-clubs-title" aria-haspopup="dialog" aria-controls="profile-clubs-dialog">Meus clubes</button>
+      {% if clubs|length %}<span class="muted">{{ clubs|length }}</span>{% endif %}
+      <span class="wc-titlebar-controls" aria-hidden="true"><i></i><i></i><i></i></span>
+    </header>
+    <div class="wc-window-body">
+      {% if club_preview %}
+        <ul class="profile-clubs">
+          {% for club in club_preview %}
+            <li class="profile-club-slot">
+              {% if club.is_closed and club.id not in mine %}
+                <span class="club-mark profile-club-mark" style="--icon-fallback: {{ club.cover_color or '#3A2348' }}" title="{{ club.name }} (fechado)" aria-label="{{ club.name }} (fechado)">
+                  {% if club.icon_image %}
+                    <img src="{{ club_icon_url(club.icon_image) }}" alt="">
+                  {% else %}
+                    <span class="club-icon-fallback">{{ club_icon_initials(club.name) }}</span>
+                  {% endif %}
+                </span>
+              {% else %}
+                <a class="club-mark profile-club-mark" href="/clubs/{{ club.id }}" title="{{ club.name }}" aria-label="{{ club.name }}" style="--icon-fallback: {{ club.cover_color or '#3A2348' }}">
+                  {% if club.icon_image %}
+                    <img src="{{ club_icon_url(club.icon_image) }}" alt="">
+                  {% else %}
+                    <span class="club-icon-fallback">{{ club_icon_initials(club.name) }}</span>
+                  {% endif %}
+                </a>
+              {% endif %}
+              <span class="profile-club-label">{{ club.name }}</span>
+            </li>
+          {% endfor %}
+          {% if club_more %}
+            <li>
+              <button type="button" class="profile-more is-round js-open-clubs" aria-haspopup="dialog" aria-controls="profile-clubs-dialog" title="Ver todos os clubes" aria-label="Ver mais {{ club_more }} clubes">+{{ club_more }}</button>
+            </li>
+          {% endif %}
+        </ul>
+      {% else %}
+        <p class="muted">Nenhum clube para mostrar.</p>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if tab == 'aparencia' and is_own_profile %}
+  <section class="wc-window" aria-labelledby="profile-theme-title">
+    <header class="wc-titlebar">
+      <span class="wc-titlebar-mark" aria-hidden="true">✦</span>
+      <h2 class="wc-titlebar-label" id="profile-theme-title">Aparência</h2>
+      <span class="wc-titlebar-controls" aria-hidden="true"><i></i><i></i><i></i></span>
+    </header>
+    <div class="wc-window-body">
+      <p class="muted">A linguagem visual continua a mesma. Você escolhe a paleta.</p>
       {% if error %}<p class="error">{{ error }}</p>{% endif %}
       {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
-      <div class="friend-actions">
-        {% if blocked_by_me %}
-          <p class="muted">Você bloqueou este usuário.</p>
-        {% elif relation == 'none' %}
-          <form action="/amigos/{{ person.username }}/convidar" method="post">
-            <input type="hidden" name="next" value="/u/{{ person.username }}">
-            <button class="btn btn-primary" type="submit">Adicionar amigo</button>
-          </form>
-        {% elif relation == 'outgoing' %}
-          <p class="muted">Pedido enviado</p>
-          <form action="/amigos/{{ person.username }}/recusar" method="post">
-            <input type="hidden" name="next" value="/u/{{ person.username }}">
-            <button class="btn btn-ghost" type="submit">Cancelar pedido</button>
-          </form>
-        {% elif relation == 'incoming' %}
-          <form action="/amigos/{{ person.username }}/aceitar" method="post">
-            <input type="hidden" name="next" value="/u/{{ person.username }}">
-            <button class="btn btn-primary" type="submit">Aceitar amizade</button>
-          </form>
-          <form action="/amigos/{{ person.username }}/recusar" method="post">
-            <input type="hidden" name="next" value="/u/{{ person.username }}">
-            <button class="btn btn-ghost" type="submit">Recusar</button>
-          </form>
-        {% elif relation == 'friends' %}
-          <p class="muted">Vocês são amigos</p>
-          <p><a class="btn btn-primary" href="/mensagens/{{ person.username }}">Mensagem</a></p>
-          <form action="/amigos/{{ person.username }}/desfazer" method="post">
-            <input type="hidden" name="next" value="/u/{{ person.username }}">
-            <button class="btn btn-danger" type="submit">Desfazer amizade</button>
-          </form>
-        {% endif %}
-        {% if relation != 'friends' and has_history %}
-          <p><a class="btn btn-ghost" href="/mensagens/{{ person.username }}">Ver conversa</a></p>
-        {% endif %}
-        <div class="safety-actions">
-          <a class="btn btn-ghost" href="/denunciar?tipo=user&amp;id={{ person.id }}&amp;next=/u/{{ person.username }}">Denunciar</a>
-          {% if blocked_by_me %}
-            <form action="/conta/bloqueios/{{ person.username }}/remover" method="post">
-              <button class="btn btn-ghost" type="submit">Desbloquear</button>
+      <ul class="theme-picker">
+        {% for key, label in themes.items() %}
+          <li>
+            <form action="/u/{{ person.username }}/tema" method="post">
+              <input type="hidden" name="theme" value="{{ key }}">
+              <button class="theme-preview wc-theme-{{ key }}{% if visitor_theme == key %} is-on{% endif %}" type="submit" aria-pressed="{{ 'true' if visitor_theme == key else 'false' }}">
+                <span class="theme-preview-bar">{{ label }}</span>
+                <span class="theme-preview-body">
+                  <span class="theme-preview-lv">LV. {{ '%02d'|format(player.level) }}</span>
+                  <span class="theme-preview-exp"><i style="width: {{ player.percent }}%"></i></span>
+                  <span class="theme-preview-hearts">♥ ♥ ♥</span>
+                </span>
+              </button>
             </form>
-          {% else %}
-            <form action="/u/{{ person.username }}/bloquear" method="post">
-              <input type="hidden" name="next" value="/u/{{ person.username }}">
-              <button class="btn btn-ghost" type="submit">Bloquear usuário</button>
-            </form>
-          {% endif %}
-        </div>
-      </div>
-    {% endif %}
-  </div>
-</section>
-
-<section class="profile-shelf" aria-labelledby="profile-favorites-title">
-  <div class="profile-shelf-head">
-    <button type="button" class="profile-shelf-title js-open-favorites" id="profile-favorites-title" aria-haspopup="dialog" aria-controls="favorites-dialog">Programas favoritos</button>
-    {% if favorites|length %}
-      <span class="muted">{{ favorites|length }}</span>
-    {% endif %}
-  </div>
-  {% if favorite_preview %}
-    <ul class="profile-posters">
-      {% for show in favorite_preview %}
-        <li>
-          <a class="profile-poster" href="/shows/{{ show.id }}" title="{{ show.name }}" aria-label="{{ show.name }}">
-            {% if show.image_url %}
-              <img src="{{ show.image_url }}" alt="">
-            {% else %}
-              <span class="profile-poster-fallback" aria-hidden="true">🎬</span>
-            {% endif %}
-          </a>
-        </li>
-      {% endfor %}
-      {% if favorite_more %}
-        <li>
-          <button type="button" class="profile-more js-open-favorites" aria-haspopup="dialog" aria-controls="favorites-dialog" title="Ver todos os favoritos" aria-label="Ver mais {{ favorite_more }} favoritos">+{{ favorite_more }}</button>
-        </li>
-      {% endif %}
-    </ul>
-  {% else %}
-    <p class="muted">{% if is_own_profile %}Favorite programas para montar esta fileira.{% else %}Nenhum programa favorito ainda.{% endif %}</p>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </section>
   {% endif %}
-</section>
+</div>
 
 <dialog class="members-dialog profile-shelf-dialog" id="favorites-dialog" aria-labelledby="favorites-dialog-title">
   <div class="members-dialog-head">
@@ -149,47 +287,6 @@
     <p class="members-empty muted">{% if is_own_profile %}Busque um programa acima para favoritar.{% else %}Nenhum programa favorito ainda.{% endif %}</p>
   {% endif %}
 </dialog>
-
-<section class="profile-shelf" aria-labelledby="profile-clubs-title">
-  <div class="profile-shelf-head">
-    <button type="button" class="profile-shelf-title js-open-clubs" id="profile-clubs-title" aria-haspopup="dialog" aria-controls="profile-clubs-dialog">Meus clubes</button>
-    {% if clubs|length %}
-      <span class="muted">{{ clubs|length }}</span>
-    {% endif %}
-  </div>
-  {% if club_preview %}
-    <ul class="profile-clubs">
-      {% for club in club_preview %}
-        <li>
-          {% if club.is_closed and club.id not in mine %}
-            <span class="club-mark profile-club-mark" style="--icon-fallback: {{ club.cover_color or '#3A2348' }}" title="{{ club.name }} (fechado)" aria-label="{{ club.name }} (fechado)">
-              {% if club.icon_image %}
-                <img src="{{ club_icon_url(club.icon_image) }}" alt="">
-              {% else %}
-                <span class="club-icon-fallback">{{ club_icon_initials(club.name) }}</span>
-              {% endif %}
-            </span>
-          {% else %}
-            <a class="club-mark profile-club-mark" href="/clubs/{{ club.id }}" title="{{ club.name }}" aria-label="{{ club.name }}" style="--icon-fallback: {{ club.cover_color or '#3A2348' }}">
-              {% if club.icon_image %}
-                <img src="{{ club_icon_url(club.icon_image) }}" alt="">
-              {% else %}
-                <span class="club-icon-fallback">{{ club_icon_initials(club.name) }}</span>
-              {% endif %}
-            </a>
-          {% endif %}
-        </li>
-      {% endfor %}
-      {% if club_more %}
-        <li>
-          <button type="button" class="profile-more is-round js-open-clubs" aria-haspopup="dialog" aria-controls="profile-clubs-dialog" title="Ver todos os clubes" aria-label="Ver mais {{ club_more }} clubes">+{{ club_more }}</button>
-        </li>
-      {% endif %}
-    </ul>
-  {% else %}
-    <p class="muted">Nenhum clube para mostrar.</p>
-  {% endif %}
-</section>
 
 <dialog class="members-dialog profile-shelf-dialog" id="profile-clubs-dialog" aria-labelledby="profile-clubs-dialog-title">
   <div class="members-dialog-head">

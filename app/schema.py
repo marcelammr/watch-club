@@ -58,6 +58,10 @@ def migrate_schema() -> None:
         alters.append("ALTER TABLE users ADD COLUMN banned_at DATETIME")
     if "had_progression_suspend" not in columns:
         alters.append("ALTER TABLE users ADD COLUMN had_progression_suspend BOOLEAN DEFAULT 0")
+    if "profile_status" not in columns:
+        alters.append("ALTER TABLE users ADD COLUMN profile_status VARCHAR(80) DEFAULT ''")
+    if "theme_key" not in columns:
+        alters.append("ALTER TABLE users ADD COLUMN theme_key VARCHAR(24) DEFAULT 'watchclub'")
     with engine.begin() as connection:
         for statement in alters:
             connection.execute(text(statement))

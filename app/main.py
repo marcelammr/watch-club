@@ -199,6 +199,18 @@ from app.friends import (
     unfriend,
 )
 from app.models import AccountInvite, Club, ClubMember, ClubShow, EmailToken, Suggestion, User
+from app.player import (
+    DEFAULT_THEME,
+    PROFILE_STATUS_MAX,
+    THEMES,
+    clean_profile_status,
+    energy_hearts,
+    player_progress,
+    player_stats,
+    profile_tab,
+    require_theme,
+    theme_of,
+)
 from app.oauth import (
     facebook_authorize_url,
     facebook_enabled,
@@ -4889,6 +4901,54 @@ def _profile_ok_message(ok: str | None, relation: str) -> str | None:
     return text
 
 
+@app.post("/u/{username}/status")
+def update_profile_status(request: Request, username: str, status: str = Form(""), next: str = Form("")):
+    db = db_session()
+    dest = _safe_next(next, f"/u/{username}")
+    try:
+        user = login_required(request, db)
+        person = find_active_user(db, username)
+        if person is None:
+            raise HTTPException(status_code=404, detail="Perfil não encontrado")
+        if person.id != user.id:
+            raise HTTPException(status_code=403, detail="Você só pode editar o próprio status")
+        text = clean_profile_status(status)
+        if text:
+            enforce_text(db, user, text, surface=SURFACE_PUBLIC_TEXT, origin="profile")
+        user.profile_status = text
+        db.commit()
+        return RedirectResponse(dest.split("?")[0] + "?aba=perfil&ok=" + quote("Status atualizado"), status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        if exc.status_code == 403:
+            return RedirectResponse(f"/u/{username}?error={quote(str(exc.detail))}", status_code=303)
+        return RedirectResponse(f"/u/{username}?aba=perfil&error={quote(str(exc.detail))}", status_code=303)
+    finally:
+        db.close()
+
+
+@app.post("/u/{username}/tema")
+def update_profile_theme(request: Request, username: str, theme: str = Form(""), next: str = Form("")):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        person = find_active_user(db, username)
+        if person is None:
+            raise HTTPException(status_code=404, detail="Perfil não encontrado")
+        if person.id != user.id:
+            raise HTTPException(status_code=403, detail="Você só pode alterar o próprio tema")
+        user.theme_key = require_theme(theme)
+        db.commit()
+        return RedirectResponse(f"/u/{user.username}?aba=aparencia&ok=" + quote("Tema salvo"), status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        return RedirectResponse(f"/u/{username}?aba=aparencia&error={quote(str(exc.detail))}", status_code=303)
+    finally:
+        db.close()
+
+
 @app.get("/u/{username}", response_class=HTMLResponse)
 def public_profile(request: Request, username: str):
     db = db_session()
@@ -4909,6 +4969,9 @@ def public_profile(request: Request, username: str):
         context_club, context_role, context_role_label = _club_profile_context(
             db, viewer, person, request.query_params.get("clube")
         )
+        own = viewer.id == person.id
+        tab = profile_tab(request.query_params.get("aba"), own=own)
+        progress = player_progress(person.created_at)
         return templates.TemplateResponse(
             request,
             "profile.html",
@@ -4921,7 +4984,7 @@ def public_profile(request: Request, username: str):
                 "favorites": favorites,
                 "favorite_preview": favorite_preview,
                 "favorite_more": favorite_more,
-                "is_own_profile": viewer.id == person.id,
+                "is_own_profile": own,
                 "search_min_chars": SEARCH_MIN_CHARS,
                 "mine": mine,
                 "requested_ids": requested_club_ids(db, viewer.id),
@@ -4934,6 +4997,18 @@ def public_profile(request: Request, username: str):
                 "context_club_tag": tag_payload(context_club) if context_club else None,
                 "context_role": context_role,
                 "context_role_label": context_role_label,
+                "tab": tab,
+                "player": progress,
+                "energy": energy_hearts(person.last_seen),
+                "energy_max": 5,
+                "stats": player_stats(
+                    db, person, club_count=len(clubs), favorite_count=len(favorites)
+                ),
+                "visitor_theme": theme_of(viewer),
+                "profile_theme": theme_of(person),
+                "themes": THEMES,
+                "default_theme": DEFAULT_THEME,
+                "status_max": PROFILE_STATUS_MAX,
                 "error": request.query_params.get("error"),
                 "ok": _profile_ok_message(request.query_params.get("ok"), relation),
             },

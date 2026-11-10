@@ -22,6 +22,8 @@ class User(Base):
     avatar_provider: Mapped[str] = mapped_column(String(32), default="watchclub", nullable=False)
     avatar_value: Mapped[str] = mapped_column(String(120), default="popcorn", nullable=False)
     bio: Mapped[str] = mapped_column(String(150), default="", nullable=False)
+    profile_status: Mapped[str] = mapped_column(String(80), default="", nullable=False)
+    theme_key: Mapped[str] = mapped_column(String(24), default="watchclub", nullable=False)
     google_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
     facebook_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
     auth0_sub: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)

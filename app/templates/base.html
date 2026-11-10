@@ -4,7 +4,7 @@
 {% from "macros/club_tag.html" import club_tag_chip %}
 {% from "macros/notifications.html" import bell_popover_inner, notice_inbox_inner %}
 <!DOCTYPE html>
-<html lang="pt-BR" class="dark" dir="ltr"{% if user %} data-enter-sends="{% if user.enter_sends %}1{% else %}0{% endif %}"{% endif %}>
+<html lang="pt-BR" class="dark wc-theme-{{ visitor_theme|default('watchclub') }}" dir="ltr"{% if user %} data-enter-sends="{% if user.enter_sends %}1{% else %}0{% endif %}"{% endif %}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -65,31 +65,60 @@
               {{ user_avatar(user, 'md') }}
               <span class="account-label">Minha conta</span>
             </button>
-            <div id="account-popover" class="account-popover" hidden role="dialog" aria-label="Conta">
-              <div class="account-popover-head">
-                {{ user_avatar(user, 'md') }}
-                <div>
-                  <strong>{{ user.name }}</strong>
-                  {{ club_tag_chip(user.display_tag) }}
-                  <p class="muted">@{{ user.username }}</p>
-                  <p class="status {{ presence_of(user) }} js-account-status">{{ presence_label(user) }}</p>
+            <div id="account-popover" class="account-popover player-card wc-theme-{{ visitor_theme|default('watchclub') }}" hidden role="dialog" aria-label="Player Card">
+              <header class="wc-titlebar">
+                <span class="wc-titlebar-mark" aria-hidden="true">♡</span>
+                <span class="wc-titlebar-label">Player Card</span>
+                <span class="wc-titlebar-controls" aria-hidden="true"><i></i><i></i></span>
+              </header>
+              <div class="account-popover-body">
+                <div class="account-popover-head">
+                  {{ user_avatar(user, 'md') }}
+                  <div>
+                    <strong>{{ user.name }}</strong>
+                    {{ club_tag_chip(user.display_tag) }}
+                    <p class="muted">@{{ user.username }}</p>
+                    <p class="status {{ presence_of(user) }} js-account-status">{{ presence_label(user) }}</p>
+                  </div>
                 </div>
-              </div>
-              <a class="account-popover-link" href="/conta">Editar perfil</a>
-              <form action="/logout" method="post">
-                <button type="submit" class="account-popover-link muted">Sair da sessão</button>
-              </form>
-              <button type="button" class="account-popover-link js-status-toggle" aria-expanded="false" aria-controls="status-submenu">Status</button>
-              <div id="status-submenu" class="status-submenu" hidden>
-                <button type="button" class="status-option js-set-status" data-status="online">
-                  <span class="status online">{{ presence_mark('online') }}Online</span>
-                </button>
-                <button type="button" class="status-option js-set-status" data-status="away">
-                  <span class="status away">{{ presence_mark('away') }}Ausente</span>
-                </button>
-                <button type="button" class="status-option js-set-status" data-status="offline">
-                  <span class="status offline">{{ presence_mark('offline') }}Offline</span>
-                </button>
+                {% if viewer_player %}
+                <p class="player-energy-label">HP</p>
+                <p class="player-energy" aria-label="HP {{ viewer_player.energy }} de {{ viewer_player.energy_max }}">
+                  {% for i in range(viewer_player.energy_max) %}
+                    <span class="player-heart{% if i < viewer_player.energy %} is-on{% endif %}" aria-hidden="true">♥</span>
+                  {% endfor %}
+                </p>
+                <p class="player-level"><span class="player-level-kicker">LV.</span> {{ '%02d'|format(viewer_player.level) }}</p>
+                <p class="player-exp-label">XP</p>
+                <div class="player-exp" role="meter" aria-label="Progresso até o próximo nível" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ viewer_player.percent }}">
+                  <span class="player-exp-fill" style="width: {{ viewer_player.percent }}%"></span>
+                </div>
+                <p class="player-card-stats">
+                  Clubes {{ '%02d'|format(viewer_player.stats.clubs) }}
+                  · Amigos {{ '%02d'|format(viewer_player.stats.friends) }}
+                  · Favoritos {{ '%02d'|format(viewer_player.stats.favorites) }}
+                </p>
+                {% if viewer_player.status %}
+                  <p class="player-status">✦ {{ viewer_player.status }}</p>
+                {% endif %}
+                {% endif %}
+                <a class="account-popover-link" href="/u/{{ user.username }}">Ver perfil</a>
+                <a class="account-popover-link" href="/conta">Editar perfil</a>
+                <form action="/logout" method="post">
+                  <button type="submit" class="account-popover-link muted">Sair da sessão</button>
+                </form>
+                <button type="button" class="account-popover-link js-status-toggle" aria-expanded="false" aria-controls="status-submenu">Status</button>
+                <div id="status-submenu" class="status-submenu" hidden>
+                  <button type="button" class="status-option js-set-status" data-status="online">
+                    <span class="status online">{{ presence_mark('online') }}Online</span>
+                  </button>
+                  <button type="button" class="status-option js-set-status" data-status="away">
+                    <span class="status away">{{ presence_mark('away') }}Ausente</span>
+                  </button>
+                  <button type="button" class="status-option js-set-status" data-status="offline">
+                    <span class="status offline">{{ presence_mark('offline') }}Offline</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
