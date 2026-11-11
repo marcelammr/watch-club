@@ -1,46 +1,21 @@
+{% from "macros/pixel.html" import px_icon %}
 {% macro hamburger(extra_class='') %}
 <button type="button" class="sidebar-toggle js-sidebar-toggle {{ extra_class }}" aria-label="Abrir ou fechar menu" aria-expanded="false" aria-controls="app-sidebar">
-  <svg class="chrome-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-    <path d="M4 7h16"/>
-    <path d="M4 12h16"/>
-    <path d="M4 17h16"/>
-  </svg>
+  <span class="chrome-icon nav-icon-px">{{ px_icon('menu') }}</span>
 </button>
 {% endmacro %}
 
 {% macro club_menu_toggle() %}
-<button type="button" class="sidebar-toggle js-club-nav-toggle" aria-label="Abrir ou fechar menu do clube" aria-expanded="false" aria-controls="club-nav">
-  <svg class="chrome-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-    <path d="M4 7h16"/>
-    <path d="M4 12h16"/>
-    <path d="M4 17h16"/>
-  </svg>
+<button type="button" class="sidebar-toggle club-nav-toggle js-club-nav-toggle" aria-label="Abrir ou fechar menu do clube" aria-expanded="false" aria-controls="club-nav">
+  <span class="chrome-icon nav-icon-px">{{ px_icon('menu') }}</span>
 </button>
 {% endmacro %}
 
 {% macro nav_icon(name) %}
-{% if name == 'home' %}
-  <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5"/><path d="M6.5 10.5V20h11V10.5"/></svg>
-{% elif name == 'agenda' %}
-  <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v3"/><path d="M17 4v3"/><rect x="4" y="6" width="16" height="14" rx="2"/><path d="M4 11h16"/></svg>
-{% elif name == 'news' %}
-  <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h12v14H4z"/><path d="M16 8h4v11a2 2 0 0 1-2 2H6"/><path d="M7 9h6"/><path d="M7 13h6"/><path d="M7 17h4"/></svg>
-{% elif name == 'clubs' %}
-  <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="7" height="14" rx="1.5"/><rect x="13.5" y="8" width="7" height="11" rx="1.5"/></svg>
-{% elif name == 'messages' %}
-  <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 6.5h10A1.5 1.5 0 0 1 16 8v6.5A1.5 1.5 0 0 1 14.5 16H9l-3.5 2.5V16H6A1.5 1.5 0 0 1 4.5 14.5V8A1.5 1.5 0 0 1 6 6.5Z"/><path d="M16 9.5h3.5A1.5 1.5 0 0 1 21 11v6.5A1.5 1.5 0 0 1 19.5 19H19v2l-3-2"/></svg>
-{% elif name == 'info' %}
-  <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg>
-{% elif name == 'admin' %}
-  <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4.5 6.5v5c0 5 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.5 7.5-9.5v-5Z"/><path d="M9 12l2 2 4-4"/></svg>
-{% elif name == 'settings' %}
-  <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.7.9 1.2 1.6 1.3H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1.1z"/></svg>
-{% elif name == 'mailbox' %}
-  <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h16v8.5A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5V10Z"/><path d="M4 10.5C4 7.5 6.2 5 9.5 5H14c2.8 0 5 2.2 5 5"/><path d="M8.5 10V7.5"/><path d="M8.5 7.5h4.5"/></svg>
-{% elif name == 'shield' %}
-  <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4.5 6.5v5c0 5 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.5 7.5-9.5v-5Z"/></svg>
+{% if name == 'agenda' %}
+  <span class="nav-icon nav-icon-px">{{ px_icon('calendar') }}</span>
 {% else %}
-  <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 19v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1"/><circle cx="10" cy="8" r="3"/><path d="M20 19v-1a3.5 3.5 0 0 0-2.6-3.4"/><path d="M16.5 5.2a3 3 0 0 1 0 5.6"/></svg>
+  <span class="nav-icon nav-icon-px">{{ px_icon(name) }}</span>
 {% endif %}
 {% endmacro %}
 
@@ -63,6 +38,7 @@
 <aside class="app-sidebar" id="app-sidebar" aria-hidden="true">
   <div class="sidebar-head">
     <a class="sidebar-brand" href="/" title="Watch Club" aria-label="Watch Club">
+      <span class="sidebar-brand-mark" aria-hidden="true">{{ px_icon('window') }}</span>
       <span class="sidebar-brand-full">Watch Club</span>
     </a>
   </div>

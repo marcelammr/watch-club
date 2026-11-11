@@ -1,3 +1,4 @@
+import secrets
 from datetime import date, datetime, timedelta, timezone
 from urllib.parse import quote
 
@@ -39,10 +40,22 @@ from app.auth0_oidc import (
     pkce_pair,
     redeem_callback,
 )
+from app.avatar_uploads import MAX_BYTES as AVATAR_MAX_BYTES
 from app.avatar_uploads import delete_upload, save_avatar_photo, stored_upload_path
+from app.pixel_art import (
+    PRESET_CHOICES,
+    PixelArtError,
+    STYLE_ORIGINAL,
+    attach_preset,
+    generate_derivative,
+    normalize_style,
+    preview_bytes,
+    require_style,
+)
 from app.avatars import (
     AVATARS,
     avatar_initials,
+    avatar_original_url,
     avatar_url,
     illustrated_catalogs,
     parse_illustrated_choice,
@@ -154,7 +167,14 @@ from app.club_tags import (
     tag_payload,
 )
 from app.colors import COLOR_PRESETS, DEFAULT_HEX, GRADIENT_DIRECTIONS, valid_hex
-from app.club_icons import club_icon_initials, club_icon_url, delete_club_icon, save_club_icon, stored_icon_path
+from app.club_icons import (
+    club_icon_initials,
+    club_icon_original_url,
+    club_icon_url,
+    delete_club_icon,
+    save_club_icon,
+    stored_icon_path,
+)
 from app.discovery import (
     KIND_LABELS,
     MAX_CATEGORIES,
@@ -165,8 +185,20 @@ from app.discovery import (
     grouped_catalog,
     load_catalog,
 )
-from app.covers import COVER_COLORS, COVER_PRESETS, cover_image_url, save_cover_image, stored_cover_path, valid_cover_color
+from app.covers import (
+    COVER_COLORS,
+    COVER_PRESETS,
+    cover_image_url,
+    cover_original_url,
+    delete_cover_image,
+    save_cover_image,
+    stored_cover_path,
+    valid_cover_color,
+)
 from app.markup import format_chat, pin_preview
+from app.pixel_emoji import pack_available as joi3_pack_available
+from app.pixel_emoji import picker_catalog as joi3_catalog
+from app.pixel_emoji import render_tokens
 from app import config as app_config
 from app.config import BASE_DIR, BIO_MAX, EMAIL_DEV_SHOW_LINK, SECRET_KEY, SESSION_HTTPS_ONLY, uploads_dir
 from app.dev_preview import register_ui_preview_routes
@@ -201,15 +233,24 @@ from app.friends import (
 from app.models import AccountInvite, Club, ClubMember, ClubShow, EmailToken, Suggestion, User
 from app.player import (
     DEFAULT_THEME,
+    DEFAULT_WALLPAPER,
     PROFILE_STATUS_MAX,
     THEMES,
+    WALLPAPERS,
     clean_profile_status,
     energy_hearts,
     player_progress,
     player_stats,
     profile_tab,
     require_theme,
+    require_wallpaper,
     theme_of,
+    wallpaper_catalog,
+    wallpaper_class,
+    wallpaper_of,
+    wallpaper_spec,
+    wallpaper_src,
+    wallpaper_style,
 )
 from app.oauth import (
     facebook_authorize_url,
@@ -441,6 +482,9 @@ templates.env.globals["presence_of"] = presence_of
 templates.env.globals["presence_label"] = lambda user: PRESENCE_LABELS[presence_of(user)]
 templates.env.globals["avatar_initials"] = avatar_initials
 templates.env.globals["avatar_url"] = avatar_url
+templates.env.globals["avatar_original_url"] = avatar_original_url
+templates.env.globals["cover_original_url"] = cover_original_url
+templates.env.globals["club_icon_original_url"] = club_icon_original_url
 templates.env.globals["google_enabled"] = google_enabled
 templates.env.globals["facebook_enabled"] = facebook_enabled
 templates.env.globals["BIO_MAX"] = BIO_MAX
@@ -449,6 +493,7 @@ templates.env.globals["COVER_PRESETS"] = COVER_PRESETS
 templates.env.globals["cover_image_url"] = cover_image_url
 templates.env.globals["club_icon_url"] = club_icon_url
 templates.env.globals["club_icon_initials"] = club_icon_initials
+templates.env.globals["PRESET_CHOICES"] = PRESET_CHOICES
 templates.env.globals["MAX_CATEGORIES"] = MAX_CATEGORIES
 templates.env.globals["MAX_TAGS"] = MAX_TAGS
 templates.env.globals["TAG_LABEL_MAX"] = TAG_LABEL_MAX
@@ -499,6 +544,13 @@ templates.env.globals["NOTICE_POLL_SECONDS"] = NOTICE_POLL_SECONDS
 templates.env.filters["notice_when"] = format_notification_when
 templates.env.filters["chat_format"] = format_chat
 templates.env.filters["pin_preview"] = pin_preview
+templates.env.filters["pixel_emoji"] = render_tokens
+templates.env.globals["joi3_emoji_catalog"] = joi3_catalog
+templates.env.globals["joi3_emoji_available"] = joi3_pack_available
+templates.env.globals["wallpaper_class"] = wallpaper_class
+templates.env.globals["wallpaper_style"] = wallpaper_style
+templates.env.globals["wallpaper_spec"] = wallpaper_spec
+templates.env.globals["wallpaper_src"] = wallpaper_src
 templates.env.filters["chat_clock"] = chat_clock
 templates.env.filters["chat_day_key"] = chat_day_key
 templates.env.filters["chat_day_label"] = chat_day_label
@@ -2068,6 +2120,8 @@ async def create_club(
     cover_color: str = Form("#3a2348"),
     cover_file: UploadFile | None = File(None),
     icon_file: UploadFile | None = File(None),
+    cover_preset: str = Form(""),
+    icon_preset: str = Form(""),
 ):
     db = db_session()
     try:
@@ -2087,6 +2141,12 @@ async def create_club(
             path = locator(stored_name) if stored_name else None
             if path:
                 enforce_image(db, user, path.read_bytes(), mime="image/*", origin=origin)
+        cover_pixel, cover_style = attach_preset(
+            image_name, stored_cover_path, uploads_dir() / "clubs", cover_preset
+        )
+        icon_pixel, icon_style = attach_preset(
+            icon_name, stored_icon_path, uploads_dir() / "club-icons", icon_preset
+        )
         club = Club(
             name=club_name,
             join_code=make_join_code(),
@@ -2096,7 +2156,11 @@ async def create_club(
             rules=club_rules,
             cover_color=valid_cover_color(cover_color),
             cover_image=image_name,
+            cover_style=cover_style,
+            cover_pixel=cover_pixel,
             icon_image=icon_name,
+            icon_style=icon_style,
+            icon_pixel=icon_pixel,
         )
         db.add(club)
         db.flush()
@@ -3261,7 +3325,11 @@ def update_avatar(
 
 
 @app.post("/conta/avatar/foto")
-async def update_avatar_photo(request: Request, photo: UploadFile | None = File(None)):
+async def update_avatar_photo(
+    request: Request,
+    photo: UploadFile | None = File(None),
+    preset: str = Form("original"),
+):
     db = db_session()
     try:
         user = login_required(request, db)
@@ -3274,6 +3342,13 @@ async def update_avatar_photo(request: Request, photo: UploadFile | None = File(
         if user.avatar_type == "upload":
             delete_upload(user.avatar_value)
         set_upload_avatar(user, filename)
+        chosen = normalize_style(preset)
+        pixel_name, style = attach_preset(
+            filename, stored_upload_path, uploads_dir() / "avatars", chosen
+        )
+        user.avatar_style = style
+        user.avatar_pixel = pixel_name
+        user.avatar_pixel_status = "ready" if pixel_name else ("none" if style == STYLE_ORIGINAL else "failed")
         db.commit()
         return RedirectResponse("/conta?ok=Foto+de+perfil+atualizada", status_code=303)
     except HTTPException as exc:
@@ -3281,6 +3356,86 @@ async def update_avatar_photo(request: Request, photo: UploadFile | None = File(
             return RedirectResponse("/login", status_code=303)
         if exc.status_code == 400:
             return RedirectResponse("/conta?error=" + quote(str(exc.detail)), status_code=303)
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/conta/avatar/estilo")
+def update_avatar_style(request: Request, style: str = Form("")):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        try:
+            chosen = require_style(style)
+        except PixelArtError as exc:
+            return RedirectResponse("/conta?error=" + quote(str(exc)), status_code=303)
+        if user.avatar_type != "upload":
+            return RedirectResponse(
+                "/conta?error=" + quote("A estilização vale para fotos enviadas. Envie uma foto primeiro."),
+                status_code=303,
+            )
+        source = stored_upload_path(user.avatar_value)
+        if source is None:
+            user.avatar_pixel_status = "none"
+            db.commit()
+            return RedirectResponse(
+                "/conta?error=" + quote("A estilização vale para fotos enviadas. Envie uma foto primeiro."),
+                status_code=303,
+            )
+        if user.avatar_pixel:
+            delete_upload(user.avatar_pixel)
+            user.avatar_pixel = None
+        if chosen == STYLE_ORIGINAL:
+            user.avatar_style = STYLE_ORIGINAL
+            user.avatar_pixel_status = "none"
+            db.commit()
+            return RedirectResponse("/conta?ok=" + quote("Estilo original salvo"), status_code=303)
+        try:
+            dest_name = f"{secrets.token_hex(12)}.png"
+            generate_derivative(source, source.parent / dest_name, preset=chosen)
+        except PixelArtError as exc:
+            user.avatar_style = STYLE_ORIGINAL
+            user.avatar_pixel_status = "failed"
+            db.commit()
+            return RedirectResponse("/conta?error=" + quote(str(exc)), status_code=303)
+        user.avatar_pixel = dest_name
+        user.avatar_pixel_status = "ready"
+        user.avatar_style = chosen
+        db.commit()
+        return RedirectResponse("/conta?ok=" + quote("Estilo da imagem salvo"), status_code=303)
+    except HTTPException:
+        return RedirectResponse("/login", status_code=303)
+    finally:
+        db.close()
+
+
+@app.post("/imagens/previsualizar")
+async def preview_image_style(
+    request: Request,
+    photo: UploadFile | None = File(None),
+    preset: str = Form("original"),
+):
+    db = db_session()
+    try:
+        login_required(request, db)
+        if not photo or not photo.filename:
+            raise HTTPException(status_code=400, detail="Envie uma imagem.")
+        data = await photo.read()
+        if not data or len(data) > AVATAR_MAX_BYTES:
+            raise HTTPException(status_code=400, detail="Imagem inválida ou grande demais.")
+        try:
+            rendered = preview_bytes(data, preset)
+        except PixelArtError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return Response(
+            content=rendered,
+            media_type="image/png",
+            headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+        )
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
         raise
     finally:
         db.close()
@@ -3612,6 +3767,8 @@ async def update_club_settings(
     cover_file: UploadFile | None = File(None),
     clear_cover: str | None = Form(None),
     icon_file: UploadFile | None = File(None),
+    cover_preset: str = Form(""),
+    icon_preset: str = Form(""),
     admin_name_color: str = Form("#B892FF"),
     sub_name_color: str = Form("#6C63FF"),
     member_limit: str = Form(""),
@@ -3667,11 +3824,43 @@ async def update_club_settings(
         club.sub_name_color = sub_hex
         club.member_limit = limit_value
         if image_name:
+            delete_cover_image(club.cover_image)
+            delete_cover_image(club.cover_pixel)
+            cover_pixel, cover_style = attach_preset(
+                image_name, stored_cover_path, uploads_dir() / "clubs", cover_preset
+            )
             club.cover_image = image_name
+            club.cover_style = cover_style
+            club.cover_pixel = cover_pixel
         elif clear_cover:
+            delete_cover_image(club.cover_image)
+            delete_cover_image(club.cover_pixel)
             club.cover_image = None
+            club.cover_pixel = None
+            club.cover_style = STYLE_ORIGINAL
+        elif club.cover_image and cover_preset:
+            delete_cover_image(club.cover_pixel)
+            cover_pixel, cover_style = attach_preset(
+                club.cover_image, stored_cover_path, uploads_dir() / "clubs", cover_preset
+            )
+            club.cover_style = cover_style
+            club.cover_pixel = cover_pixel
         if icon_name:
+            delete_club_icon(club.icon_image)
+            delete_club_icon(club.icon_pixel)
+            icon_pixel, icon_style = attach_preset(
+                icon_name, stored_icon_path, uploads_dir() / "club-icons", icon_preset
+            )
             club.icon_image = icon_name
+            club.icon_style = icon_style
+            club.icon_pixel = icon_pixel
+        elif club.icon_image and icon_preset:
+            delete_club_icon(club.icon_pixel)
+            icon_pixel, icon_style = attach_preset(
+                club.icon_image, stored_icon_path, uploads_dir() / "club-icons", icon_preset
+            )
+            club.icon_style = icon_style
+            club.icon_pixel = icon_pixel
         db.commit()
         return RedirectResponse(
             _config_href(club_id, settings_section, ok="Configurações salvas"),
@@ -3694,9 +3883,13 @@ def remove_club_icon_image(request: Request, club_id: int):
         user = login_required(request, db)
         club = require_club_admin(db, club_id, user.id)
         old_name = club.icon_image
+        old_pixel = club.icon_pixel
         club.icon_image = None
+        club.icon_pixel = None
+        club.icon_style = STYLE_ORIGINAL
         db.commit()
         delete_club_icon(old_name)
+        delete_club_icon(old_pixel)
         return Response(status_code=204)
     except HTTPException:
         raise
@@ -4762,18 +4955,38 @@ def friend_unfriend(request: Request, username: str, next: str = Form("/amigos")
         db.close()
 
 
+def _dm_peer_context(db, user, person):
+    if person is None:
+        return [], []
+    mine = select(ClubMember.club_id).where(ClubMember.user_id == user.id)
+    shared_clubs = list(
+        db.scalars(
+            select(Club)
+            .join(ClubMember, ClubMember.club_id == Club.id)
+            .where(ClubMember.user_id == person.id, ClubMember.club_id.in_(mine))
+            .order_by(Club.name)
+            .limit(6)
+        ).unique()
+    )
+    favorites = list_user_favorites(db, person.id)[:4]
+    return shared_clubs, favorites
+
+
 def _conversations_response(request: Request, db, user, person=None):
     conversations = list_dm_conversations(db, user.id)
     people = [row.person for row in conversations]
     messages = []
     are_friends = False
     blocked_peer = False
+    shared_clubs = []
+    peer_favorites = []
     if person is not None:
         mark_dm_read(db, user.id, person.id)
         are_friends = relation_status(db, user.id, person.id) == "friends"
         blocked_peer = are_blocked(db, user.id, person.id)
         messages = dm_thread(db, user.id, person.id)
         people = people + [person] + [item.sender for item in messages]
+        shared_clubs, peer_favorites = _dm_peer_context(db, user, person)
     stamp_display_tags(db, people)
     report_select_ids = []
     if person is not None:
@@ -4791,6 +5004,8 @@ def _conversations_response(request: Request, db, user, person=None):
             "are_friends": are_friends,
             "blocked_peer": blocked_peer,
             "conversations": conversations,
+            "shared_clubs": shared_clubs,
+            "peer_favorites": peer_favorites,
             "report_select_ids": report_select_ids,
             "max_report_messages": MAX_REPORT_MESSAGES,
             "error": request.query_params.get("error"),
@@ -4949,6 +5164,33 @@ def update_profile_theme(request: Request, username: str, theme: str = Form(""),
         db.close()
 
 
+@app.post("/u/{username}/aparencia")
+def update_profile_look(
+    request: Request,
+    username: str,
+    theme: str = Form(""),
+    wallpaper: str = Form(""),
+):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        person = find_active_user(db, username)
+        if person is None:
+            raise HTTPException(status_code=404, detail="Perfil não encontrado")
+        if person.id != user.id:
+            raise HTTPException(status_code=403, detail="Você só pode alterar a própria aparência")
+        user.theme_key = require_theme(theme)
+        user.wallpaper_key = require_wallpaper(wallpaper)
+        db.commit()
+        return RedirectResponse(f"/u/{user.username}?aba=aparencia&ok=" + quote("Aparência salva"), status_code=303)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse("/login", status_code=303)
+        return RedirectResponse(f"/u/{username}?aba=aparencia&error={quote(str(exc.detail))}", status_code=303)
+    finally:
+        db.close()
+
+
 @app.get("/u/{username}", response_class=HTMLResponse)
 def public_profile(request: Request, username: str):
     db = db_session()
@@ -5005,9 +5247,13 @@ def public_profile(request: Request, username: str):
                     db, person, club_count=len(clubs), favorite_count=len(favorites)
                 ),
                 "visitor_theme": theme_of(viewer),
+                "visitor_wallpaper": wallpaper_of(viewer),
                 "profile_theme": theme_of(person),
+                "profile_wallpaper": wallpaper_of(person),
                 "themes": THEMES,
+                "wallpapers": wallpaper_catalog(),
                 "default_theme": DEFAULT_THEME,
+                "default_wallpaper": DEFAULT_WALLPAPER,
                 "status_max": PROFILE_STATUS_MAX,
                 "error": request.query_params.get("error"),
                 "ok": _profile_ok_message(request.query_params.get("ok"), relation),

@@ -10,3 +10,4 @@ python-dotenv>=1.0.1
 joserfc>=1.0.0
 pytest>=8.3.0
 emoji>=2.14.0
+Pillow>=10.4.0

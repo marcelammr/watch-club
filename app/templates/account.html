@@ -2,11 +2,11 @@
 {% from "macros/avatar.html" import user_avatar %}
 {% from "macros/emoji.html" import emoji_picker %}
 {% from "macros/club_tag.html" import club_tag_chip %}
+{% from "macros/image_style.html" import style_choices %}
 {% block title %}Configurações · Watch Club{% endblock %}
 {% block page_heading %}Configurações{% endblock %}
+{% block body_class %}account-page{% endblock %}
 {% block content %}
-<p class="crumb"><a href="/">Início</a> / Minha conta</p>
-<h1>Configurações</h1>
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
 
@@ -26,10 +26,21 @@
   <div class="avatar-actions">
     <form class="js-photo-form" action="/conta/avatar/foto" method="post" enctype="multipart/form-data">
       <input class="js-photo-input" type="file" name="photo" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+      <input type="hidden" name="preset" class="js-image-preset" value="original">
       <button type="button" class="btn btn-secondary js-photo-open">Enviar foto</button>
     </form>
     <button type="button" id="open-avatar" class="btn btn-secondary" aria-haspopup="dialog" aria-controls="avatar-modal">Escolher avatar</button>
   </div>
+  <p class="muted">O estilo pixel é escolhido ao enviar a foto. A original fica guardada e você pode estilizar de novo depois.</p>
+  {% if user.avatar_type == 'upload' %}
+  <form class="avatar-style-form" action="/conta/avatar/estilo" method="post" data-preview=".current-avatar [data-user-avatar] img" data-original-url="{{ avatar_original_url(user) or '' }}">
+    <p class="avatar-style-label">Estilo da foto atual</p>
+    {{ style_choices('style', user.avatar_style or 'original') }}
+    <p class="avatar-style-actions">
+      <button class="btn btn-secondary avatar-style-apply" type="submit">Aplicar estilo</button>
+    </p>
+  </form>
+  {% endif %}
 </section>
 
 <dialog id="avatar-modal" class="avatar-modal">
@@ -68,18 +79,35 @@
     </form>
   </div>
 </dialog>
-<dialog id="photo-crop-dialog" class="leave-dialog photo-crop-dialog" aria-labelledby="photo-crop-title">
-  <h2 id="photo-crop-title">Enquadrar foto</h2>
-  <p class="error js-crop-error" hidden></p>
-  <div class="photo-crop-stage">
-    <canvas class="js-crop-canvas" width="280" height="280" aria-label="Prévia circular da foto"></canvas>
-  </div>
-  <label class="photo-crop-zoom">Zoom
-    <input class="js-crop-zoom" type="range" min="1" max="4" step="0.01" value="1" aria-label="Zoom">
-  </label>
-  <div class="leave-dialog-actions">
-    <button type="button" class="btn btn-ghost js-crop-cancel">Cancelar</button>
-    <button type="button" class="btn btn-primary js-crop-confirm">Usar esta foto</button>
+<dialog id="photo-crop-dialog" class="leave-dialog photo-crop-dialog image-studio" aria-labelledby="photo-crop-title">
+  <header class="wc-titlebar">
+    <span class="wc-titlebar-label" id="photo-crop-title">Estúdio de imagem</span>
+  </header>
+  <div class="image-studio-body">
+    <p class="error js-crop-error" hidden></p>
+    <div class="js-studio-crop">
+      <div class="photo-crop-stage image-studio-preview is-avatar">
+        <canvas class="js-crop-canvas" width="280" height="280" aria-label="Prévia circular da foto"></canvas>
+      </div>
+      <label class="photo-crop-zoom">Zoom
+        <input class="js-crop-zoom" type="range" min="1" max="4" step="0.01" value="1" aria-label="Zoom">
+      </label>
+      <div class="image-studio-actions">
+        <button type="button" class="btn btn-ghost js-crop-cancel">Cancelar</button>
+        <button type="button" class="btn btn-primary js-crop-confirm">Continuar</button>
+      </div>
+    </div>
+    <div class="js-studio-style" hidden>
+      <div class="image-studio-preview is-avatar">
+        <img class="js-style-preview" alt="Prévia do estilo escolhido">
+      </div>
+      <p class="image-studio-label">Estilo da imagem</p>
+      {{ style_choices('preset', 'original') }}
+      <div class="image-studio-actions">
+        <button type="button" class="btn btn-ghost js-crop-cancel">Cancelar</button>
+        <button type="button" class="btn btn-primary js-style-save">Salvar imagem</button>
+      </div>
+    </div>
   </div>
 </dialog>
 
@@ -360,4 +388,5 @@
   });
 </script>
 <script src="/static/js/avatar-crop.js"></script>
+<script src="/static/js/image-style.js"></script>
 {% endblock %}

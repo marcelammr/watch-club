@@ -1,0 +1,15 @@
+{% macro style_choices(name='preset', selected='original', include_hidden=true) %}
+<div class="wc-choice-row js-style-choices" role="radiogroup" aria-label="Estilo da imagem">
+  {% for value, label in PRESET_CHOICES %}
+    <button
+      type="button"
+      class="wc-choice js-style-choice{% if selected == value %} is-on{% endif %}"
+      data-preset="{{ value }}"
+      aria-pressed="{{ 'true' if selected == value else 'false' }}"
+    >{{ label }}</button>
+  {% endfor %}
+</div>
+{% if include_hidden %}
+<input type="hidden" name="{{ name }}" class="js-image-preset" value="{{ selected }}">
+{% endif %}
+{% endmacro %}

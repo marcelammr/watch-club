@@ -1,5 +1,5 @@
 {% from "macros/presence.html" import crescent_moon %}
-{% macro user_avatar(person, size='md') %}
+{% macro user_avatar(person, size='md', shape='circle') %}
 {% set presence = presence_of(person) %}
 {% set label = presence_label(person) %}
 {% set size_class = 'h-8 w-8' if size == 'sm' else ('h-[88px] w-[88px]' if size == 'lg' else 'h-10 w-10') %}
@@ -20,9 +20,10 @@
   data-presence="{{ presence }}"
   data-presence-label="{{ label }}"
   data-size="{{ size }}"
+  data-shape="{{ shape }}"
 >
-  <span class="relative flex {{ size_class }} shrink-0 rounded-full">
-    <img class="aspect-square h-full w-full rounded-full object-cover" src="{{ avatar_url(person) }}" alt="{{ person.name }}">
+  <span class="relative flex {{ size_class }} shrink-0 {% if shape == 'portrait' %}rounded-[4px]{% else %}rounded-full{% endif %}">
+    <img class="aspect-square h-full w-full {% if shape == 'portrait' %}rounded-[4px]{% else %}rounded-full{% endif %} object-cover" src="{{ avatar_url(person) }}" alt="{{ person.name }}">
     <div
       data-slot="avatar-badge"
       class="absolute bottom-0 right-0 z-10 {{ badge_size }} {{ badge_variant }}"

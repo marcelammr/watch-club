@@ -5,6 +5,8 @@ import re
 
 from markupsafe import Markup
 
+from app.pixel_emoji import inject_into_escaped
+
 SPOILER_RE = re.compile(r"\|\|(.+?)\|\|", re.DOTALL)
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*", re.DOTALL)
 ITALIC_RE = re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", re.DOTALL)
@@ -36,4 +38,5 @@ def format_chat(text: str | None) -> Markup:
     formatted = SPOILER_RE.sub(spoiler, escaped)
     formatted = BOLD_RE.sub(r"<strong>\1</strong>", formatted)
     formatted = ITALIC_RE.sub(r"<em>\1</em>", formatted)
+    formatted = inject_into_escaped(formatted)
     return Markup(formatted)

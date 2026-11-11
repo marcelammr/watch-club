@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
@@ -11,17 +12,132 @@ from app.friends import friend_id_set
 from app.models import ClubMember, User, UserShowFavorite
 
 DEFAULT_THEME = "watchclub"
+DEFAULT_WALLPAPER = "grid"
 PROFILE_STATUS_MAX = 80
 DAYS_PER_LEVEL = 30
 MAX_LEVEL = 99
 ENERGY_MAX = 5
+WALLPAPER_ROOT = Path(__file__).resolve().parent / "static" / "wallpapers"
 THEMES = {
     "watchclub": "Watch Club",
     "bubblegum": "Bubblegum",
-    "cyber": "Cyber",
     "dreamy": "Dreamy",
+    "matcha": "Matcha",
+    "cyber": "Cyber",
+}
+# kind: css (class pattern) | image (local raster/SVG file).
+# Image specs stay hidden until the file exists under static/wallpapers/.
+WALLPAPER_SPECS = {
+    "grid": {"label": "Grid", "kind": "css", "css_class": "wc-paper-grid"},
+    "stars": {"label": "Stars", "kind": "css", "css_class": "wc-paper-stars"},
+    "sky": {"label": "Dreamy Sky", "kind": "css", "css_class": "wc-paper-sky"},
+    "desktop": {"label": "Desktop", "kind": "css", "css_class": "wc-paper-desktop"},
+    "night": {"label": "Night", "kind": "css", "css_class": "wc-paper-night"},
+    "checker": {"label": "Checker", "kind": "css", "css_class": "wc-paper-checker"},
+    "doodles": {"label": "Watch Doodles", "kind": "css", "css_class": "wc-paper-doodles"},
+    "dreamy-pixel-sky": {
+        "label": "Dreamy Pixel Sky",
+        "kind": "image",
+        "file": "dreamy-pixel-sky.png",
+        "css_class": "wc-paper-asset",
+        "size": "cover",
+        "repeat": "no-repeat",
+        "position": "center",
+    },
+    "kawaii-desktop": {
+        "label": "Kawaii Desktop",
+        "kind": "image",
+        "file": "kawaii-desktop.png",
+        "css_class": "wc-paper-asset",
+        "size": "cover",
+        "repeat": "no-repeat",
+        "position": "center",
+    },
+    "retro-computer": {
+        "label": "Retro Computer",
+        "kind": "image",
+        "file": "retro-computer.png",
+        "css_class": "wc-paper-asset",
+        "size": "cover",
+        "repeat": "no-repeat",
+        "position": "center",
+    },
+    "gingham-garden": {
+        "label": "Gingham Garden",
+        "kind": "image",
+        "file": "gingham-garden.png",
+        "css_class": "wc-paper-asset",
+        "size": "cover",
+        "repeat": "no-repeat",
+        "position": "center",
+    },
+    "pastel-sparkles": {
+        "label": "Pastel Sparkles",
+        "kind": "image",
+        "file": "pastel-sparkles.png",
+        "css_class": "wc-paper-asset",
+        "size": "cover",
+        "repeat": "no-repeat",
+        "position": "center",
+    },
 }
 PROFILE_TABS = ("perfil", "favoritos", "clubes", "aparencia")
+
+
+def wallpaper_spec(key: str | None) -> dict | None:
+    return WALLPAPER_SPECS.get((key or "").strip().lower())
+
+
+def wallpaper_file_path(spec: dict) -> Path | None:
+    name = spec.get("file")
+    if not name:
+        return None
+    return WALLPAPER_ROOT / name
+
+
+def wallpaper_available(spec: dict) -> bool:
+    if spec.get("enabled") is False:
+        return False
+    if spec.get("kind") == "image":
+        path = wallpaper_file_path(spec)
+        return bool(path and path.is_file())
+    return True
+
+
+def wallpaper_catalog() -> dict[str, str]:
+    return {key: spec["label"] for key, spec in WALLPAPER_SPECS.items() if wallpaper_available(spec)}
+
+
+WALLPAPERS = wallpaper_catalog()
+
+
+def wallpaper_src(spec: dict) -> str:
+    name = spec.get("file") or ""
+    return f"/static/wallpapers/{name}"
+
+
+def wallpaper_class(key: str | None) -> str:
+    resolved = normalize_wallpaper(key)
+    spec = WALLPAPER_SPECS[resolved]
+    if spec.get("kind") == "image" and wallpaper_available(spec):
+        return f"wc-paper-asset wc-paper-{resolved}"
+    return spec.get("css_class") or f"wc-paper-{DEFAULT_WALLPAPER}"
+
+
+def wallpaper_style(key: str | None) -> str:
+    spec = wallpaper_spec(key)
+    if not spec or spec.get("kind") != "image" or not wallpaper_available(spec):
+        return ""
+    src = wallpaper_src(spec)
+    size = spec.get("size") or "cover"
+    repeat = spec.get("repeat") or "no-repeat"
+    position = spec.get("position") or "center"
+    return (
+        f"--wc-wallpaper-src:url('{src}');"
+        f"--wc-wallpaper-size:{size};"
+        f"--wc-wallpaper-repeat:{repeat};"
+        f"--wc-wallpaper-position:{position};"
+    )
 
 
 def normalize_theme(value: str | None) -> str:
@@ -40,6 +156,28 @@ def theme_of(user: User | None) -> str:
     if user is None:
         return DEFAULT_THEME
     return normalize_theme(getattr(user, "theme_key", None))
+
+
+def normalize_wallpaper(value: str | None) -> str:
+    key = (value or "").strip().lower()
+    spec = wallpaper_spec(key)
+    if spec and wallpaper_available(spec):
+        return key
+    return DEFAULT_WALLPAPER
+
+
+def require_wallpaper(value: str | None) -> str:
+    key = (value or "").strip().lower()
+    spec = wallpaper_spec(key)
+    if not spec or not wallpaper_available(spec):
+        raise HTTPException(status_code=400, detail="Fundo inválido")
+    return key
+
+
+def wallpaper_of(user: User | None) -> str:
+    if user is None:
+        return DEFAULT_WALLPAPER
+    return normalize_wallpaper(getattr(user, "wallpaper_key", None))
 
 
 def player_progress(created_at: datetime | None, *, now: datetime | None = None) -> dict:
@@ -124,4 +262,5 @@ def player_card_payload(db: Session, user: User) -> dict:
         "status": (user.profile_status or "").strip(),
         "stats": player_stats(db, user, club_count=int(clubs), favorite_count=int(favorites)),
         "theme": theme_of(user),
+        "wallpaper": wallpaper_of(user),
     }

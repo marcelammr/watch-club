@@ -271,7 +271,10 @@ def test_admin_sets_support_perms_and_support_cannot_edit_roles():
     assert "Como funcionam as tags?" in tag_page.text
     assert "Posição dos emojis" in tag_page.text
     assert "Personalizar cor" in tag_page.text
+    assert "px-paint" in tag_page.text
+    assert "js-px-slot" in tag_page.text
     assert 'name="tag_color_1"' in tag_page.text
+    assert 'name="tag_color_2"' in tag_page.text
     assert 'name="tag_color_mode"' in tag_page.text
     assert "Sólida" in tag_page.text
     assert "Degradê" in tag_page.text

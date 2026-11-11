@@ -1,5 +1,5 @@
 {% from "macros/emoji.html" import emoji_picker %}
-{% from "macros/color_picker.html" import color_picker %}
+{% from "macros/color_picker.html" import pixel_color_palette %}
 {% macro club_tag_style(tag) %}
 {%- set c1 = tag.color_1 if tag and tag.color_1 else DEFAULT_HEX -%}
 {%- set c2 = tag.color_2 if tag and tag.color_2 else c1 -%}
@@ -9,9 +9,9 @@
 {%- if tag and tag.surface_style -%}{{ tag.surface_style }}{%- else -%}--tag-c1: {{ c1 }}; --tag-c2: {{ c2 }}; --tag-angle: {{ angle }}; --tag-bg-intensity: {{ bg }}; --tag-border-intensity: {{ border }};{%- endif -%}
 {% endmacro %}
 {% macro club_tag_inner(prefix, slug, suffix) %}
-  {% if prefix %}<span class="club-tag-emojis">{{ prefix }}</span>{% endif %}
+  {% if prefix %}<span class="club-tag-emojis">{{ prefix|pixel_emoji }}</span>{% endif %}
   <span class="club-tag-slug">{{ slug }}</span>
-  {% if suffix %}<span class="club-tag-emojis">{{ suffix }}</span>{% endif %}
+  {% if suffix %}<span class="club-tag-emojis">{{ suffix|pixel_emoji }}</span>{% endif %}
 {% endmacro %}
 {% macro club_tag_chip(tag, extra_class='') %}
 {% if tag %}
@@ -72,9 +72,9 @@
       style="{{ club_tag_style(current) }}"
       aria-hidden="true"
     >
-      <span class="club-tag-emojis js-tag-chip-prefix">{{ parts.prefix }}</span>
+      <span class="club-tag-emojis js-tag-chip-prefix">{{ parts.prefix|pixel_emoji }}</span>
       <span class="club-tag-slug js-tag-chip-slug">{{ parts.slug or 'MC' }}</span>
-      <span class="club-tag-emojis js-tag-chip-suffix">{{ parts.suffix }}</span>
+      <span class="club-tag-emojis js-tag-chip-suffix">{{ parts.suffix|pixel_emoji }}</span>
     </span>
   </div>
   <label>Sigla
@@ -86,7 +86,7 @@
     <div class="tag-emoji-slots">
       {% for index in [0, 1] %}
         <button type="button" class="tag-emoji-slot js-tag-slot" data-index="{{ index }}" aria-label="Emoji {{ index + 1 }}">
-          <span class="js-tag-slot-value">{% if selected|length > index %}{{ selected[index] }}{% else %}＋{% endif %}</span>
+          <span class="js-tag-slot-value">{% if selected|length > index %}{{ selected[index]|pixel_emoji }}{% else %}＋{% endif %}</span>
         </button>
       {% endfor %}
     </div>
@@ -129,13 +129,11 @@
   </div>
   <div class="js-tag-solid-fields" {% if mode == 'gradient' %}hidden{% endif %}>
     <p class="bio-label">Cor</p>
-    {{ color_picker('tag_color_1', color_1, COLOR_PRESETS, 'js-tag-color-1') }}
+    {{ pixel_color_palette('tag_color_1', color_1, COLOR_PRESETS, 'js-tag-color-1') }}
   </div>
   <div class="js-tag-gradient-fields" {% if mode != 'gradient' %}hidden{% endif %}>
-    <p class="bio-label">Cor 1</p>
-    {{ color_picker('tag_color_1', color_1, COLOR_PRESETS, 'js-tag-color-1-grad') }}
-    <p class="bio-label">Cor 2</p>
-    {{ color_picker('tag_color_2', color_2, COLOR_PRESETS, 'js-tag-color-2') }}
+    <p class="bio-label">Cor 1 e Cor 2</p>
+    {{ pixel_color_palette('tag_color_1', color_1, COLOR_PRESETS, 'js-tag-color-1-grad js-tag-color-2', 'tag_color_2', color_2) }}
     <p class="bio-label">Direção</p>
     <div class="tag-position-row" role="radiogroup" aria-label="Direção do degradê">
       <label class="tag-position-option">

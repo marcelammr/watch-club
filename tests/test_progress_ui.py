@@ -50,6 +50,8 @@ def test_admin_marks_and_unmarks_episode_on_open_round():
     page = owner.get(f"/clubs/{club_id}?aba=assistindo")
     assert "0 de 2 episódios assistidos" in page.text
     assert "Próximo episódio: T1 E1 — Pilot" in page.text
+    assert "watch-synopsis" not in page.text
+    assert "watch-flag" not in page.text
     assert "watch-title" in page.text
     assert f'href="/clubs/{club_id}/shows/{show_id}"' in page.text
     assert "js-action-menu-toggle" in page.text

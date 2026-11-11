@@ -1,3 +1,46 @@
+{% macro pixel_color_palette(field_name, value, presets, extra_class='', field_name_2='', value_2='') %}
+{% set hex = value if value else DEFAULT_HEX %}
+{% set hex2 = value_2 if value_2 else hex %}
+<div class="px-paint js-color-picker {{ extra_class }}" {% if field_name_2 %}data-dual="1"{% endif %}>
+  {% if field_name_2 %}
+  <div class="px-paint-fgbg" role="group" aria-label="Cor ativa">
+    <button type="button" class="px-paint-slot is-front is-on js-px-slot" data-slot="1" aria-pressed="true" aria-label="Cor 1">
+      <span class="px-paint-chip js-color-preview" data-slot="1" style="--swatch: {{ hex }}"></span>
+    </button>
+    <button type="button" class="px-paint-slot is-back js-px-slot" data-slot="2" aria-pressed="false" aria-label="Cor 2">
+      <span class="px-paint-chip js-color-preview" data-slot="2" style="--swatch: {{ hex2 }}"></span>
+    </button>
+  </div>
+  {% endif %}
+  <input type="hidden" name="{{ field_name }}" class="js-color-value" data-slot="1" data-active="1" value="{{ hex }}" maxlength="7">
+  {% if field_name_2 %}
+  <input type="hidden" name="{{ field_name_2 }}" class="js-color-value" data-slot="2" value="{{ hex2 }}" maxlength="7">
+  {% endif %}
+  <div class="px-paint-grid" role="listbox" aria-label="Paleta de cores">
+    {% for preset in presets %}
+      <button
+        type="button"
+        class="px-paint-cell js-color-preset{% if hex == preset.hex %} is-on{% endif %}"
+        data-hex="{{ preset.hex }}"
+        title="{{ preset.label }}"
+        aria-label="{{ preset.label }}"
+        style="--swatch: {{ preset.hex }}"
+      ></button>
+    {% endfor %}
+    <button type="button" class="px-paint-cell is-add js-color-toggle" aria-label="Personalizar cor" title="Personalizar cor" aria-expanded="false" aria-haspopup="true">+</button>
+  </div>
+  <div class="wc-color-panel js-color-panel" hidden>
+    <div class="js-color-iro"></div>
+    <div class="wc-color-hex-row">
+      <span class="color-swatch js-color-preview" style="--swatch: {{ hex }}" aria-hidden="true"></span>
+      <label class="wc-color-hex-label">HEX
+        <input class="js-color-hex" maxlength="7" value="{{ hex }}" spellcheck="false" autocomplete="off">
+      </label>
+    </div>
+  </div>
+</div>
+{% endmacro %}
+
 {% macro color_picker(field_name, value, presets, extra_class='') %}
 {% set hex = value if value else DEFAULT_HEX %}
 <div class="wc-color-picker js-color-picker {{ extra_class }}">

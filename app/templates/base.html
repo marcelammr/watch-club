@@ -3,8 +3,10 @@
 {% from "macros/presence.html" import presence_mark %}
 {% from "macros/club_tag.html" import club_tag_chip %}
 {% from "macros/notifications.html" import bell_popover_inner, notice_inbox_inner %}
+{% from "macros/pixel.html" import px_icon %}
+{% from "macros/window.html" import window_close %}
 <!DOCTYPE html>
-<html lang="pt-BR" class="dark wc-theme-{{ visitor_theme|default('watchclub') }}" dir="ltr"{% if user %} data-enter-sends="{% if user.enter_sends %}1{% else %}0{% endif %}"{% endif %}>
+<html lang="pt-BR" class="dark wc-theme-{{ visitor_theme|default('watchclub') }} {{ wallpaper_class(visitor_wallpaper|default('grid')) }}" dir="ltr"{% set paper_style = wallpaper_style(visitor_wallpaper|default('grid')) %}{% if paper_style %} style="{{ paper_style }}"{% endif %}{% if user %} data-enter-sends="{% if user.enter_sends %}1{% else %}0{% endif %}"{% endif %}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,15 +21,14 @@
   <div class="app-shell">
     {{ app_sidebar(request, user) }}
     <div class="app-main">
+      <div class="app-stage">
       <header class="top">
         <div class="top-start">
           {% block top_start %}
           {% set back_to = back_href_for(request) %}
           {% if back_to %}
-          <a class="back-btn" href="{{ back_to }}" aria-label="Voltar">
-            <svg class="chrome-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M15 18l-6-6 6-6"/>
-            </svg>
+          <a class="back-btn" href="{{ back_to }}" aria-label="Voltar" title="Voltar">
+            <span class="chrome-icon nav-icon-px">{{ px_icon('back') }}</span>
           </a>
           {% endif %}
           {{ hamburger() }}
@@ -35,20 +36,15 @@
           {% endblock %}
         </div>
         <nav class="top-end" aria-label="Conta">
+          <a class="appearance-btn" href="/u/{{ user.username }}?aba=aparencia" aria-label="Aparência" title="Aparência">{{ px_icon('palette') }}</a>
           {% set bell_label = 'Notificações, 1 não lida' if notification_unread == 1 else ('Notificações, ' ~ notification_unread ~ ' não lidas' if notification_unread else 'Notificações') %}
           <a class="bell-btn bell-link" href="/notificacoes" aria-label="{{ bell_label }}" title="Notificações">
-            <svg class="chrome-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M6 9a6 6 0 0 1 12 0c0 7 2 7 2 9H4c0-2 2-2 2-9"/>
-              <path d="M10 20a2 2 0 0 0 4 0"/>
-            </svg>
+            {{ px_icon('bell') }}
             {% if notification_badge %}<span class="bell-badge">{{ notification_badge }}</span>{% endif %}
           </a>
           <div class="bell-menu">
             <button type="button" class="bell-btn js-bell-toggle" aria-label="{{ bell_label }}" title="Notificações" aria-expanded="false" aria-haspopup="dialog" aria-controls="notice-inbox">
-              <svg class="chrome-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M6 9a6 6 0 0 1 12 0c0 7 2 7 2 9H4c0-2 2-2 2-9"/>
-                <path d="M10 20a2 2 0 0 0 4 0"/>
-              </svg>
+              {{ px_icon('bell') }}
               {% if notification_badge %}<span class="bell-badge">{{ notification_badge }}</span>{% endif %}
             </button>
             <div id="bell-popover" class="bell-popover" hidden role="dialog" aria-label="Notificações">
@@ -65,42 +61,47 @@
               {{ user_avatar(user, 'md') }}
               <span class="account-label">Minha conta</span>
             </button>
-            <div id="account-popover" class="account-popover player-card wc-theme-{{ visitor_theme|default('watchclub') }}" hidden role="dialog" aria-label="Player Card">
+            <div id="account-popover" class="account-popover player-card wc-theme-{{ visitor_theme|default('watchclub') }}" hidden role="dialog" aria-label="{{ user.name }}">
               <header class="wc-titlebar">
-                <span class="wc-titlebar-mark" aria-hidden="true">♡</span>
-                <span class="wc-titlebar-label">Player Card</span>
-                <span class="wc-titlebar-controls" aria-hidden="true"><i></i><i></i></span>
+                <span class="wc-titlebar-mark" aria-hidden="true">{{ px_icon('heart') }}</span>
+                <span class="wc-titlebar-label player-card-title">
+                  <span class="player-card-title-name">{{ user.name }}</span>
+                  {{ club_tag_chip(user.display_tag) }}
+                </span>
+                {{ window_close('js-account-close', 'Fechar cartão de ' ~ user.name) }}
               </header>
-              <div class="account-popover-body">
+              <div class="account-popover-body player-card-sheet">
                 <div class="account-popover-head">
-                  {{ user_avatar(user, 'md') }}
+                  <div class="player-avatar-frame is-compact">
+                    {{ user_avatar(user, 'lg', 'portrait') }}
+                  </div>
                   <div>
-                    <strong>{{ user.name }}</strong>
+                    <strong class="player-card-name">{{ user.name }}</strong>
                     {{ club_tag_chip(user.display_tag) }}
                     <p class="muted">@{{ user.username }}</p>
                     <p class="status {{ presence_of(user) }} js-account-status">{{ presence_label(user) }}</p>
                   </div>
                 </div>
                 {% if viewer_player %}
-                <p class="player-energy-label">HP</p>
-                <p class="player-energy" aria-label="HP {{ viewer_player.energy }} de {{ viewer_player.energy_max }}">
-                  {% for i in range(viewer_player.energy_max) %}
-                    <span class="player-heart{% if i < viewer_player.energy %} is-on{% endif %}" aria-hidden="true">♥</span>
-                  {% endfor %}
-                </p>
                 <p class="player-level"><span class="player-level-kicker">LV.</span> {{ '%02d'|format(viewer_player.level) }}</p>
-                <p class="player-exp-label">XP</p>
+                <p class="player-exp-label">EXP</p>
                 <div class="player-exp" role="meter" aria-label="Progresso até o próximo nível" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ viewer_player.percent }}">
                   <span class="player-exp-fill" style="width: {{ viewer_player.percent }}%"></span>
                 </div>
-                <p class="player-card-stats">
-                  Clubes {{ '%02d'|format(viewer_player.stats.clubs) }}
-                  · Amigos {{ '%02d'|format(viewer_player.stats.friends) }}
-                  · Favoritos {{ '%02d'|format(viewer_player.stats.favorites) }}
+                <p class="player-energy-label">Energia</p>
+                <p class="player-energy" aria-label="Energia {{ viewer_player.energy }} de {{ viewer_player.energy_max }}">
+                  {% for i in range(viewer_player.energy_max) %}
+                    <span class="player-heart{% if i < viewer_player.energy %} is-on{% endif %}" aria-hidden="true">{{ px_icon('heart') }}</span>
+                  {% endfor %}
                 </p>
                 {% if viewer_player.status %}
-                  <p class="player-status">✦ {{ viewer_player.status }}</p>
+                  <p class="player-status">{{ viewer_player.status|pixel_emoji }}</p>
                 {% endif %}
+                <dl class="player-stats-grid is-compact" aria-label="Player stats">
+                  <div class="player-stat"><dt>Clubes</dt><dd>{{ '%02d'|format(viewer_player.stats.clubs) }}</dd></div>
+                  <div class="player-stat"><dt>Amigos</dt><dd>{{ '%02d'|format(viewer_player.stats.friends) }}</dd></div>
+                  <div class="player-stat"><dt>Favoritos</dt><dd>{{ '%02d'|format(viewer_player.stats.favorites) }}</dd></div>
+                </dl>
                 {% endif %}
                 <a class="account-popover-link" href="/u/{{ user.username }}">Ver perfil</a>
                 <a class="account-popover-link" href="/conta">Editar perfil</a>
@@ -139,6 +140,7 @@
         {% block content %}{% endblock %}
       </main>
   {% if user %}
+      </div>
     </div>
   </div>
   {% endif %}
@@ -398,6 +400,14 @@
           setAccount(!accountOpen());
         });
       }
+      const accountClose = popover && popover.querySelector(".js-account-close");
+      if (accountClose) {
+        accountClose.addEventListener("click", (event) => {
+          event.stopPropagation();
+          setAccount(false);
+          if (accountToggle && typeof accountToggle.focus === "function") accountToggle.focus();
+        });
+      }
       if (bellToggle) {
         bellToggle.addEventListener("click", (event) => {
           event.stopPropagation();
@@ -484,6 +494,10 @@
     })();
   </script>
   <script src="/static/js/chat-composer.js"></script>
+  <script src="/static/js/appearance-studio.js"></script>
+  {% endif %}
+  {% if user %}
+  <script type="application/json" id="joi3-emoji-catalog">{{ joi3_emoji_catalog()|tojson }}</script>
   {% endif %}
   <div id="command-root"></div>
   <script type="module" src="/static/js/command.js"></script>

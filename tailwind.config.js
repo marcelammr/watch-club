@@ -2,6 +2,21 @@
 module.exports = {
   darkMode: "class",
   content: ["./app/templates/**/*.html", "./frontend/**/*.{ts,tsx}"],
+  safelist: [
+    "wc-theme-watchclub",
+    "wc-theme-bubblegum",
+    "wc-theme-dreamy",
+    "wc-theme-matcha",
+    "wc-theme-cyber",
+    "wc-paper-grid",
+    "wc-paper-stars",
+    "wc-paper-sky",
+    "wc-paper-desktop",
+    "wc-paper-night",
+    "wc-paper-checker",
+    "wc-paper-doodles",
+    "wc-paper-asset",
+  ],
   theme: {
     extend: {
       colors: {
@@ -65,6 +80,8 @@ module.exports = {
         sans: ['"Work Sans"', "ui-sans-serif", "system-ui", "sans-serif"],
         display: ['"Fugaz One"', "ui-sans-serif", "system-ui", "sans-serif"],
         hero: ['Hero', '"Work Sans"', "ui-sans-serif", "system-ui", "sans-serif"],
+        headline: ['"Pixelify Sans"', '"Jersey 15"', "Hero", '"Work Sans"', "ui-sans-serif", "system-ui", "sans-serif"],
+        pixel: ['"Jersey 15"', '"Work Sans"', "ui-sans-serif", "system-ui", "sans-serif"],
       },
     },
   },

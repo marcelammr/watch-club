@@ -62,9 +62,18 @@ def migrate_schema() -> None:
         alters.append("ALTER TABLE users ADD COLUMN profile_status VARCHAR(80) DEFAULT ''")
     if "theme_key" not in columns:
         alters.append("ALTER TABLE users ADD COLUMN theme_key VARCHAR(24) DEFAULT 'watchclub'")
+    if "wallpaper_key" not in columns:
+        alters.append("ALTER TABLE users ADD COLUMN wallpaper_key VARCHAR(24) DEFAULT 'grid'")
+    if "avatar_style" not in columns:
+        alters.append("ALTER TABLE users ADD COLUMN avatar_style VARCHAR(16) DEFAULT 'original'")
+    if "avatar_pixel" not in columns:
+        alters.append("ALTER TABLE users ADD COLUMN avatar_pixel VARCHAR(120)")
+    if "avatar_pixel_status" not in columns:
+        alters.append("ALTER TABLE users ADD COLUMN avatar_pixel_status VARCHAR(16) DEFAULT 'none'")
     with engine.begin() as connection:
         for statement in alters:
             connection.execute(text(statement))
+        connection.execute(text("UPDATE users SET avatar_style = 'faithful' WHERE avatar_style = 'pixel'"))
         rows = connection.execute(text("SELECT id, name, username, username_key, is_active, avatar FROM users")).mappings()
         used: set[str] = set()
         for row in rows:
@@ -137,6 +146,14 @@ def migrate_schema() -> None:
             club_alters.append("ALTER TABLE clubs ADD COLUMN cover_image VARCHAR(120)")
         if "icon_image" not in club_cols:
             club_alters.append("ALTER TABLE clubs ADD COLUMN icon_image VARCHAR(120)")
+        if "cover_style" not in club_cols:
+            club_alters.append("ALTER TABLE clubs ADD COLUMN cover_style VARCHAR(16) DEFAULT 'original'")
+        if "cover_pixel" not in club_cols:
+            club_alters.append("ALTER TABLE clubs ADD COLUMN cover_pixel VARCHAR(120)")
+        if "icon_style" not in club_cols:
+            club_alters.append("ALTER TABLE clubs ADD COLUMN icon_style VARCHAR(16) DEFAULT 'original'")
+        if "icon_pixel" not in club_cols:
+            club_alters.append("ALTER TABLE clubs ADD COLUMN icon_pixel VARCHAR(120)")
         if "tag_slug" not in club_cols:
             club_alters.append("ALTER TABLE clubs ADD COLUMN tag_slug VARCHAR(4) DEFAULT ''")
         if "tag_emoji" not in club_cols:

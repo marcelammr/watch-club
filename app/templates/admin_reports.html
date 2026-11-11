@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% from "macros/admin_nav.html" import admin_sections %}
+{% from "macros/admin_nav.html" import admin_shell %}
 {% block title %}Denúncias · Administração · Watch Club{% endblock %}
 {% block page_heading %}Denúncias{% endblock %}
 {% block body_class %}admin-ui{% endblock %}
 {% block content %}
-{{ admin_sections('denuncias') }}
-<nav class="watch-tabs" aria-label="Filas de denúncias">
-  <a class="watch-tab{% if aba == 'pendentes' %} is-on{% endif %}" href="/admin/denuncias"{% if aba == 'pendentes' %} aria-current="page"{% endif %}>Pendentes</a>
-  <a class="watch-tab{% if aba == 'resolvidas' %} is-on{% endif %}" href="/admin/denuncias?aba=resolvidas"{% if aba == 'resolvidas' %} aria-current="page"{% endif %}>Resolvidas</a>
-  <a class="watch-tab{% if aba == 'contestacoes' %} is-on{% endif %}" href="/admin/denuncias?aba=contestacoes"{% if aba == 'contestacoes' %} aria-current="page"{% endif %}>Contestações</a>
+{% call admin_shell('denuncias') %}
+<nav class="wc-menubar" aria-label="Filas de denúncias">
+  <a class="wc-menu{% if aba == 'pendentes' %} is-on{% endif %}" href="/admin/denuncias"{% if aba == 'pendentes' %} aria-current="page"{% endif %}>Pendentes</a>
+  <a class="wc-menu{% if aba == 'resolvidas' %} is-on{% endif %}" href="/admin/denuncias?aba=resolvidas"{% if aba == 'resolvidas' %} aria-current="page"{% endif %}>Resolvidas</a>
+  <a class="wc-menu{% if aba == 'contestacoes' %} is-on{% endif %}" href="/admin/denuncias?aba=contestacoes"{% if aba == 'contestacoes' %} aria-current="page"{% endif %}>Contestações</a>
 </nav>
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
@@ -193,4 +193,5 @@
     <p class="muted">Nenhuma contestação pendente.</p>
   {% endif %}
 {% endif %}
+{% endcall %}
 {% endblock %}

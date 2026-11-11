@@ -167,6 +167,18 @@ def illustrated_url(provider: str | None, value: str | None) -> str | None:
     return url
 
 
+def clear_pixel_avatar(user) -> None:
+    from app.avatar_uploads import delete_upload
+
+    filename = getattr(user, "avatar_pixel", None)
+    if filename:
+        delete_upload(filename)
+    if hasattr(user, "avatar_pixel"):
+        user.avatar_pixel = None
+    if hasattr(user, "avatar_pixel_status"):
+        user.avatar_pixel_status = "none"
+
+
 def upload_url(filename: str | None) -> str | None:
     from app.avatar_uploads import stored_upload_path
 
@@ -177,6 +189,14 @@ def upload_url(filename: str | None) -> str | None:
 
 
 def avatar_url(person) -> str:
+    from app.pixel_art import is_styled, normalize_style
+
+    style = normalize_style(getattr(person, "avatar_style", None))
+    status = (getattr(person, "avatar_pixel_status", None) or "none").strip().lower()
+    if is_styled(style) and status == "ready":
+        pixel = upload_url(getattr(person, "avatar_pixel", None))
+        if pixel:
+            return pixel
     kind = (getattr(person, "avatar_type", None) or TYPE_ILLUSTRATED).strip().lower()
     if kind == TYPE_UPLOAD:
         url = upload_url(getattr(person, "avatar_value", None))
@@ -189,6 +209,13 @@ def avatar_url(person) -> str:
         return url
     legacy = getattr(person, "avatar", None)
     return illustrated_url(PROVIDER_WATCHCLUB, legacy) or FALLBACK_URL
+
+
+def avatar_original_url(person) -> str | None:
+    kind = (getattr(person, "avatar_type", None) or TYPE_ILLUSTRATED).strip().lower()
+    if kind == TYPE_UPLOAD:
+        return upload_url(getattr(person, "avatar_value", None))
+    return None
 
 
 def illustrated_catalogs() -> list[dict]:
@@ -234,6 +261,7 @@ def parse_illustrated_choice(choice: str | None, provider: str | None = None, va
 def set_illustrated_avatar(user, provider: str, value: str) -> bool:
     if not illustrated_url(provider, value):
         return False
+    clear_pixel_avatar(user)
     user.avatar_type = TYPE_ILLUSTRATED
     user.avatar_provider = provider
     user.avatar_value = value
@@ -243,6 +271,7 @@ def set_illustrated_avatar(user, provider: str, value: str) -> bool:
 
 
 def set_upload_avatar(user, filename: str) -> None:
+    clear_pixel_avatar(user)
     user.avatar_type = TYPE_UPLOAD
     user.avatar_provider = ""
     user.avatar_value = filename

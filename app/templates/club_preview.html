@@ -5,7 +5,7 @@
 {% block content %}
 <section class="club-cover-banner" style="background: {{ club.cover_color or '#3a2348' }}">
   {% if club.cover_image %}
-    <img src="{{ cover_image_url(club.cover_image) }}" alt="">
+    <img src="{{ cover_image_url(club) }}" alt="">
   {% endif %}
 </section>
 <section class="card narrow">

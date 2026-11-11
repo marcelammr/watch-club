@@ -11,7 +11,7 @@ from app.club_tags import stamp_display_tags
 from app.db import SessionLocal
 from app.friends import unread_dm_badge, unread_dm_count
 from app.models import Club, ClubJoinRequest, ClubMember, Notification, Suggestion, User
-from app.player import DEFAULT_THEME, player_card_payload, theme_of
+from app.player import DEFAULT_THEME, DEFAULT_WALLPAPER, player_card_payload, theme_of, wallpaper_of
 from app.roles import PERM_JOINS, can
 
 TYPE_JOIN_REQUEST = "join_request"
@@ -474,6 +474,7 @@ def header_notification_context(request: Request) -> dict:
         "dm_unread": 0,
         "dm_unread_badge": "",
         "visitor_theme": DEFAULT_THEME,
+        "visitor_wallpaper": DEFAULT_WALLPAPER,
         "viewer_player": None,
     }
     user_id = request.session.get("user_id") if request.session else None
@@ -493,6 +494,7 @@ def header_notification_context(request: Request) -> dict:
             "dm_unread": dm_count,
             "dm_unread_badge": unread_dm_badge(dm_count),
             "visitor_theme": theme_of(user),
+            "visitor_wallpaper": wallpaper_of(user),
             "viewer_player": player_card_payload(db, user),
         }
     finally:

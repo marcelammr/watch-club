@@ -1,4 +1,5 @@
 {% from "macros/avatar.html" import user_avatar %}
+{% from "macros/pixel.html" import px_icon %}
 
 {% macro notification_item(item, next_path='/notificacoes', compact=false, ajax=false) %}
 {% set note = item.notification %}
@@ -114,8 +115,9 @@
 {% endmacro %}
 
 {% macro bell_popover_inner(unread, items, current_path) %}
-<div class="bell-popover-head">
-  <strong>Notificações</strong>
+<header class="wc-titlebar bell-popover-head">
+  <span class="wc-titlebar-mark" aria-hidden="true">{{ px_icon('bell') }}</span>
+  <span class="wc-titlebar-label">Notificações</span>
   <div class="notice-inbox-tools">
     {% if unread %}
       <form action="/notificacoes/lidas" method="post">
@@ -127,7 +129,7 @@
       {{ notice_clear_form(current_path, true) }}
     {% endif %}
   </div>
-</div>
+</header>
 {% if items %}
   <div class="notice-list notice-list-compact">
     {% for item in items %}
@@ -135,14 +137,15 @@
     {% endfor %}
   </div>
 {% else %}
-  <p class="muted notice-empty">Nenhuma notificação por enquanto.</p>
+  <p class="muted notice-empty"><span class="wc-kawaii-mark" aria-hidden="true">{{ px_icon('sparkle') }}</span> Nenhuma notificação por enquanto.</p>
 {% endif %}
 <a class="bell-popover-all js-notice-inbox-open" href="/notificacoes">Ver todas as notificações</a>
 {% endmacro %}
 
 {% macro notice_inbox_inner(unread, items, current_path) %}
-<div class="notice-inbox-head">
-  <h2 id="notice-inbox-title">Notificações</h2>
+<div class="notice-inbox-head wc-titlebar">
+  <span class="wc-titlebar-mark" aria-hidden="true">{{ px_icon('bell') }}</span>
+  <h2 id="notice-inbox-title" class="wc-titlebar-label">Notificações</h2>
   <div class="notice-inbox-tools">
     {% if unread %}
       <form class="js-notice-mark-all" action="/notificacoes/lidas" method="post">

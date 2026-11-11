@@ -1,0 +1,17 @@
+{% from "macros/pixel.html" import px_icon %}
+
+{% macro window_close(extra='', label='Fechar') %}
+<button type="button" class="wc-win-close {{ extra }}" aria-label="{{ label }}" title="{{ label }}">
+  <span aria-hidden="true">×</span>
+</button>
+{% endmacro %}
+
+{% macro app_window(title, icon='window', extra='', light=True) %}
+<section class="wc-window wc-app-window{% if light %} is-light{% endif %} {{ extra }}">
+  <header class="wc-titlebar">
+    <span class="wc-titlebar-mark">{{ px_icon(icon) }}</span>
+    <span class="wc-titlebar-label">{{ title }}</span>
+  </header>
+  {{ caller() }}
+</section>
+{% endmacro %}

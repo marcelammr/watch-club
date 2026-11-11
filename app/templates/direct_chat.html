@@ -8,11 +8,17 @@
 {% block content %}
 <section class="dm-shell{% if person %} is-thread{% else %} is-list{% endif %}">
   <aside class="dm-inbox" aria-label="Conversas">
+    <div class="dm-inbox-tools">
+      <label class="dm-search">
+        <span class="visually-hidden">Buscar conversas</span>
+        <input class="js-dm-filter" type="search" placeholder="Buscar" autocomplete="off">
+      </label>
+    </div>
     {% if conversations %}
       <ul class="dm-inbox-list">
         {% for row in conversations %}
           <li>
-            <a class="dm-inbox-row{% if person and person.id == row.person.id %} is-on{% endif %}{% if row.unread %} is-unread{% endif %}" href="/mensagens/{{ row.person.username }}">
+            <a class="dm-inbox-row{% if person and person.id == row.person.id %} is-on{% endif %}{% if row.unread %} is-unread{% endif %}" href="/mensagens/{{ row.person.username }}" data-search="{{ row.person.name }} {{ row.person.username }} {{ row.preview }}">
               {{ user_avatar(row.person, 'md') }}
               <span class="dm-inbox-copy">
                 <span class="dm-inbox-top">
@@ -30,7 +36,7 @@
       <p class="muted dm-inbox-empty">Nenhuma conversa ainda. Abra o perfil de um amigo e toque em Mensagem.</p>
     {% endif %}
   </aside>
-  <section class="dm-thread chat-panel" {% if person %}aria-label="Conversa com {{ person.name }}"{% else %}aria-label="Conversa"{% endif %}>
+  <section class="dm-thread chat-panel is-chat" {% if person %}aria-label="Conversa com {{ person.name }}"{% else %}aria-label="Conversa"{% endif %}>
     {% if person %}
       <header class="dm-head">
         <a class="dm-back" href="/mensagens" aria-label="Voltar para conversas">
@@ -41,9 +47,10 @@
         {{ user_avatar(person, 'md') }}
         <div class="dm-head-copy">
           <h1 class="profile-name">{{ person.name }} {{ club_tag_chip(person.display_tag) }}</h1>
+          <p class="muted">@{{ person.username }}</p>
           <p class="status {{ presence_of(person) }}">{{ presence_label(person) }}</p>
         </div>
-        <a class="muted dm-profile-link" href="/u/{{ person.username }}">Ver perfil</a>
+        <a class="btn btn-secondary dm-profile-link" href="/u/{{ person.username }}">Ver perfil</a>
       </header>
       {% if error %}<p class="error dm-error">{{ error }}</p>{% endif %}
       <div class="chat-log-wrap js-chat-log-wrap">
@@ -76,7 +83,7 @@
                   {% endif %}
                   <time class="muted dm-msg-time" datetime="{{ item.created_at.isoformat() if item.created_at else '' }}">{{ item.created_at|chat_clock }}</time>
                 </p>
-                <p class="chat-body">{{ item.body }}</p>
+                <p class="chat-body">{{ item.body|pixel_emoji }}</p>
               </div>
               <div class="chat-msg-actions">
                 {% if not mine %}
@@ -107,18 +114,17 @@
         <p class="muted dm-locked">Você bloqueou esta conversa. O histórico permanece, mas ninguém envia novas mensagens enquanto o bloqueio existir.</p>
       {% elif are_friends %}
         <form class="chat-form" action="/mensagens/{{ person.username }}" method="post">
-          <div class="dm-composer">
-            {{ emoji_picker('Emoji') }}
+          <div class="chat-composer">
             <label class="chat-compose">
               <span class="visually-hidden">Mensagem</span>
               <textarea name="body" class="js-dm-input" rows="1" maxlength="2000" required placeholder="Escreva para {{ person.name }}"></textarea>
             </label>
-            <button class="dm-send" type="submit" aria-label="Enviar">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M22 2 11 13"/>
-                <path d="M22 2 15 22l-4-9-9-4 20-7z"/>
-              </svg>
-            </button>
+            <div class="chat-toolbar">
+              <div class="chat-toolbar-tools">
+                {{ emoji_picker('Emoji') }}
+              </div>
+              <button class="btn btn-primary" type="submit">Enviar</button>
+            </div>
           </div>
         </form>
       {% else %}
@@ -131,7 +137,56 @@
       </div>
     {% endif %}
   </section>
+  {% if person %}
+  <aside class="dm-peer" aria-label="Sobre {{ person.name }}">
+    <div class="dm-peer-card">
+      {{ user_avatar(person, 'lg') }}
+      <strong>{{ person.name }}</strong>
+      <p class="muted">@{{ person.username }}</p>
+      <p class="status {{ presence_of(person) }}">{{ presence_label(person) }}</p>
+      <a class="btn btn-secondary" href="/u/{{ person.username }}">Ver perfil</a>
+    </div>
+    {% if shared_clubs %}
+      <p class="dm-peer-kicker">Clubes em comum</p>
+      <ul class="dm-peer-list">
+        {% for club in shared_clubs %}
+          <li><a href="/clubs/{{ club.id }}">{{ club.name }}</a></li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+    {% if peer_favorites %}
+      <p class="dm-peer-kicker">Favoritos</p>
+      <ul class="dm-peer-favs">
+        {% for show in peer_favorites %}
+          <li>
+            <a href="/shows/{{ show.id }}" title="{{ show.name }}">
+              {% if show.image_url %}
+                <img src="{{ show.image_url }}" alt="{{ show.name }}">
+              {% else %}
+                <span>{{ show.name }}</span>
+              {% endif %}
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </aside>
+  {% endif %}
 </section>
+<script>
+  (function () {
+    const input = document.querySelector(".js-dm-filter");
+    const rows = document.querySelectorAll("[data-search]");
+    if (!input) return;
+    input.addEventListener("input", () => {
+      const q = input.value.trim().toLowerCase();
+      rows.forEach((row) => {
+        const hay = (row.getAttribute("data-search") || "").toLowerCase();
+        row.closest("li").hidden = Boolean(q) && !hay.includes(q);
+      });
+    });
+  })();
+</script>
 {% if person %}
 <script>
   const log = document.querySelector(".chat-log");

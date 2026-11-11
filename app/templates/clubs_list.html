@@ -9,7 +9,7 @@
   <form class="clubes-search" action="/clubes" method="get" role="search">
     <label class="sr-only" for="clubes-q">Pesquisar meus clubes</label>
     <input id="clubes-q" type="search" name="q" value="{{ query }}" placeholder="Pesquisar meus clubes" maxlength="120">
-    <button class="btn btn-ghost" type="submit">Pesquisar</button>
+    <button class="btn btn-secondary" type="submit">Pesquisar</button>
   </form>
   <div class="clubes-toolbar-actions">
     <a class="btn btn-ghost clubes-create" href="/clubs/novo" aria-label="Criar um clube">
@@ -26,7 +26,7 @@
       <a class="club-cover-card" href="/clubs/{{ club.id }}">
         <span class="club-cover" style="background: {{ club.cover_color or '#3a2348' }}">
           {% if club.cover_image %}
-            <img src="{{ cover_image_url(club.cover_image) }}" alt="">
+            <img src="{{ cover_image_url(club) }}" alt="">
           {% endif %}
         </span>
         <strong>{{ club.name }}</strong>

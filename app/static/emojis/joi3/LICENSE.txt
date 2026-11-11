@@ -1,0 +1,18 @@
+JOI3's FREE Pixel Art Emoji and Icon
+Author: JOI3
+Source: https://joi3.itch.io/joi3s-free-pixel-art-emoji-icon
+
+This work is licensed under CC BY 4.0.
+https://creativecommons.org/licenses/by/4.0/
+
+Itch.io terms (as published by the author):
+You are allowed to edit and modify the asset for commercial and non-commercial
+projects, and to sell works created with the asset.
+You are NOT allowed to resell or redistribute the asset pack, or to edit and
+resell the asset to others.
+Credit is not required but is appreciated.
+Do not use these works for generative AI.
+
+Watch Club uses a subset of the free PNG files as the in-app emoji picker.
+The full Unicode mapping JSON is only in the paid pack; this integration
+identifies sprites by pack index (:joi3-N:) and does not invent Unicode maps.

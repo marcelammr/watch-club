@@ -6,6 +6,8 @@ import emoji
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.pixel_emoji import PACK_TOKEN_RE, sprite_exists
+
 from app.colors import (
     COLOR_MODE_DEFAULT,
     DEFAULT_HEX,
@@ -42,21 +44,30 @@ def parse_tag_emojis(value: str | None) -> list[str] | None:
         return []
     if any(char in _UNSAFE or ord(char) < 32 for char in text):
         return None
-    if not emoji.purely_emoji(text):
-        return None
-    items = emoji.emoji_list(text)
-    count = emoji.emoji_count(text)
-    if count != len(items) or count < 1 or count > TAG_EMOJI_MAX:
-        return None
-    if items[0]["match_start"] != 0 or items[-1]["match_end"] != len(text):
-        return None
-    for current, nxt in zip(items, items[1:]):
-        if current["match_end"] != nxt["match_start"]:
+    units: list[str] = []
+    index = 0
+    while index < len(text):
+        token = PACK_TOKEN_RE.match(text, index)
+        if token:
+            slug = token.group(1)
+            emoji_id = int(token.group(2))
+            if not sprite_exists(emoji_id, slug):
+                return None
+            units.append(token.group(0))
+            index = token.end()
+            continue
+        remaining = text[index:]
+        items = emoji.emoji_list(remaining)
+        if not items or items[0]["match_start"] != 0:
             return None
-    parsed = [item["emoji"] for item in items]
-    if not all(emoji.is_emoji(item) for item in parsed):
+        piece = items[0]["emoji"]
+        if not emoji.is_emoji(piece):
+            return None
+        units.append(piece)
+        index += items[0]["match_end"]
+    if not units or len(units) > TAG_EMOJI_MAX:
         return None
-    return parsed
+    return units
 
 
 def valid_tag_emoji(value: str | None) -> str:

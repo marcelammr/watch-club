@@ -9,12 +9,21 @@ from app.main import app
 from app.models import User
 from app.player import (
     DEFAULT_THEME,
+    DEFAULT_WALLPAPER,
     DAYS_PER_LEVEL,
     PROFILE_STATUS_MAX,
+    WALLPAPER_SPECS,
     energy_hearts,
+    normalize_theme,
+    normalize_wallpaper,
     player_progress,
     require_theme,
     theme_of,
+    wallpaper_available,
+    wallpaper_catalog,
+    wallpaper_class,
+    wallpaper_of,
+    wallpaper_style,
 )
 from tests.test_app import register_active
 from tests.test_suggestions import _user_id
@@ -51,7 +60,7 @@ def test_own_and_other_profile_open_with_real_stats():
     guest.post("/clubs/join", data={"join_code": _join_code(club_id), "next": "/"}, follow_redirects=False)
     own = owner.get("/u/pcard_own")
     assert own.status_code == 200
-    assert "Player Card" in own.text
+    assert "player-card-title-name" in own.text or "Carta Dona" in own.text
     assert "Perfil" in own.text
     assert "Carta Dona" in own.text
     assert "@pcard_own" in own.text
@@ -128,8 +137,8 @@ def test_themes_persist_and_stay_scoped():
     register_active(guest, "theme_guest", "theme.guest@example.com")
     page = owner.get("/u/theme_own")
     assert 'data-theme="watchclub"' in page.text
-    assert "profile-lab wc-theme-watchclub" in page.text
-    for key in ("watchclub", "bubblegum", "cyber", "dreamy"):
+    assert "profile-lab wc-stage wc-theme-watchclub" in page.text
+    for key in ("watchclub", "bubblegum", "dreamy", "matcha", "cyber"):
         saved = owner.post("/u/theme_own/tema", data={"theme": key}, follow_redirects=False)
         assert saved.status_code == 303
         mine = owner.get("/u/theme_own?aba=aparencia")
@@ -139,6 +148,7 @@ def test_themes_persist_and_stay_scoped():
         try:
             user = db.scalar(select(User).where(User.email == "theme.own@example.com"))
             assert theme_of(user) == key
+            assert wallpaper_of(user) == DEFAULT_WALLPAPER
         finally:
             db.close()
     bad = owner.post("/u/theme_own/tema", data={"theme": "rainbow-hacks"}, follow_redirects=False)
@@ -147,8 +157,8 @@ def test_themes_persist_and_stay_scoped():
     visited = guest.get("/u/theme_own")
     assert 'data-theme="bubblegum"' in visited.text
     assert "profile-head wc-theme-bubblegum" in visited.text
-    assert "profile-lab wc-theme-watchclub" in visited.text
-    assert "profile-lab wc-theme-bubblegum" not in visited.text
+    assert "profile-lab wc-stage wc-theme-watchclub" in visited.text
+    assert "profile-lab wc-stage wc-theme-bubblegum" not in visited.text
     stolen = guest.post("/u/theme_own/tema", data={"theme": "cyber"}, follow_redirects=False)
     assert stolen.status_code == 303
     db = SessionLocal()
@@ -157,8 +167,85 @@ def test_themes_persist_and_stay_scoped():
         assert theme_of(user) == "bubblegum"
         guest_user = db.scalar(select(User).where(User.email == "theme.guest@example.com"))
         assert theme_of(guest_user) == DEFAULT_THEME
+        assert wallpaper_of(guest_user) == DEFAULT_WALLPAPER
     finally:
         db.close()
+
+
+def test_look_persists_theme_and_wallpaper_separately():
+    owner = TestClient(app)
+    guest = TestClient(app)
+    register_active(owner, "look_own", "look.own@example.com")
+    register_active(guest, "look_guest", "look.guest@example.com")
+    page = owner.get("/u/look_own?aba=aparencia")
+    assert "wc-paper-grid" in page.text
+    css = owner.get("/static/style.css")
+    assert "--wc-sidebar:" in css.text or "--wc-sidebar:#" in css.text
+    assert "var(--wc-sidebar)" in css.text
+    assert "--wc-sidebar:" in css.text
+    assert "--sidebar:var(--wc-sidebar)" in css.text.replace(" ", "")
+    assert "Aplicar aparência" in page.text
+    assert "overflow-x-scroll" not in page.text
+    assert "look-studio" in page.text
+    assert 'href="/u/look_own?aba=aparencia"' in page.text
+    assert "appearance-btn" in page.text
+    preview = owner.post(
+        "/u/look_own/aparencia",
+        data={"theme": "bubblegum", "wallpaper": "stars"},
+        follow_redirects=False,
+    )
+    assert preview.status_code == 303
+    db = SessionLocal()
+    try:
+        user = db.scalar(select(User).where(User.email == "look.own@example.com"))
+        assert theme_of(user) == "bubblegum"
+        assert wallpaper_of(user) == "stars"
+        user.theme_key = "missing-theme"
+        user.wallpaper_key = "missing-paper"
+        db.commit()
+        assert normalize_theme(user.theme_key) == DEFAULT_THEME
+        assert normalize_wallpaper(user.wallpaper_key) == DEFAULT_WALLPAPER
+        assert theme_of(user) == DEFAULT_THEME
+        assert wallpaper_of(user) == DEFAULT_WALLPAPER
+    finally:
+        db.close()
+    saved = owner.post(
+        "/u/look_own/aparencia",
+        data={"theme": "matcha", "wallpaper": "night"},
+        follow_redirects=False,
+    )
+    assert saved.status_code == 303
+    mine = owner.get("/u/look_own?aba=aparencia")
+    assert "wc-theme-matcha" in mine.text
+    assert "wc-paper-night" in mine.text
+    assert 'data-paper-pick="night"' in mine.text
+    visited = guest.get("/u/look_own")
+    assert "profile-head wc-theme-matcha" in visited.text
+    assert "profile-lab wc-stage wc-theme-watchclub" in visited.text
+    assert "wc-paper-grid" in visited.text
+    assert "wc-paper-night" not in visited.text.split("profile-head", 1)[0]
+    stolen = guest.post(
+        "/u/look_own/aparencia",
+        data={"theme": "cyber", "wallpaper": "checker"},
+        follow_redirects=False,
+    )
+    assert stolen.status_code == 303
+    db = SessionLocal()
+    try:
+        user = db.scalar(select(User).where(User.email == "look.own@example.com"))
+        assert theme_of(user) == "matcha"
+        assert wallpaper_of(user) == "night"
+        guest_user = db.scalar(select(User).where(User.email == "look.guest@example.com"))
+        assert theme_of(guest_user) == DEFAULT_THEME
+        assert wallpaper_of(guest_user) == DEFAULT_WALLPAPER
+    finally:
+        db.close()
+    bad = owner.post(
+        "/u/look_own/aparencia",
+        data={"theme": "matcha", "wallpaper": "hacks"},
+        follow_redirects=False,
+    )
+    assert "error=" in bad.headers["location"]
 
 
 def test_invalid_theme_helper_rejects():
@@ -175,14 +262,19 @@ def test_player_card_popover_keeps_account_actions():
     register_active(person, "pcard_menu", "pcard.menu@example.com")
     home = person.get("/")
     popover = home.text.split('id="account-popover"', 1)[1]
-    assert "Player Card" in popover
+    assert "Player Card" not in popover
+    assert "player-card-title-name" in popover
+    assert "pcard_menu" in popover or "Fechar cartão" in popover
+    assert "Fechar cartão de" in popover
+    assert "js-account-close" in popover
+    assert "wc-win-min" not in popover
     assert 'href="/u/pcard_menu"' in popover
     assert "Ver perfil" in popover
     assert "Editar perfil" in popover
     assert 'href="/conta"' in popover
     assert "Sair da sessão" in popover
     assert "js-status-toggle" in popover
-    assert "HP" in popover
+    assert "Energia" in popover
     assert "LV." in popover
     assert "html" in home.text and "wc-theme-watchclub" in home.text
 
@@ -228,3 +320,74 @@ def test_profile_tabs_and_safety_routes_untouched():
     home = person.get("/")
     assert "Player Profile" not in home.text
     assert _user_id("ptab.a@example.com")
+
+
+def test_contrast_tokens_profile_clubs_friends_and_doodles():
+    owner = TestClient(app)
+    register_active(owner, "look_vis", "look.vis@example.com")
+    created = owner.post("/clubs", data={"name": "Clube Legivel Longo"}, follow_redirects=False)
+    assert created.status_code == 303
+    clubs = owner.get("/u/look_vis?aba=clubes")
+    assert 'class="profile-club-label"' in clubs.text
+    assert 'title="Clube Legivel Longo"' in clubs.text
+    assert "profile-name" in owner.get("/u/look_vis").text
+    css = owner.get("/static/style.css").text
+    compact = css.replace(" ", "")
+    assert "--wc-on-desktop:" in css
+    assert "--wc-on-window:" in css
+    assert "--wc-on-desktop-muted:" in css
+    assert "--wc-on-window-muted:" in css
+    assert "profile-club-label" in css
+    assert "friends-heading" in css
+    look = owner.get("/u/look_vis?aba=aparencia")
+    assert 'data-paper-pick="doodles"' in look.text
+    assert "Watch Doodles" in look.text
+    assert "look-swatch" in look.text
+    assert "look-swatch-accent" in look.text
+    assert 'aria-label="Watch Club"' in look.text
+    assert "look-live-side" in look.text
+    saved = owner.post(
+        "/u/look_vis/aparencia",
+        data={"theme": "dreamy", "wallpaper": "doodles"},
+        follow_redirects=False,
+    )
+    assert saved.status_code == 303
+    db = SessionLocal()
+    try:
+        user = db.scalar(select(User).where(User.email == "look.vis@example.com"))
+        assert theme_of(user) == "dreamy"
+        assert wallpaper_of(user) == "doodles"
+    finally:
+        db.close()
+    friends = owner.get("/amigos")
+    assert "friends-heading" in friends.text
+    assert "Solicitações de amizade" in friends.text
+    assert "Seus amigos" in friends.text
+    assert "wc-paper-doodles" in compact or "wc-paper-doodles" in css
+
+
+def test_chrome_stage_crumbs_and_wallpaper_registry():
+    person = TestClient(app)
+    register_active(person, "chrome_a", "chrome.a@example.com", name="Chrome User")
+    home = person.get("/")
+    assert 'class="app-stage"' in home.text
+    assert "player-card-title-name" in home.text
+    assert ">Player Card<" not in home.text
+    assert 'aria-label="Voltar"' not in home.text or 'class="back-btn"' in home.text
+    conta = person.get("/conta")
+    assert conta.status_code == 200
+    assert "Início / Minha conta" not in conta.text
+    assert "Configurações" in conta.text
+    perfil = person.get("/u/chrome_a")
+    assert "Início / Perfil" not in perfil.text
+    look = person.get("/u/chrome_a?aba=aparencia")
+    assert "Dreamy Pixel Sky" not in look.text
+    assert "js-look-preview" in look.text
+    assert wallpaper_available(WALLPAPER_SPECS["grid"])
+    assert wallpaper_available(WALLPAPER_SPECS["doodles"])
+    assert WALLPAPER_SPECS["dreamy-pixel-sky"]["kind"] == "image"
+    assert not wallpaper_available(WALLPAPER_SPECS["dreamy-pixel-sky"])
+    assert "dreamy-pixel-sky" not in wallpaper_catalog()
+    assert wallpaper_class("grid") == "wc-paper-grid"
+    assert wallpaper_style("grid") == ""
+    assert wallpaper_class("missing-paper") == "wc-paper-grid"

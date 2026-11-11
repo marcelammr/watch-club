@@ -6,10 +6,11 @@
 {% from "macros/club_tag.html" import club_tag_chip, club_person_name %}
 {% from "macros/star_form.html" import club_star_form %}
 {% from "macros/favorite.html" import favorite_button %}
+{% from "macros/pixel.html" import px_icon %}
 {% block title %}{{ club.name }} · Watch Club{% endblock %}
 {% block body_class %}club-room club-ui{% endblock %}
 {% block top_start %}
-  <a class="home-btn" href="/" aria-label="Início" title="Início">{{ nav_icon('home') }}</a>
+  <a class="home-btn" href="/" aria-label="Início" title="Início">{{ px_icon('home') }}</a>
   {{ club_menu_toggle() }}
   <div class="club-switcher">
     {% if user_clubs and user_clubs|length > 1 %}
@@ -24,7 +25,7 @@
       >
         <span class="club-mark" style="--icon-fallback: {{ club.cover_color or '#3A2348' }}" aria-hidden="true">
           {% if club.icon_image %}
-            <img src="{{ club_icon_url(club.icon_image) }}" alt="">
+            <img src="{{ club_icon_url(club) }}" alt="">
           {% else %}
             <span class="club-icon-fallback">{{ club_icon_initials(club.name) }}</span>
           {% endif %}
@@ -35,7 +36,10 @@
         </svg>
       </button>
       <div id="club-switch-popover" class="club-switch-popover" hidden role="dialog" aria-label="Seus clubes">
-        <p class="club-switch-kicker">Seus clubes</p>
+        <header class="wc-titlebar club-switch-head">
+          <span class="wc-titlebar-mark" aria-hidden="true">{{ px_icon('folder') }}</span>
+          <span class="wc-titlebar-label">Seus clubes</span>
+        </header>
         <div class="club-switch-list">
           {% for item in user_clubs %}
             {% set is_current = item.id == club.id %}
@@ -46,18 +50,14 @@
             {% endif %}
                 <span class="club-mark" style="--icon-fallback: {{ item.cover_color or '#3A2348' }}" aria-hidden="true">
                   {% if item.icon_image %}
-                    <img src="{{ club_icon_url(item.icon_image) }}" alt="">
+                    <img src="{{ club_icon_url(item) }}" alt="">
                   {% else %}
                     <span class="club-icon-fallback">{{ club_icon_initials(item.name) }}</span>
                   {% endif %}
                 </span>
                 <span class="club-switch-name">{{ item.name }}</span>
                 {% if is_current %}
-                  <span class="club-switch-check" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M5 12l5 5L20 7"/>
-                    </svg>
-                  </span>
+                  <span class="club-switch-check" aria-hidden="true">{{ px_icon('star') }}</span>
                 {% endif %}
             {% if is_current %}
               </span>
@@ -125,39 +125,41 @@
         </p>
       {% endif %}
       {{ club_star_form(club.id, link.show.id, info, lista=watch_list) }}
-      <p class="watch-meta">
-        <span>{{ CONTENT_KINDS.get(link.show.kind, 'Série') }}</span>
-        <span class="watch-flag {{ flag_class }}">{{ flag_label }}</span>
-      </p>
-    </div>
-    {% if link.show.summary %}
-      <p class="watch-synopsis">{{ link.show.summary[:180] }}{% if link.show.summary|length > 180 %}…{% endif %}</p>
-    {% endif %}
-    {% set progress = progress_by_show.get(link.show.id) %}
-    {% set meeting = next_meeting_by_show.get(link.show.id) if watch_list != 'finalizados' else none %}
-    {% if (progress and progress.has_regular) or meeting %}
-      <div class="watch-progress">
-        {% if progress and progress.has_regular %}
-          <p>{{ progress.watched_count }} de {{ progress.total }} episódio{% if progress.total != 1 %}s{% endif %} assistidos</p>
-          {% if progress.complete %}
-            <p class="muted">Todos os episódios disponíveis foram assistidos.</p>
-          {% elif progress.next_label %}
-            <p class="muted watch-progress-next">Próximo episódio: {{ progress.next_label }}</p>
+      {% if watch_list == 'finalizados' %}
+        <p class="watch-meta">
+          <span class="watch-flag {{ flag_class }}">{{ flag_label }}</span>
+        </p>
+      {% endif %}
+      {% set progress = progress_by_show.get(link.show.id) %}
+      {% set meeting = next_meeting_by_show.get(link.show.id) if watch_list != 'finalizados' else none %}
+      {% if (progress and progress.has_regular) or meeting %}
+        <div class="watch-progress">
+          {% if progress and progress.has_regular %}
+            <p>{{ progress.watched_count }} de {{ progress.total }} episódio{% if progress.total != 1 %}s{% endif %} assistidos</p>
+            {% if progress.complete %}
+              <p class="muted">Todos os episódios disponíveis foram assistidos.</p>
+            {% elif progress.next_label %}
+              <p class="muted watch-progress-next">Próximo episódio: {{ progress.next_label }}</p>
+            {% endif %}
           {% endif %}
-        {% endif %}
-        {% if meeting %}
-          <p class="muted watch-progress-meet">Próximo encontro: {{ meeting.starts_at|schedule_detail }}</p>
-        {% endif %}
-      </div>
-    {% endif %}
+          {% if meeting %}
+            <p class="muted watch-progress-meet">Próximo encontro: {{ meeting.starts_at|schedule_detail }}</p>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
   </article>
 {% endmacro %}
 <div class="club-shell" style="--club-admin-color: {{ club.admin_name_color or '#B892FF' }}; --club-sub-color: {{ club.sub_name_color or '#6C63FF' }}">
   <div class="club-nav-dim js-club-nav-close" hidden></div>
   <aside class="club-nav" id="club-nav" aria-hidden="true">
+    <header class="wc-titlebar">
+      <span class="wc-titlebar-mark" aria-hidden="true">{{ px_icon('folder') }}</span>
+      <span class="wc-titlebar-label">Clube</span>
+    </header>
     <section class="club-cover-banner club-nav-cover" style="background: {{ club.cover_color or '#3a2348' }}">
       {% if club.cover_image %}
-        <img src="{{ cover_image_url(club.cover_image) }}" alt="">
+        <img src="{{ cover_image_url(club) }}" alt="">
       {% endif %}
     </section>
     <div class="club-nav-copy">
@@ -201,7 +203,11 @@
     {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
     {% if tab == 'chat' %}
-      <section class="chat-panel">
+      <section class="chat-panel is-chat">
+        <header class="wc-titlebar">
+          <span class="wc-titlebar-mark" aria-hidden="true">{{ px_icon('envelope') }}</span>
+          <span class="wc-titlebar-label">Bate-papo</span>
+        </header>
         <div class="chat-toolbar-top">
           <a class="chat-refresh" href="/clubs/{{ club.id }}?aba=chat" aria-label="Atualizar" title="Atualizar">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -873,11 +879,16 @@
       return root.classList.contains("club-nav-open");
     }
 
+    function isDocked() {
+      return window.matchMedia("(min-width: 901px)").matches;
+    }
+
     function sync() {
-      const expanded = isOpen();
+      const docked = isDocked();
+      const expanded = docked || isOpen();
       toggles.forEach((btn) => btn.setAttribute("aria-expanded", expanded ? "true" : "false"));
       if (nav) nav.setAttribute("aria-hidden", expanded ? "false" : "true");
-      if (dim) dim.hidden = !expanded;
+      if (dim) dim.hidden = docked || !isOpen();
     }
 
     function setOpen(open) {
@@ -898,6 +909,7 @@
       if (document.querySelector(".js-emoji-picker.is-open")) return;
       setOpen(false);
     });
+    window.addEventListener("resize", sync);
     sync();
   })();
   (function () {

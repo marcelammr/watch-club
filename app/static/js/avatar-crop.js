@@ -55,6 +55,12 @@
     showError("");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     revokeUrl();
+    const stylePane = dialog.querySelector(".js-studio-style");
+    const cropPane = dialog.querySelector(".js-studio-crop");
+    if (stylePane && cropPane) {
+      cropPane.hidden = false;
+      stylePane.hidden = true;
+    }
   }
 
   function closeDialog() {
@@ -225,6 +231,14 @@
     const transfer = new DataTransfer();
     transfer.items.add(cropped);
     input.files = transfer.files;
+    const stylePane = dialog.querySelector(".js-studio-style");
+    const cropPane = dialog.querySelector(".js-studio-crop");
+    if (stylePane && cropPane) {
+      cropPane.hidden = true;
+      stylePane.hidden = false;
+      dialog.dispatchEvent(new CustomEvent("wc:cropped", { detail: { file: cropped } }));
+      return;
+    }
     revokeUrl();
     dialog.close();
     form.submit();

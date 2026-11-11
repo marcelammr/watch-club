@@ -81,6 +81,8 @@ def test_logged_in_shell_and_clubes_page():
     assert "é só o começo." in home.text
     assert "Clube Nav" in home.text
     assert 'href="/clubes"' in home.text
+    assert "home-clubs-arrow" in home.text
+    assert "wc-win-min" not in home.text
     assert "Criar um clube" not in home.text
     assert "Entrar com código" not in home.text
     assert 'id="account-popover"' in home.text
@@ -112,10 +114,9 @@ def test_logged_in_shell_and_clubes_page():
     assert "app-sidebar" not in guest_home.text
     assert 'href="/auth/login">Entrar</a>' in guest_home.text
     assert 'class="btn btn-secondary" href="/auth/signup">Criar conta</a>' in guest_home.text
-    assert 'class="btn btn-secondary" href="/auth/signup">Começar</a>' in guest_home.text
+    assert 'href="/auth/signup">Começar</a>' in guest_home.text
     assert 'href="/register">Criar conta</a>' not in guest_home.text
     assert 'href="/register">Começar</a>' not in guest_home.text
-    assert 'class="btn btn-primary" href="/auth/signup">Começar</a>' not in guest_home.text
 
 
 def test_health():
@@ -419,7 +420,7 @@ def test_bio_and_avatar_editor_hidden():
     assert "js-emoji-picker" in settings.text
     assert "js-emoji-panel" in settings.text
     assert 'id="photo-crop-dialog"' in settings.text
-    assert "Usar esta foto" in settings.text
+    assert "Salvar imagem" in settings.text or "Continuar" in settings.text
     assert "Cinéfila de maratona." in settings.text
     public = person.get("/u/bio_user")
     assert public.status_code == 200
@@ -656,8 +657,10 @@ def test_home_is_a_simple_club_hub():
     assert 'id="icon-crop-dialog"' in form.text
     assert "/static/js/cover-crop.js" in form.text
     assert "/static/js/icon-crop.js" in form.text
-    assert 'class="js-cover-file"' in form.text
-    assert 'class="js-icon-file"' in form.text
+    assert "js-cover-file" in form.text
+    assert "js-icon-file" in form.text
+    assert "js-cover-file-pick" in form.text
+    assert "js-icon-file-pick" in form.text
     assert "Ícone do clube" in form.text
     assert "Capa do clube" in form.text
     assert 'id="icon-remove-dialog"' not in form.text

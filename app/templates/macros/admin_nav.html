@@ -1,7 +1,24 @@
+{% from "macros/pixel.html" import px_icon %}
+
 {% macro admin_sections(current) %}
-<nav class="watch-tabs" aria-label="Administração">
-  <a class="watch-tab{% if current == 'cadastros' %} is-on{% endif %}" href="/admin/cadastros"{% if current == 'cadastros' %} aria-current="page"{% endif %}>Cadastros</a>
-  <a class="watch-tab{% if current == 'sugestoes' %} is-on{% endif %}" href="/admin/sugestoes"{% if current == 'sugestoes' %} aria-current="page"{% endif %}>Sugestões</a>
-  <a class="watch-tab{% if current == 'denuncias' %} is-on{% endif %}" href="/admin/denuncias"{% if current == 'denuncias' %} aria-current="page"{% endif %}>Denúncias</a>
+<nav class="wc-tabs" aria-label="Administração">
+  <a class="wc-tab{% if current == 'cadastros' %} is-on{% endif %}" href="/admin/cadastros"{% if current == 'cadastros' %} aria-current="page"{% endif %}>Cadastros</a>
+  <a class="wc-tab{% if current == 'sugestoes' %} is-on{% endif %}" href="/admin/sugestoes"{% if current == 'sugestoes' %} aria-current="page"{% endif %}>Sugestões</a>
+  <a class="wc-tab{% if current == 'denuncias' %} is-on{% endif %}" href="/admin/denuncias"{% if current == 'denuncias' %} aria-current="page"{% endif %}>Denúncias</a>
 </nav>
+{% endmacro %}
+
+{% macro admin_shell(current, preview=False) %}
+<section class="wc-window wc-app-window is-light admin-app">
+  <header class="wc-titlebar">
+    <span class="wc-titlebar-mark">{{ px_icon('window') }}</span>
+    <span class="wc-titlebar-label">Administração</span>
+  </header>
+  {% if not preview %}
+    {{ admin_sections(current) }}
+  {% endif %}
+  <div class="wc-window-body is-light">
+    {{ caller() }}
+  </div>
+</section>
 {% endmacro %}

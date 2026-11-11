@@ -42,7 +42,18 @@ function toggleOf(wrap: HTMLElement) {
 }
 
 function valueInputOf(wrap: HTMLElement) {
-  return wrap.querySelector<HTMLInputElement>(".js-color-value");
+  return (
+    wrap.querySelector<HTMLInputElement>('.js-color-value[data-active="1"]') ||
+    wrap.querySelector<HTMLInputElement>(".js-color-value")
+  );
+}
+
+function slotInputs(wrap: HTMLElement) {
+  return [...wrap.querySelectorAll<HTMLInputElement>(".js-color-value")];
+}
+
+function activeSlot(wrap: HTMLElement) {
+  return valueInputOf(wrap)?.dataset.slot || "1";
 }
 
 function hexInputOf(wrap: HTMLElement) {
@@ -77,8 +88,11 @@ function markPresets(wrap: HTMLElement, hex: string) {
 }
 
 function paintPreview(wrap: HTMLElement, hex: string) {
+  const slot = activeSlot(wrap);
   wrap.querySelectorAll<HTMLElement>(".js-color-preview").forEach((node) => {
-    node.style.setProperty("--swatch", hex);
+    if (!node.dataset.slot || node.dataset.slot === slot) {
+      node.style.setProperty("--swatch", hex);
+    }
   });
 }
 
@@ -149,6 +163,26 @@ export function mountColorPickers(root: ParentNode = document) {
     if (wrap.dataset.bound === "1") return;
     wrap.dataset.bound = "1";
     commitHex(wrap, currentHex(wrap), false);
+    wrap.querySelectorAll<HTMLButtonElement>(".js-px-slot").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const slot = btn.dataset.slot || "1";
+        slotInputs(wrap).forEach((input) => {
+          if (input.dataset.slot === slot) input.dataset.active = "1";
+          else delete input.dataset.active;
+        });
+        wrap.querySelectorAll<HTMLButtonElement>(".js-px-slot").forEach((item) => {
+          const on = item === btn;
+          item.classList.toggle("is-on", on);
+          item.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+        const hex = currentHex(wrap);
+        markPresets(wrap, hex);
+        const hexField = hexInputOf(wrap);
+        if (hexField) hexField.value = hex;
+        const picker = (wrap as HTMLElement & { _iro?: IroPicker })._iro;
+        if (picker) picker.color.hexString = hex;
+      });
+    });
     wrap.querySelectorAll<HTMLElement>(".js-color-preset").forEach((btn) => {
       btn.addEventListener("click", () => {
         commitHex(wrap, btn.dataset.hex || "");

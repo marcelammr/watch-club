@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% from "macros/admin_nav.html" import admin_sections %}
+{% from "macros/admin_nav.html" import admin_shell %}
 {% block title %}Sugestões · Administração · Watch Club{% endblock %}
 {% block page_heading %}Sugestões{% endblock %}
 {% block body_class %}admin-ui{% endblock %}
 {% block content %}
-{{ admin_sections('sugestoes') }}
-<nav class="watch-tabs" aria-label="Filas de sugestões">
-  <a class="watch-tab{% if not archived %} is-on{% endif %}" href="/admin/sugestoes"{% if not archived %} aria-current="page"{% endif %}>Recebidas</a>
-  <a class="watch-tab{% if archived %} is-on{% endif %}" href="/admin/sugestoes?aba=arquivadas"{% if archived %} aria-current="page"{% endif %}>Arquivadas</a>
+{% call admin_shell('sugestoes') %}
+<nav class="wc-menubar" aria-label="Filas de sugestões">
+  <a class="wc-menu{% if not archived %} is-on{% endif %}" href="/admin/sugestoes"{% if not archived %} aria-current="page"{% endif %}>Recebidas</a>
+  <a class="wc-menu{% if archived %} is-on{% endif %}" href="/admin/sugestoes?aba=arquivadas"{% if archived %} aria-current="page"{% endif %}>Arquivadas</a>
 </nav>
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
@@ -62,4 +62,5 @@
     if (open && open.scrollIntoView) open.scrollIntoView({ block: "nearest" });
   })();
 </script>
+{% endcall %}
 {% endblock %}

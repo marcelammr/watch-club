@@ -175,6 +175,10 @@ def test_dm_pair_history_unread_list_and_permissions():
     assert history.index("vamos assistir hoje?") < history.index("beleza, depois te mando")
     assert "is-mine" in thread.text
     assert 'action="/mensagens/dm_guest"' in thread.text
+    assert "Ver perfil" in thread.text
+    assert 'href="/u/dm_guest"' in thread.text
+    assert "Buscar" in thread.text
+    assert "dm-peer" in thread.text
     assert "Nenhuma API" not in thread.text
 
     after_read = host.get("/mensagens")

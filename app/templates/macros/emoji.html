@@ -1,19 +1,26 @@
+{% from "macros/pixel.html" import px_icon %}
+{% from "macros/window.html" import window_close %}
 {% macro emoji_picker(aria_label='Emoji', toggle_class='chat-tool', mode='insert') %}
 <div class="emoji-picker-wrap js-emoji-picker" data-emoji-mode="{{ mode }}">
   <button
     type="button"
     class="{{ toggle_class }} js-emoji-toggle"
     aria-expanded="false"
-    aria-haspopup="true"
+    aria-haspopup="dialog"
+    aria-controls=""
     aria-label="{{ aria_label }}"
     title="{{ aria_label }}"
   >
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="9"/>
-      <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
-      <path d="M9 9.5h.01M15 9.5h.01"/>
-    </svg>
+    {{ px_icon('face') }}
   </button>
-  <div class="emoji-panel js-emoji-panel" hidden></div>
+  <div class="emoji-panel js-emoji-panel" hidden role="dialog" aria-label="Emojis">
+    <header class="wc-titlebar emoji-window-head">
+      <span class="wc-titlebar-mark" aria-hidden="true">{{ px_icon('face') }}</span>
+      <span class="wc-titlebar-label">Emojis</span>
+      {{ window_close('js-emoji-close', 'Fechar emojis') }}
+    </header>
+    <nav class="emoji-packs js-emoji-packs" hidden aria-label="Pacotes de emoji"></nav>
+    <div class="emoji-grid js-emoji-grid-host" role="listbox" aria-label="Emojis pixel"></div>
+  </div>
 </div>
 {% endmacro %}

@@ -17,11 +17,15 @@ COLOR_PRESETS = (
     {"token": "lavender", "hex": "#B892FF", "label": "Lavanda"},
     {"token": "violet", "hex": "#6C63FF", "label": "Violeta"},
     {"token": "pink", "hex": "#FF5D8F", "label": "Rosa"},
+    {"token": "candy", "hex": "#ED789C", "label": "Candy"},
+    {"token": "lilac", "hex": "#B78AD9", "label": "Lilás"},
     {"token": "blue", "hex": "#6EA8FF", "label": "Azul"},
+    {"token": "navy", "hex": "#0B4F87", "label": "Navy"},
     {"token": "green", "hex": "#3DDC84", "label": "Verde"},
     {"token": "orange", "hex": "#FF9F5B", "label": "Laranja"},
     {"token": "cream", "hex": "#F7F0FF", "label": "Creme"},
     {"token": "night", "hex": "#C4B8D9", "label": "Noite"},
+    {"token": "ink", "hex": "#14284A", "label": "Tinta"},
 )
 TOKEN_TO_HEX = {item["token"]: item["hex"] for item in COLOR_PRESETS}
 

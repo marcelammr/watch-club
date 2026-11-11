@@ -2,14 +2,13 @@
 {% from "macros/avatar.html" import user_avatar %}
 {% from "macros/club_tag.html" import club_tag_chip, club_person_name, club_role_badge, club_tag_fields %}
 {% from "macros/color_picker.html" import color_picker %}
+{% from "macros/image_style.html" import style_choices %}
+{% from "macros/pixel.html" import px_icon %}
 {% block title %}{% if mode == 'tag' %}Tag · {{ club.name }}{% elif mode == 'edit' %}Configurações · {{ club.name }}{% else %}Criar um clube{% endif %}{% endblock %}
 {% block body_class %}club-ui{% if mode in ['edit', 'tag'] %} settings-overlay{% endif %}{% endblock %}
 {% block page_heading %}{% if mode == 'create' %}Criar um clube{% else %}Configurações{% endif %}{% endblock %}
 {% block content %}
 {% set is_settings = mode in ['edit', 'tag'] %}
-{% if not is_settings %}
-<p class="crumb"><a href="/">Início</a> / Novo clube</p>
-{% endif %}
 {% if mode == 'create' %}
 <section class="card">
   <h1>Criar um clube</h1>
@@ -31,9 +30,11 @@
       <img class="js-icon-preview-img" alt="" hidden>
       <span class="club-icon-fallback js-icon-fallback">?</span>
     </div>
-    <label>Foto do ícone
-      <input type="file" name="icon_file" class="js-icon-file" accept="image/jpeg,image/png,image/webp">
-    </label>
+    <div class="wc-file-field">
+      <input type="file" name="icon_file" class="js-icon-file wc-file-input" accept="image/jpeg,image/png,image/webp">
+      <button type="button" class="btn btn-secondary js-icon-file-pick">Escolher foto do ícone</button>
+    </div>
+    <input type="hidden" name="icon_preset" class="js-icon-preset" value="">
     <p class="bio-label">Capa do clube</p>
     <p class="muted">Imagem horizontal usada dentro do clube.</p>
     <div class="js-cover-editor" data-initial-tab="color">
@@ -49,9 +50,11 @@
         <div class="club-cover-banner cover-preview" id="cover-preview">
           <img id="cover-preview-img" alt="" hidden>
         </div>
-        <label>Imagem
-          <input type="file" name="cover_file" id="cover-file" class="js-cover-file" accept="image/jpeg,image/png,image/webp,image/gif">
-        </label>
+        <div class="wc-file-field">
+          <input type="file" name="cover_file" id="cover-file" class="js-cover-file wc-file-input" accept="image/jpeg,image/png,image/webp,image/gif">
+          <button type="button" class="btn btn-secondary js-cover-file-pick">Escolher imagem da capa</button>
+        </div>
+        <input type="hidden" name="cover_preset" class="js-cover-preset" value="">
       </div>
     </div>
     <label class="check"><input type="checkbox" name="is_closed" value="1"> Clube fechado — novas entradas precisam de aprovação.</label>
@@ -102,6 +105,10 @@
 >
   <a class="btn btn-icon settings-close js-settings-leave" href="/clubs/{{ club.id }}" aria-label="Fechar configurações" title="Fechar">&times;</a>
   <aside class="club-settings-nav" aria-label="Categorias de configuração">
+    <header class="wc-titlebar">
+      <span class="wc-titlebar-mark" aria-hidden="true">{{ px_icon('window') }}</span>
+      <span class="wc-titlebar-label">Configurações</span>
+    </header>
     <p class="club-settings-kicker">Configurações do clube</p>
     <p class="club-settings-club">{{ club.name }}</p>
     {% if mode == 'edit' %}
@@ -162,16 +169,22 @@
         <p class="muted">Identidade compacta da comunidade.</p>
         <div class="club-icon-preview js-club-icon-preview" style="--icon-fallback: {{ cover_hex }}">
           {% if club.icon_image %}
-            <img class="js-icon-preview-img" src="{{ club_icon_url(club.icon_image) }}" alt="">
+            <img class="js-icon-preview-img" src="{{ club_icon_url(club) }}" data-original-url="{{ club_icon_original_url(club) or '' }}" alt="">
             <span class="club-icon-fallback js-icon-fallback" hidden>{{ club_icon_initials(club.name) }}</span>
           {% else %}
             <img class="js-icon-preview-img" alt="" hidden>
             <span class="club-icon-fallback js-icon-fallback">{{ club_icon_initials(club.name) }}</span>
           {% endif %}
         </div>
-        <label>Foto do ícone
-          <input type="file" name="icon_file" class="js-icon-file" accept="image/jpeg,image/png,image/webp">
-        </label>
+        <div class="wc-file-field">
+          <input type="file" name="icon_file" class="js-icon-file wc-file-input" accept="image/jpeg,image/png,image/webp">
+          <button type="button" class="btn btn-secondary js-icon-file-pick">Escolher foto do ícone</button>
+        </div>
+        <div class="club-image-style js-page-style" data-preview=".js-icon-preview-img" data-original-url="{{ club_icon_original_url(club) or '' }}">
+          <p class="avatar-style-label">Estilo do ícone</p>
+          <p class="muted">Escolha o preset pixel. A original fica guardada e o estilo pode ser reaplicado depois.</p>
+          {{ style_choices('icon_preset', club.icon_style or 'original') }}
+        </div>
         <button
           type="button"
           class="btn btn-ghost js-icon-remove-open"
@@ -192,14 +205,20 @@
           <div class="js-cover-pane" data-tab="image" {% if cover_tab != 'image' %}hidden{% endif %}>
             <div class="club-cover-banner cover-preview" id="cover-preview">
               {% if club.cover_image %}
-                <img id="cover-preview-img" src="{{ cover_image_url(club.cover_image) }}" alt="">
+                <img id="cover-preview-img" src="{{ cover_image_url(club) }}" data-original-url="{{ cover_original_url(club) or '' }}" alt="">
               {% else %}
                 <img id="cover-preview-img" alt="" hidden>
               {% endif %}
             </div>
-            <label>Imagem
-              <input type="file" name="cover_file" id="cover-file" class="js-cover-file" accept="image/jpeg,image/png,image/webp,image/gif">
-            </label>
+            <div class="wc-file-field">
+              <input type="file" name="cover_file" id="cover-file" class="js-cover-file wc-file-input" accept="image/jpeg,image/png,image/webp,image/gif">
+              <button type="button" class="btn btn-secondary js-cover-file-pick">Escolher imagem da capa</button>
+            </div>
+            <div class="club-image-style js-page-style" data-preview="#cover-preview-img" data-original-url="{{ cover_original_url(club) or '' }}">
+              <p class="avatar-style-label">Estilo da capa</p>
+              <p class="muted">O mesmo estúdio de crop e presets do ícone, em formato horizontal.</p>
+              {{ style_choices('cover_preset', club.cover_style or 'original') }}
+            </div>
             {% if club.cover_image %}
               <label class="check"><input type="checkbox" name="clear_cover" value="1"> Remover imagem e usar só a cor</label>
             {% endif %}
@@ -512,14 +531,50 @@
     const gradientFields = editor.querySelector(".js-tag-gradient-fields");
     const angles = { right: "90deg", "down-right": "135deg", down: "180deg", "up-right": "45deg" };
 
-    function splitEmojis(value) {
-      const text = value || "";
+    function graphemes(text) {
       if (typeof Intl !== "undefined" && Intl.Segmenter) {
         return [...new Intl.Segmenter("und", { granularity: "grapheme" }).segment(text)]
           .map((part) => part.segment)
           .filter((part) => part.trim());
       }
       return Array.from(text);
+    }
+
+    function splitEmojis(value) {
+      const text = value || "";
+      const units = [];
+      const token = /:joi3-\d+:/g;
+      let last = 0;
+      let match;
+      while ((match = token.exec(text))) {
+        if (match.index > last) units.push(...graphemes(text.slice(last, match.index)));
+        units.push(match[0]);
+        last = match.index + match[0].length;
+      }
+      if (last < text.length) units.push(...graphemes(text.slice(last)));
+      return units.filter(Boolean);
+    }
+
+    function renderEmojiText(target, text) {
+      if (!target) return;
+      target.replaceChildren();
+      if (!text) return;
+      const token = /:joi3-(\d+):/g;
+      let last = 0;
+      let match;
+      while ((match = token.exec(text))) {
+        if (match.index > last) target.append(text.slice(last, match.index));
+        const img = document.createElement("img");
+        img.className = "px-emoji";
+        img.src = "/static/emojis/joi3/32/Emojis_32x32_" + match[1] + ".png";
+        img.alt = "";
+        img.width = 16;
+        img.height = 16;
+        img.draggable = false;
+        target.append(img);
+        last = match.index + match[0].length;
+      }
+      if (last < text.length) target.append(text.slice(last));
     }
 
     let emojis = splitEmojis(emojiInput ? emojiInput.value : "").slice(0, 2);
@@ -529,9 +584,10 @@
       return checked ? checked.value : "solid";
     }
 
-    function pickerHex(root) {
-      const input = root && root.querySelector(".js-color-value");
-      const value = (input && input.value || "").toUpperCase();
+    function namedHex(name) {
+      const fields = [...editor.querySelectorAll('input[name="' + name + '"]')];
+      const live = fields.find((node) => !node.disabled) || fields[0];
+      const value = ((live && live.value) || "").toUpperCase();
       return /^#[0-9A-F]{6}$/.test(value) ? value : "#B892FF";
     }
 
@@ -540,14 +596,14 @@
       if (mode === "gradient") {
         return {
           mode: mode,
-          color1: pickerHex(editor.querySelector(".js-tag-color-1-grad")),
-          color2: pickerHex(editor.querySelector(".js-tag-color-2")),
+          color1: namedHex("tag_color_1"),
+          color2: namedHex("tag_color_2"),
         };
       }
       return {
         mode: "solid",
-        color1: pickerHex(editor.querySelector(".js-tag-color-1")),
-        color2: pickerHex(editor.querySelector(".js-tag-color-1")),
+        color1: namedHex("tag_color_1"),
+        color2: namedHex("tag_color_1"),
       };
     }
 
@@ -587,7 +643,7 @@
       if (parts.prefix) {
         const prefix = document.createElement("span");
         prefix.className = "club-tag-emojis";
-        prefix.textContent = parts.prefix;
+        renderEmojiText(prefix, parts.prefix);
         node.appendChild(prefix);
       }
       const slugNode = document.createElement("span");
@@ -597,7 +653,7 @@
       if (parts.suffix) {
         const suffix = document.createElement("span");
         suffix.className = "club-tag-emojis";
-        suffix.textContent = parts.suffix;
+        renderEmojiText(suffix, parts.suffix);
         node.appendChild(suffix);
       }
     }
@@ -627,15 +683,18 @@
         node.style.setProperty("--tag-border-intensity", borderInput.value);
       }
       paintSurface(chip, "js-tag-chip");
-      chipPrefix.textContent = parts.prefix;
+      renderEmojiText(chipPrefix, parts.prefix);
       chipSlug.textContent = parts.slug;
-      chipSuffix.textContent = parts.suffix;
+      renderEmojiText(chipSuffix, parts.suffix);
       if (emojiInput) emojiInput.value = emojis.join("");
       if (bgLabel) bgLabel.textContent = bgInput.value + "%";
       if (borderLabel) borderLabel.textContent = borderInput.value + "%";
       slots.forEach((slot, index) => {
         const label = slot.querySelector(".js-tag-slot-value");
-        if (label) label.textContent = emojis[index] || "＋";
+        if (label) {
+          if (emojis[index]) renderEmojiText(label, emojis[index]);
+          else label.textContent = "＋";
+        }
         slot.classList.toggle("is-on", Boolean(emojis[index]));
       });
       editor.querySelectorAll(".js-pos-preview").forEach((preview) => {
@@ -1198,37 +1257,72 @@
   </div>
 </dialog>
 {% endif %}
-<dialog id="icon-crop-dialog" class="leave-dialog icon-crop-dialog" aria-labelledby="icon-crop-title">
-  <h2 id="icon-crop-title">Enquadrar ícone</h2>
-  <p class="error js-icon-crop-error" hidden></p>
-  <div class="icon-crop-stage">
-    <canvas class="js-icon-crop-canvas" width="280" height="280" aria-label="Prévia quadrada do ícone"></canvas>
-  </div>
-  <label class="photo-crop-zoom">Zoom
-    <input class="js-icon-crop-zoom" type="range" min="1" max="4" step="0.01" value="1" aria-label="Zoom do ícone">
-  </label>
-  <div class="leave-dialog-actions">
-    <button type="button" class="btn btn-ghost js-icon-crop-cancel">Cancelar</button>
-    <button type="button" class="btn btn-primary js-icon-crop-confirm">Usar este enquadramento</button>
+<dialog id="icon-crop-dialog" class="leave-dialog icon-crop-dialog image-studio" aria-labelledby="icon-crop-title">
+  <header class="wc-titlebar">
+    <span class="wc-titlebar-label" id="icon-crop-title">Estúdio do ícone</span>
+  </header>
+  <div class="image-studio-body">
+    <p class="error js-icon-crop-error" hidden></p>
+    <div class="js-studio-crop">
+      <div class="icon-crop-stage image-studio-preview is-icon">
+        <canvas class="js-icon-crop-canvas" width="280" height="280" aria-label="Prévia quadrada do ícone"></canvas>
+      </div>
+      <label class="photo-crop-zoom">Zoom
+        <input class="js-icon-crop-zoom" type="range" min="1" max="4" step="0.01" value="1" aria-label="Zoom do ícone">
+      </label>
+      <div class="image-studio-actions">
+        <button type="button" class="btn btn-ghost js-icon-crop-cancel">Cancelar</button>
+        <button type="button" class="btn btn-primary js-icon-crop-confirm">Continuar</button>
+      </div>
+    </div>
+    <div class="js-studio-style" hidden>
+      <div class="image-studio-preview is-icon">
+        <img class="js-style-preview" alt="Prévia do estilo do ícone">
+      </div>
+      <p class="image-studio-label">Estilo da imagem</p>
+      {{ style_choices('icon_preset', 'original', false) }}
+      <div class="image-studio-actions">
+        <button type="button" class="btn btn-ghost js-icon-crop-cancel">Cancelar</button>
+        <button type="button" class="btn btn-primary js-style-save">Usar imagem</button>
+      </div>
+    </div>
   </div>
 </dialog>
-<dialog id="cover-crop-dialog" class="leave-dialog cover-crop-dialog" aria-labelledby="cover-crop-title">
-  <h2 id="cover-crop-title">Enquadrar capa</h2>
-  <p class="error js-cover-crop-error" hidden></p>
-  <p class="muted js-cover-crop-gif" hidden>GIFs animados viram um único quadro. A animação não é mantida.</p>
-  <div class="cover-crop-stage">
-    <canvas class="js-cover-crop-canvas" width="320" height="200" aria-label="Prévia 16 por 10 da capa"></canvas>
-  </div>
-  <label class="photo-crop-zoom">Zoom
-    <input class="js-cover-crop-zoom" type="range" min="1" max="4" step="0.01" value="1" aria-label="Zoom da capa">
-  </label>
-  <div class="leave-dialog-actions">
-    <button type="button" class="btn btn-ghost js-cover-crop-cancel">Cancelar</button>
-    <button type="button" class="btn btn-primary js-cover-crop-confirm">Usar este enquadramento</button>
+<dialog id="cover-crop-dialog" class="leave-dialog cover-crop-dialog image-studio" aria-labelledby="cover-crop-title">
+  <header class="wc-titlebar">
+    <span class="wc-titlebar-label" id="cover-crop-title">Estúdio da capa</span>
+  </header>
+  <div class="image-studio-body">
+    <p class="error js-cover-crop-error" hidden></p>
+    <p class="muted js-cover-crop-gif" hidden>GIFs animados viram um único quadro. A animação não é mantida.</p>
+    <div class="js-studio-crop">
+      <div class="cover-crop-stage image-studio-preview is-cover">
+        <canvas class="js-cover-crop-canvas" width="320" height="200" aria-label="Prévia 16 por 10 da capa"></canvas>
+      </div>
+      <label class="photo-crop-zoom">Zoom
+        <input class="js-cover-crop-zoom" type="range" min="1" max="4" step="0.01" value="1" aria-label="Zoom da capa">
+      </label>
+      <div class="image-studio-actions">
+        <button type="button" class="btn btn-ghost js-cover-crop-cancel">Cancelar</button>
+        <button type="button" class="btn btn-primary js-cover-crop-confirm">Continuar</button>
+      </div>
+    </div>
+    <div class="js-studio-style" hidden>
+      <div class="image-studio-preview is-cover">
+        <img class="js-style-preview" alt="Prévia do estilo da capa">
+      </div>
+      <p class="image-studio-label">Estilo da imagem</p>
+      {{ style_choices('cover_preset', 'original', false) }}
+      <div class="image-studio-actions">
+        <button type="button" class="btn btn-ghost js-cover-crop-cancel">Cancelar</button>
+        <button type="button" class="btn btn-primary js-style-save">Usar imagem</button>
+      </div>
+    </div>
   </div>
 </dialog>
 <script src="/static/js/cover-crop.js"></script>
 <script src="/static/js/icon-crop.js"></script>
+<script src="/static/js/image-style.js"></script>
 <script>
   (function () {
     const wrap = document.querySelector(".js-club-icon-preview");

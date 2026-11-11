@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/pixel.html" import px_icon %}
 {% block title %}Agenda · Watch Club{% endblock %}
 {% block page_heading %}Agenda{% endblock %}
 {% block body_class %}planner-page{% endblock %}
@@ -112,7 +113,7 @@
                         <a href="/clubs/{{ item.club.id }}?aba=agendamentos">
                           <span class="planner-club-mark" style="background: {{ item.club.cover_color or '#3a2348' }}">
                             {% if item.club.icon_image %}
-                              <img src="{{ club_icon_url(item.club.icon_image) }}" alt="">
+                              <img src="{{ club_icon_url(item.club) }}" alt="">
                             {% endif %}
                           </span>
                           {{ item.club.name }}
@@ -131,7 +132,7 @@
       </div>
     {% else %}
       <div class="planner-empty">
-        <p class="muted">Nenhum encontro marcado por enquanto.</p>
+        <p class="muted"><span class="wc-kawaii-mark" aria-hidden="true">{{ px_icon('moon') }}</span> Nenhum encontro marcado por enquanto.</p>
         <p class="muted">Os agendamentos dos seus clubes aparecem aqui.</p>
         {% if clubs %}
           <a class="btn btn-ghost" href="/clubes">Meus Clubes</a>

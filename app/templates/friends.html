@@ -2,6 +2,7 @@
 {% from "macros/avatar.html" import user_avatar %}
 {% from "macros/presence.html" import presence_mark %}
 {% from "macros/club_tag.html" import club_tag_chip %}
+{% from "macros/pixel.html" import px_icon %}
 {% block title %}Amigos · Watch Club{% endblock %}
 {% block page_heading %}Amigos{% endblock %}
 {% block content %}
@@ -9,7 +10,7 @@
 {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
 
 <section class="friends-section">
-  <h2 class="friends-heading">Solicitações de amizade</h2>
+  <h2 class="friends-heading"><span class="wc-kawaii-mark" aria-hidden="true">{{ px_icon('sparkle') }}</span>Solicitações de amizade</h2>
   <ul class="people">
     {% for person in incoming %}
       <li class="person-row">
@@ -36,7 +37,7 @@
 </section>
 
 <section class="friends-section">
-  <h2 class="friends-heading">Seus amigos</h2>
+  <h2 class="friends-heading"><span class="wc-kawaii-mark" aria-hidden="true">{{ px_icon('heart') }}</span>Seus amigos</h2>
   <ul class="people">
     {% for person in friends %}
       <li class="person-row">
@@ -49,7 +50,7 @@
         <a class="btn btn-primary" href="/mensagens/{{ person.username }}">Mensagem</a>
       </li>
     {% else %}
-      <li class="muted">Você ainda não tem amigos. Envie um pedido pelo perfil de alguém do clube.</li>
+      <li class="muted friends-empty">Você ainda não tem amigos. Envie um pedido pelo perfil de alguém do clube.</li>
     {% endfor %}
   </ul>
 </section>

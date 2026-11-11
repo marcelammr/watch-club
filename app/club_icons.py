@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import secrets
 from pathlib import Path
+from typing import Any
 
 from fastapi import UploadFile
 
@@ -32,10 +33,29 @@ def club_icon_initials(name: str | None) -> str:
     return (parts[0][0] + parts[1][0]).upper()
 
 
-def club_icon_url(filename: str | None) -> str | None:
-    if not filename:
+def club_icon_url(source: Any) -> str | None:
+    from app.pixel_art import is_styled
+
+    if source is None:
         return None
-    return f"/static/uploads/club-icons/{filename}"
+    if not isinstance(source, str):
+        pixel = getattr(source, "icon_pixel", None)
+        original = getattr(source, "icon_image", None)
+        if is_styled(getattr(source, "icon_style", None)) and pixel and stored_icon_path(pixel):
+            return f"/static/uploads/club-icons/{pixel}"
+        if original:
+            return f"/static/uploads/club-icons/{original}"
+        return None
+    return f"/static/uploads/club-icons/{source}"
+
+
+def club_icon_original_url(source: Any) -> str | None:
+    if source is None:
+        return None
+    original = source if isinstance(source, str) else getattr(source, "icon_image", None)
+    if original:
+        return f"/static/uploads/club-icons/{original}"
+    return None
 
 
 def stored_icon_path(filename: str | None) -> Path | None:

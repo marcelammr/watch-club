@@ -1,16 +1,14 @@
 {% extends "base.html" %}
 {% from "macros/avatar.html" import user_avatar %}
-{% from "macros/admin_nav.html" import admin_sections %}
+{% from "macros/admin_nav.html" import admin_shell %}
 {% block title %}Cadastros · Administração · Watch Club{% endblock %}
 {% block page_heading %}Cadastros{% endblock %}
 {% block body_class %}admin-ui{% endblock %}
 {% block content %}
-{% if not ui_preview %}
-{{ admin_sections('cadastros') }}
-{% endif %}
-<nav class="watch-tabs" aria-label="Filas de cadastro">
-  <a class="watch-tab{% if aba != 'revisoes' %} is-on{% endif %}" href="{% if ui_preview %}/dev/acesso/cadastros{% else %}/admin/cadastros{% endif %}"{% if aba != 'revisoes' %} aria-current="page"{% endif %}>Pendentes</a>
-  <a class="watch-tab{% if aba == 'revisoes' %} is-on{% endif %}" href="{% if ui_preview %}/dev/acesso/revisoes{% else %}/admin/cadastros?aba=revisoes{% endif %}"{% if aba == 'revisoes' %} aria-current="page"{% endif %}>Revisões</a>
+{% call admin_shell('cadastros', preview=ui_preview|default(false)) %}
+<nav class="wc-menubar" aria-label="Filas de cadastro">
+  <a class="wc-menu{% if aba != 'revisoes' %} is-on{% endif %}" href="{% if ui_preview|default(false) %}/dev/acesso/cadastros{% else %}/admin/cadastros{% endif %}"{% if aba != 'revisoes' %} aria-current="page"{% endif %}>Pendentes</a>
+  <a class="wc-menu{% if aba == 'revisoes' %} is-on{% endif %}" href="{% if ui_preview|default(false) %}/dev/acesso/revisoes{% else %}/admin/cadastros?aba=revisoes{% endif %}"{% if aba == 'revisoes' %} aria-current="page"{% endif %}>Revisões</a>
 </nav>
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
@@ -62,4 +60,5 @@
   {% endif %}
 </section>
 {% endif %}
+{% endcall %}
 {% endblock %}

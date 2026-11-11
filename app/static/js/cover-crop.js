@@ -182,6 +182,9 @@
     });
   }
 
+  document.querySelectorAll(".js-cover-file-pick").forEach((btn) => {
+    btn.addEventListener("click", () => input.click());
+  });
   input.addEventListener("change", async () => {
     const file = input.files && input.files[0];
     if (!file) return;
@@ -291,6 +294,14 @@
     const clearBox = document.querySelector('input[name="clear_cover"]');
     if (clearBox) clearBox.checked = false;
     revokeUrl("source");
+    const stylePane = dialog.querySelector(".js-studio-style");
+    const cropPane = dialog.querySelector(".js-studio-crop");
+    if (stylePane && cropPane) {
+      cropPane.hidden = true;
+      stylePane.hidden = false;
+      dialog.dispatchEvent(new CustomEvent("wc:cropped", { detail: { file: cropped } }));
+      return;
+    }
     dialog.close();
     resetState();
   });

@@ -1,13 +1,14 @@
 {% extends "base.html" %}
+{% from "macros/pixel.html" import px_icon %}
 {% block body_class %}home{% endblock %}
 {% block page_heading %}Início{% endblock %}
 {% block content %}
 {% if not user %}
   <section class="home-hero">
-    <p class="home-kicker">Watch Club</p>
+    <p class="home-kicker">{{ px_icon('sparkle') }} Watch Club</p>
     <h1>Assistir juntos <span class="home-hero-break">é só o começo.</span></h1>
     <p>Crie um clube, chame os amigos e acompanhe pôsteres, temporadas e notícias num só lugar.</p>
-    <a class="btn btn-secondary" href="/auth/signup">Começar</a>
+    <a class="btn btn-primary" href="/auth/signup">Começar</a>
   </section>
 {% else %}
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
@@ -15,7 +16,7 @@
 
   <section class="home-hero">
     <p class="home-hello-line">Olá, {{ user.name }}!</p>
-    <p class="home-kicker">Watch Club</p>
+    <p class="home-kicker">{{ px_icon('sparkle') }} Watch Club</p>
     <h1>Assistir juntos <span class="home-hero-break">é só o começo.</span></h1>
     <p>Crie um clube, chame os amigos e acompanhe pôsteres, temporadas e notícias num só lugar.</p>
   </section>
@@ -24,12 +25,8 @@
     <div class="home-clubs-head">
       <h2 id="home-clubs-title" class="home-clubs-title">
         <a class="home-clubs-link" href="/clubes">
-          <span class="home-section-mark" aria-hidden="true"></span>
           Meus Clubes
-          <svg class="home-clubs-arrow" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M5 12h14"/>
-            <path d="M13 6l6 6-6 6"/>
-          </svg>
+          <span class="home-clubs-arrow" aria-hidden="true">→</span>
         </a>
       </h2>
     </div>
@@ -39,9 +36,9 @@
         <div class="home-clubs-rail" id="home-clubs-rail" tabindex="0" role="list">
           {% for club in clubs %}
             <a class="home-club-card" href="/clubs/{{ club.id }}" role="listitem">
-              <span class="home-club-cover" style="background: {{ club.cover_color or '#3a2348' }}">
+              <span class="home-club-cover" style="background: {{ club.cover_color or '#0B4F87' }}">
                 {% if club.cover_image %}
-                  <img src="{{ cover_image_url(club.cover_image) }}" alt="">
+                  <img src="{{ cover_image_url(club) }}" alt="">
                 {% endif %}
               </span>
               <strong>{{ club.name }}</strong>
@@ -59,7 +56,7 @@
       </div>
     {% else %}
       <div class="home-clubs-empty">
-        <p class="muted">Você ainda não participa de nenhum clube. Abra Meus Clubes para criar um ou entrar com código.</p>
+        <p class="muted"><span class="wc-kawaii-mark" aria-hidden="true">{{ px_icon('heart') }}</span> Você ainda não participa de nenhum clube. Abra Meus Clubes para criar um ou entrar com código.</p>
       </div>
     {% endif %}
   </section>
@@ -69,12 +66,8 @@
     <div class="home-clubs-head">
       <h2 id="home-news-title" class="home-clubs-title">
         <a class="home-clubs-link" href="/noticias">
-          <span class="home-section-mark" aria-hidden="true"></span>
           Últimas notícias
-          <svg class="home-clubs-arrow" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M5 12h14"/>
-            <path d="M13 6l6 6-6 6"/>
-          </svg>
+          <span class="home-clubs-arrow" aria-hidden="true">→</span>
         </a>
       </h2>
     </div>

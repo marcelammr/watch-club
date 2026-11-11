@@ -147,7 +147,8 @@ def test_news_page_requires_login_and_uses_general_feed():
     assert 'class="home-news-card"' in home.text
     assert "home-news-media" in home.text
     assert 'src="https://example.com/a.jpg"' in home.text
-    assert "home-section-mark" in home.text
+    assert 'href="/noticias"' in home.text
+    assert "home-clubs-link" in home.text
     assert "home-news-meta" in home.text
     assert "26 out" in home.text
     assert 'href="/noticias"' in home.text

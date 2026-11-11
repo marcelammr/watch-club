@@ -9,6 +9,12 @@ const sizes = {
   lg: "h-[88px] w-[88px] text-2xl",
 } as const;
 
+const portraitSizes = {
+  sm: "h-8 w-8",
+  md: "h-10 w-10",
+  lg: "h-[7.35rem] w-[6.2rem] text-2xl",
+} as const;
+
 const badgeSizes = {
   sm: "size-2.5",
   md: "size-3",
@@ -44,6 +50,7 @@ type UserAvatarProps = {
   presence?: string;
   presenceLabel?: string;
   size?: AvatarSize;
+  shape?: "circle" | "portrait";
   className?: string;
 };
 
@@ -54,13 +61,15 @@ export function UserAvatar({
   presence,
   presenceLabel,
   size = "md",
+  shape = "circle",
   className,
 }: UserAvatarProps) {
   const status = presence && presence in presenceVariant ? presence : undefined;
+  const portrait = shape === "portrait";
   return (
-    <Avatar className={cn(sizes[size], className)}>
-      <AvatarImage src={src} alt={alt} />
-      <AvatarFallback>{fallback}</AvatarFallback>
+    <Avatar className={cn(portrait ? portraitSizes[size] : sizes[size], portrait ? "rounded-[4px]" : "rounded-full", className)}>
+      <AvatarImage src={src} alt={alt} className={portrait ? "rounded-[4px] object-cover" : undefined} />
+      <AvatarFallback className={portrait ? "rounded-[4px]" : undefined}>{fallback}</AvatarFallback>
       {status ? (
         <AvatarBadge
           variant={presenceVariant[status]}
@@ -100,6 +109,7 @@ export function mountUserAvatars(root: ParentNode = document) {
         presence={node.dataset.presence}
         presenceLabel={node.dataset.presenceLabel}
         size={(node.dataset.size as AvatarSize) || "md"}
+        shape={node.dataset.shape === "portrait" ? "portrait" : "circle"}
       />
     );
   });

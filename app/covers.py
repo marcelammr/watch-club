@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import secrets
 from pathlib import Path
+from typing import Any
 
 from fastapi import UploadFile
 
@@ -61,7 +62,32 @@ async def save_cover_image(upload: UploadFile | None) -> str | None:
     return name
 
 
-def cover_image_url(filename: str | None) -> str | None:
-    if not filename:
+def delete_cover_image(filename: str | None) -> None:
+    path = stored_cover_path(filename)
+    if path:
+        path.unlink(missing_ok=True)
+
+
+def cover_image_url(source: Any) -> str | None:
+    from app.pixel_art import is_styled
+
+    if source is None:
         return None
-    return f"/static/uploads/clubs/{filename}"
+    if not isinstance(source, str):
+        pixel = getattr(source, "cover_pixel", None)
+        original = getattr(source, "cover_image", None)
+        if is_styled(getattr(source, "cover_style", None)) and pixel and stored_cover_path(pixel):
+            return f"/static/uploads/clubs/{pixel}"
+        if original:
+            return f"/static/uploads/clubs/{original}"
+        return None
+    return f"/static/uploads/clubs/{source}"
+
+
+def cover_original_url(source: Any) -> str | None:
+    if source is None:
+        return None
+    original = source if isinstance(source, str) else getattr(source, "cover_image", None)
+    if original:
+        return f"/static/uploads/clubs/{original}"
+    return None
