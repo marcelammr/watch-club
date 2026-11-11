@@ -344,16 +344,8 @@ def migrate_schema() -> None:
     inspector.clear_cache()
     if "registration_requests" in inspector.get_table_names():
         with engine.begin() as connection:
-            connection.execute(
-                text(
-                    "INSERT INTO registration_requests (user_id, status, created_at) "
-                    "SELECT u.id, 'pending', COALESCE(u.created_at, CURRENT_TIMESTAMP) "
-                    "FROM users u "
-                    "WHERE u.auth0_sub IS NOT NULL AND TRIM(u.auth0_sub) != '' "
-                    "AND COALESCE(u.is_active, 0) = 0 "
-                    "AND NOT EXISTS (SELECT 1 FROM registration_requests r WHERE r.user_id = u.id)"
-                )
-            )
+            # Historical pending rows stay in SQLite. New inactive Auth0 users
+            # are no longer backfilled into the approval queue.
             connection.execute(
                 text(
                     "CREATE UNIQUE INDEX IF NOT EXISTS ix_registration_requests_one_pending "

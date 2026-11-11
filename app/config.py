@@ -38,6 +38,7 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 FACEBOOK_CLIENT_ID = os.getenv("FACEBOOK_CLIENT_ID", "")
 FACEBOOK_CLIENT_SECRET = os.getenv("FACEBOOK_CLIENT_SECRET", "")
+# Legado: o cadastro público ignora este valor. Pode permanecer no .env.
 REGISTRATION_INVITE_REQUIRED = os.getenv("REGISTRATION_INVITE_REQUIRED", "false").lower() in {"1", "true", "yes"}
 TMDB_ACCESS_TOKEN = os.getenv("TMDB_ACCESS_TOKEN", "")
 AUTH0_DOMAIN = (os.getenv("AUTH0_DOMAIN") or "").strip()

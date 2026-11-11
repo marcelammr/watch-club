@@ -206,6 +206,31 @@ def is_profile_draft_ready(payload: dict | None) -> bool:
     return not error
 
 
+def signup_blocked_reason(db: Session, user: User) -> str | None:
+    """Historical rejection or a disciplinary restriction still blocks automatic access."""
+    if getattr(user, "banned_at", None):
+        return "banned"
+    until = getattr(user, "suspended_until", None)
+    if until and until > utcnow():
+        return "suspended"
+    from app.registrations import STATUS_REJECTED, latest_registration_for_user
+
+    request = latest_registration_for_user(db, user.id)
+    if request is not None and request.status == STATUS_REJECTED:
+        return "rejected"
+    return None
+
+
+def activate_open_signup(db: Session, user: User) -> bool:
+    if user.is_active:
+        return True
+    if signup_blocked_reason(db, user):
+        return False
+    user.is_active = True
+    db.flush()
+    return True
+
+
 def auth0_followup_path(
     db: Session,
     user: User | None,
@@ -214,6 +239,8 @@ def auth0_followup_path(
     email_verified: bool,
     profile_ready: bool = False,
 ) -> str:
+    if user and email_verified is True and activate_open_signup(db, user):
+        return "/"
     if user and user.is_active:
         return "/"
     if user:
@@ -280,15 +307,11 @@ def complete_auth0_onboarding(
     try:
         known = find_user_by_auth0_sub(write, sub)
         if known:
-            if known.is_active:
+            if activate_open_signup(write, known):
+                write.commit()
                 return "active", known.id, "", []
-            from app.registrations import STATUS_EXPIRED, ensure_pending_registration
-
-            request = ensure_pending_registration(write, known.id)
             write.commit()
-            if request.status == STATUS_EXPIRED:
-                return "expired", known.id, "", []
-            return "awaiting", known.id, "", []
+            return "blocked", known.id, "", []
         candidate = find_user_by_email(write, address)
         if candidate is not None:
             bound = (candidate.auth0_sub or "").strip()
@@ -309,24 +332,18 @@ def complete_auth0_onboarding(
                 suggest_usernames(key, taken_keys(write)),
             )
         user = create_auth0_user(write, sub=sub.strip(), email=address, name=display, username=key)
-        from app.registrations import ensure_pending_registration
-
-        ensure_pending_registration(write, user.id)
+        activate_open_signup(write, user)
         write.commit()
-        return "awaiting", user.id, "", []
+        return "active", user.id, "", []
     except IntegrityError:
         write.rollback()
         known = find_user_by_auth0_sub(write, sub)
         if known:
-            if known.is_active:
+            if activate_open_signup(write, known):
+                write.commit()
                 return "active", known.id, "", []
-            from app.registrations import STATUS_EXPIRED, ensure_pending_registration
-
-            request = ensure_pending_registration(write, known.id)
             write.commit()
-            if request.status == STATUS_EXPIRED:
-                return "expired", known.id, "", []
-            return "awaiting", known.id, "", []
+            return "blocked", known.id, "", []
         if username_taken(write, key):
             return (
                 "form_error",
@@ -394,11 +411,6 @@ def login_or_create_oauth(db: Session, profile: dict) -> User:
     if not user:
         user = find_user_by_email(db, email)
     if not user:
-        from app import config
-        from app.invites import InviteSignupBlocked
-
-        if config.REGISTRATION_INVITE_REQUIRED:
-            raise InviteSignupBlocked()
         if email_taken(db, email):
             raise ValueError("Este e-mail já está cadastrado")
         username = unique_username(db, profile.get("name") or email.split("@")[0])
@@ -424,7 +436,8 @@ def login_or_create_oauth(db: Session, profile: dict) -> User:
         user.google_id = provider_id
     else:
         user.facebook_id = provider_id
-    user.is_active = True
+    if not signup_blocked_reason(db, user):
+        user.is_active = True
     if not user.email:
         user.email = email
     db.flush()

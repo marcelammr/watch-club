@@ -12,6 +12,7 @@ from app.player import (
     DEFAULT_WALLPAPER,
     DAYS_PER_LEVEL,
     PROFILE_STATUS_MAX,
+    THEMES,
     WALLPAPER_SPECS,
     energy_hearts,
     normalize_theme,
@@ -23,7 +24,9 @@ from app.player import (
     wallpaper_catalog,
     wallpaper_class,
     wallpaper_of,
+    wallpaper_src,
     wallpaper_style,
+    wallpaper_thumb_src,
 )
 from tests.test_app import register_active
 from tests.test_suggestions import _user_id
@@ -60,7 +63,7 @@ def test_own_and_other_profile_open_with_real_stats():
     guest.post("/clubs/join", data={"join_code": _join_code(club_id), "next": "/"}, follow_redirects=False)
     own = owner.get("/u/pcard_own")
     assert own.status_code == 200
-    assert "player-card-title-name" in own.text or "Carta Dona" in own.text
+    assert "player-card-name" in own.text or "Carta Dona" in own.text
     assert "Perfil" in own.text
     assert "Carta Dona" in own.text
     assert "@pcard_own" in own.text
@@ -261,13 +264,17 @@ def test_player_card_popover_keeps_account_actions():
     person = TestClient(app)
     register_active(person, "pcard_menu", "pcard.menu@example.com")
     home = person.get("/")
-    popover = home.text.split('id="account-popover"', 1)[1]
+    popover = home.text.split('id="account-popover"', 1)[1].split("<main>", 1)[0]
     assert "Player Card" not in popover
-    assert "player-card-title-name" in popover
-    assert "pcard_menu" in popover or "Fechar cartão" in popover
-    assert "Fechar cartão de" in popover
-    assert "js-account-close" in popover
+    assert "player-card-name" in popover
+    assert "player-nameplate" in popover
+    assert "player-avatar-orb" in popover
+    assert "wc-titlebar" not in popover
+    assert "js-account-close" not in popover
     assert "wc-win-min" not in popover
+    assert "Classe" not in popover
+    assert "Mago" not in popover
+    assert "@pcard_menu" in popover
     assert 'href="/u/pcard_menu"' in popover
     assert "Ver perfil" in popover
     assert "Editar perfil" in popover
@@ -276,7 +283,13 @@ def test_player_card_popover_keeps_account_actions():
     assert "js-status-toggle" in popover
     assert "Energia" in popover
     assert "LV." in popover
+    assert "EXP" in popover
+    assert "Clubes" in popover
+    assert "Amigos" in popover
+    assert "Favoritos" in popover
+    assert 'data-shape="circle"' in popover
     assert "html" in home.text and "wc-theme-watchclub" in home.text
+    assert "account-popover player-card wc-theme-" in home.text
 
 
 def test_friendship_from_profile_still_works():
@@ -371,7 +384,7 @@ def test_chrome_stage_crumbs_and_wallpaper_registry():
     register_active(person, "chrome_a", "chrome.a@example.com", name="Chrome User")
     home = person.get("/")
     assert 'class="app-stage"' in home.text
-    assert "player-card-title-name" in home.text
+    assert "player-card-name" in home.text
     assert ">Player Card<" not in home.text
     assert 'aria-label="Voltar"' not in home.text or 'class="back-btn"' in home.text
     conta = person.get("/conta")
@@ -385,9 +398,15 @@ def test_chrome_stage_crumbs_and_wallpaper_registry():
     assert "js-look-preview" in look.text
     assert wallpaper_available(WALLPAPER_SPECS["grid"])
     assert wallpaper_available(WALLPAPER_SPECS["doodles"])
-    assert WALLPAPER_SPECS["dreamy-pixel-sky"]["kind"] == "image"
-    assert not wallpaper_available(WALLPAPER_SPECS["dreamy-pixel-sky"])
+    assert wallpaper_available(WALLPAPER_SPECS["azure-cove"])
+    assert "dreamy-pixel-sky" not in WALLPAPER_SPECS
     assert "dreamy-pixel-sky" not in wallpaper_catalog()
     assert wallpaper_class("grid") == "wc-paper-grid"
     assert wallpaper_style("grid") == ""
     assert wallpaper_class("missing-paper") == "wc-paper-grid"
+    assert wallpaper_class("azure-cove") == "wc-paper-asset wc-paper-azure-cove"
+    assert "/static/wallpapers/azure-cove.png" in wallpaper_src(WALLPAPER_SPECS["azure-cove"])
+    assert "/static/wallpapers/thumbs/azure-cove.jpg" in wallpaper_thumb_src(WALLPAPER_SPECS["azure-cove"])
+    assert "Azure Cove" in look.text
+    assert look.text.count("data-paper-pick=") == len(wallpaper_catalog())
+    assert len(THEMES) == 22

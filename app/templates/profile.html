@@ -265,7 +265,7 @@
               type="button"
               data-paper-pick="{{ key }}"
               data-paper-kind="{{ spec.kind if spec else 'css' }}"
-              {% if spec and spec.kind == 'image' %}data-paper-src="{{ wallpaper_src(spec) }}" data-paper-size="{{ spec.size }}" data-paper-repeat="{{ spec.repeat }}" data-paper-position="{{ spec.position }}"{% endif %}
+              {% if spec and spec.kind == 'image' %}data-paper-src="{{ wallpaper_src(spec) }}" data-paper-thumb="{{ wallpaper_thumb_src(spec) }}" data-paper-size="{{ spec.size }}" data-paper-repeat="{{ spec.repeat }}" data-paper-position="{{ spec.position }}" style="--wc-wallpaper-src:url('{{ wallpaper_src(spec) }}');--wc-wallpaper-thumb:url('{{ wallpaper_thumb_src(spec) }}');"{% endif %}
               role="radio"
               aria-checked="{{ 'true' if visitor_wallpaper == key else 'false' }}"
             >

@@ -205,7 +205,9 @@ def test_admin_lists_updates_status_and_archives_without_deleting():
     assert "Áreas restritas do Watch Club" not in hub.text
     listing = admin.get("/admin/sugestoes")
     assert listing.status_code == 200
-    assert 'href="/admin/cadastros"' in listing.text
+    assert 'href="/admin/cadastros"' not in listing.text
+    assert 'href="/admin/sugestoes"' in listing.text
+    assert 'href="/admin/denuncias"' in listing.text
     assert "Recebidas" in listing.text
     assert "Arquivadas" in listing.text
     assert "Modo compacto" in listing.text
@@ -371,8 +373,6 @@ def test_admin_tabs_keep_received_and_archived_apart():
     assert "Vai arquivar" not in received_board
     assert "Vai arquivar" in archived_board
     assert "Recebida visível" not in archived_board
-    cadastros = admin.get("/admin/cadastros")
-    assert cadastros.status_code == 200
-    assert "Pendentes" in cadastros.text
-    assert "Revisões" in cadastros.text
-    assert 'href="/admin/sugestoes"' in cadastros.text
+    cadastros = admin.get("/admin/cadastros", follow_redirects=False)
+    assert cadastros.status_code == 303
+    assert cadastros.headers["location"] == "/admin/sugestoes"

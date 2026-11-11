@@ -21,16 +21,38 @@ EMOJI_ROOT = Path(__file__).resolve().parent / "static" / "emojis"
 PACKS = {
     "joi3": {
         "id": "joi3",
-        "label": "JOI3",
+        "label": "Emojis",
+        "tab": "emojis",
         "dir": EMOJI_ROOT / "joi3" / "32",
         "catalog": EMOJI_ROOT / "joi3" / "catalog.json",
         "src": "/static/emojis/joi3/32/Emojis_32x32_{id}.png",
         "file": "Emojis_32x32_{id}.png",
         "picker": True,
     },
+    "joyquest": {
+        "id": "joyquest",
+        "label": "Reações",
+        "tab": "reactions",
+        "dir": EMOJI_ROOT / "joyquest",
+        "catalog": EMOJI_ROOT / "joyquest" / "catalog.json",
+        "src": "/static/emojis/joyquest/em_outline_{id}.png",
+        "file": "em_outline_{id}.png",
+        "picker": True,
+    },
+    "social": {
+        "id": "social",
+        "label": "Social",
+        "tab": "social",
+        "dir": EMOJI_ROOT / "social",
+        "catalog": EMOJI_ROOT / "social" / "catalog.json",
+        "src": "/static/emojis/social/Emojis_Social_32x32_{id}.png",
+        "file": "Emojis_Social_32x32_{id}.png",
+        "picker": True,
+    },
     "pixelmojis": {
         "id": "pixelmojis",
-        "label": "Pixelmojis",
+        "label": "Emojis",
+        "tab": "emojis",
         "dir": EMOJI_ROOT / "pixelmojis",
         "catalog": EMOJI_ROOT / "pixelmojis" / "catalog.json",
         "src": "/static/emojis/pixelmojis/pixelmojis{id}.png",
@@ -56,6 +78,7 @@ def item_for(emoji_id: int, slug: str = "joi3") -> dict:
     return {
         "id": emoji_id,
         "pack": spec["id"],
+        "tab": spec.get("tab") or spec["id"],
         "token": f":{spec['id']}-{emoji_id}:",
         "src": spec["src"].format(id=int(emoji_id)),
     }
@@ -133,15 +156,19 @@ def _file_hash(path: Path) -> str | None:
 
 @lru_cache(maxsize=1)
 def picker_catalog() -> dict:
-    """Picker payload. Exact binary duplicates across packs are listed once (JOI3 wins)."""
-    packs = []
-    items = []
+    """Picker payload grouped by friendly tabs. Binary duplicates are listed once (JOI3 wins)."""
+    tabs: dict[str, dict] = {}
+    order: list[str] = []
+    items: list[dict] = []
     seen_hashes: set[str] = set()
     for slug, spec in PACKS.items():
         if not spec.get("picker", True):
             continue
+        tab_id = spec.get("tab") or spec["id"]
+        if tab_id not in tabs:
+            tabs[tab_id] = {"id": tab_id, "label": spec["label"], "count": 0}
+            order.append(tab_id)
         pack = catalog_for(slug)
-        visible = []
         for raw in pack.get("items", []):
             try:
                 emoji_id = int(raw["id"])
@@ -155,9 +182,9 @@ def picker_catalog() -> dict:
                 continue
             if digest:
                 seen_hashes.add(digest)
-            visible.append(item_for(emoji_id, spec["id"]))
-        packs.append({"id": spec["id"], "label": spec["label"], "count": len(visible)})
-        items.extend(visible)
+            items.append(item_for(emoji_id, spec["id"]))
+            tabs[tab_id]["count"] += 1
+    packs = [tabs[tab_id] for tab_id in order]
     return {"pack": "JOI3", "packs": packs, "count": len(items), "items": items}
 
 
@@ -174,8 +201,9 @@ def img_markup(emoji_id: int, extra_class: str = "", slug: str = "joi3") -> str:
         return escape(f":{slug}-{emoji_id}:")
     cls = "px-emoji" + (f" {extra_class}" if extra_class else "")
     src = escape(item_for(emoji_id, slug)["src"])
+    size = 18 if slug == "pixelmojis" else 16
     return (
-        f'<img class="{cls}" src="{src}" alt="" width="16" height="16" '
+        f'<img class="{cls}" src="{src}" alt="" width="{size}" height="{size}" '
         f'data-pack="{escape(slug)}" data-joi3="{emoji_id}" draggable="false">'
     )
 
@@ -209,3 +237,28 @@ def split_units(value: str | None) -> list[str] | None:
             continue
         return None
     return units
+
+
+_UNICODE_EMOJI_RE = re.compile(
+    "["
+    "\U0001F1E6-\U0001F1FF"
+    "\U0001F300-\U0001FAFF"
+    "\U00002600-\U000026FF"
+    "\U00002700-\U000027BF"
+    "\U0000FE0F"
+    "\U0000200D"
+    "\U000020E3"
+    "]+"
+)
+
+
+def is_sticker_message(text: str | None) -> bool:
+    """True when the body is only pixel tokens and/or unicode emoji (no other copy)."""
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    without_tokens = PACK_TOKEN_RE.sub("", raw)
+    leftover = _UNICODE_EMOJI_RE.sub("", without_tokens)
+    if leftover.strip():
+        return False
+    return bool(PACK_TOKEN_RE.search(raw) or _UNICODE_EMOJI_RE.search(raw))

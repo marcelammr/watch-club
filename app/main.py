@@ -196,20 +196,16 @@ from app.covers import (
     valid_cover_color,
 )
 from app.markup import format_chat, pin_preview
+from app.pixel_emoji import is_sticker_message
 from app.pixel_emoji import pack_available as joi3_pack_available
 from app.pixel_emoji import picker_catalog as joi3_catalog
 from app.pixel_emoji import render_tokens
+from app.pixel_icons import pixel_icon
 from app import config as app_config
 from app.config import BASE_DIR, BIO_MAX, EMAIL_DEV_SHOW_LINK, SECRET_KEY, SESSION_HTTPS_ONLY, uploads_dir
 from app.dev_preview import register_ui_preview_routes
 from app.db import Base, close_exclusive_session, engine, exclusive_write_session, get_db
-from app.invites import (
-    MSG_OAUTH_CLOSED,
-    MSG_USED,
-    InviteSignupBlocked,
-    lookup_invite,
-    mark_invite_used,
-)
+from app.invites import InviteSignupBlocked
 from app.mail import MAIL_ERROR_MESSAGE, MailDeliveryError
 from app.friends import (
     accept_invite,
@@ -251,6 +247,7 @@ from app.player import (
     wallpaper_spec,
     wallpaper_src,
     wallpaper_style,
+    wallpaper_thumb_src,
 )
 from app.oauth import (
     facebook_authorize_url,
@@ -264,24 +261,11 @@ from app.oauth import (
 from app.presence import LABELS as PRESENCE_LABELS
 from app.presence import mark_logout, presence_of, touch_presence
 from app.registrations import (
-    EXPIRED_DECISION_MESSAGE,
-    REVIEW_ALREADY_DECIDED_MESSAGE,
     REVIEW_APPROVED,
-    REVIEW_LABELS,
     REVIEW_MESSAGE_MAX,
     REVIEW_PENDING,
     REVIEW_REJECTED,
-    STATUS_EXPIRED,
-    STATUS_LABELS,
-    approve_registration,
-    approve_registration_review,
     create_registration_review,
-    get_registration,
-    get_registration_review,
-    list_pending_registrations,
-    list_pending_reviews,
-    reject_registration,
-    reject_registration_review,
     require_site_admin,
 )
 from app.roles import (
@@ -545,12 +529,15 @@ templates.env.filters["notice_when"] = format_notification_when
 templates.env.filters["chat_format"] = format_chat
 templates.env.filters["pin_preview"] = pin_preview
 templates.env.filters["pixel_emoji"] = render_tokens
+templates.env.filters["sticker_message"] = is_sticker_message
 templates.env.globals["joi3_emoji_catalog"] = joi3_catalog
 templates.env.globals["joi3_emoji_available"] = joi3_pack_available
+templates.env.globals["pixel_icon"] = pixel_icon
 templates.env.globals["wallpaper_class"] = wallpaper_class
 templates.env.globals["wallpaper_style"] = wallpaper_style
 templates.env.globals["wallpaper_spec"] = wallpaper_spec
 templates.env.globals["wallpaper_src"] = wallpaper_src
+templates.env.globals["wallpaper_thumb_src"] = wallpaper_thumb_src
 templates.env.filters["chat_clock"] = chat_clock
 templates.env.filters["chat_day_key"] = chat_day_key
 templates.env.filters["chat_day_label"] = chat_day_label
@@ -1015,7 +1002,7 @@ def _auth_page(request: Request, mode: str, error: str, status_code: int = 400, 
             "suggestions": suggestions or [],
             "form": form or {},
             "dev_code": None,
-            "invite_required": app_config.REGISTRATION_INVITE_REQUIRED,
+            "invite_required": False,
         },
         status_code=status_code,
     )
@@ -1058,37 +1045,13 @@ def register(
             )
         if email_taken(db, email):
             return _auth_page(request, "register", "Este e-mail já está cadastrado", form=form)
-        if not app_config.REGISTRATION_INVITE_REQUIRED:
-            try:
-                user = create_user(db, username, email, password, name=display)
-                verify_url = send_activation(db, user)
-                db.commit()
-            except MailDeliveryError:
-                db.rollback()
-                return _auth_page(request, "register", MAIL_ERROR_MESSAGE, form=form)
-            if EMAIL_DEV_SHOW_LINK:
-                request.session["verify_link"] = verify_url
-            return RedirectResponse("/verificar-email", status_code=303)
-
-        write = exclusive_write_session(db)
         try:
-            _invite, invite_error = lookup_invite(write, invite_code)
-            if invite_error:
-                return _auth_page(request, "register", invite_error, form=form)
-            user = create_user(write, username, email, password, name=display)
-            if not mark_invite_used(write, _invite, user.id):
-                write.rollback()
-                return _auth_page(request, "register", MSG_USED, form=form)
-            verify_url = send_activation(write, user)
-            write.commit()
+            user = create_user(db, username, email, password, name=display)
+            verify_url = send_activation(db, user)
+            db.commit()
         except MailDeliveryError:
-            write.rollback()
+            db.rollback()
             return _auth_page(request, "register", MAIL_ERROR_MESSAGE, form=form)
-        except Exception:
-            write.rollback()
-            raise
-        finally:
-            close_exclusive_session(write)
         if EMAIL_DEV_SHOW_LINK:
             request.session["verify_link"] = verify_url
         return RedirectResponse("/verificar-email", status_code=303)
@@ -1433,16 +1396,11 @@ def _login_auth0_user(request: Request, db, user) -> RedirectResponse:
     return RedirectResponse("/", status_code=303)
 
 
-def _awaiting_auth0_user(request: Request) -> RedirectResponse:
-    request.session.pop("user_id", None)
-    request.session["auth_provider"] = "auth0"
-    return RedirectResponse("/auth/aguardando", status_code=303)
-
-
-def _expired_auth0_user(request: Request) -> RedirectResponse:
-    request.session.pop("user_id", None)
-    request.session["auth_provider"] = "auth0"
-    return RedirectResponse("/auth/expirada", status_code=303)
+def _home_if_signed_in(request: Request, db) -> RedirectResponse | None:
+    user = current_user(request, db)
+    if user and user.is_active:
+        return RedirectResponse("/", status_code=303)
+    return None
 
 
 def _complete_auth0_from_draft(request: Request, db, identity):
@@ -1506,15 +1464,18 @@ def auth0_callback(request: Request, code: str | None = None, state: str | None 
             created = db.get(User, created_id) if created_id else None
             if outcome == "active" and created:
                 return _login_auth0_user(request, db, created)
-            if outcome == "awaiting":
-                return _awaiting_auth0_user(request)
-            if outcome == "expired":
-                return _expired_auth0_user(request)
+            if outcome == "blocked" and created:
+                return RedirectResponse(_auth0_destination(db, created, identity, request), status_code=303)
             if outcome == "form_error":
                 request.session["auth0_profile_error"] = error_text
                 request.session["auth0_profile_suggestions"] = suggestions
                 return RedirectResponse("/auth/completar-perfil", status_code=303)
-        return RedirectResponse(_auth0_destination(db, user, identity, request), status_code=303)
+        destination = _auth0_destination(db, user, identity, request)
+        if destination == "/" and user:
+            refreshed = db.get(User, user.id)
+            if refreshed and refreshed.is_active:
+                return _login_auth0_user(request, db, refreshed)
+        return RedirectResponse(destination, status_code=303)
     finally:
         db.close()
 
@@ -1532,11 +1493,14 @@ def _auth0_gate_page(request: Request, template: str, identity, extra: dict | No
 
 @app.get("/auth/pendente", response_class=HTMLResponse)
 def auth0_pending_page(request: Request):
-    identity = _auth0_pending_identity(request)
-    if not identity:
-        return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
     db = db_session()
     try:
+        signed_in = _home_if_signed_in(request, db)
+        if signed_in:
+            return signed_in
+        identity = _auth0_pending_identity(request)
+        if not identity:
+            return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
         user = find_user_by_auth0_sub(db, identity.sub)
         destination = _auth0_destination(db, user, identity, request)
         if destination == "/auth/pendente":
@@ -1577,11 +1541,14 @@ def auth0_verify_email_continue(request: Request):
 
 @app.get("/auth/completar-perfil", response_class=HTMLResponse)
 def auth0_complete_profile_form(request: Request):
-    identity = _auth0_pending_identity(request)
-    if not identity:
-        return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
     db = db_session()
     try:
+        signed_in = _home_if_signed_in(request, db)
+        if signed_in:
+            return signed_in
+        identity = _auth0_pending_identity(request)
+        if not identity:
+            return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
         user = find_user_by_auth0_sub(db, identity.sub)
         destination = _auth0_destination(db, user, identity, request)
         if destination != "/auth/completar-perfil":
@@ -1616,11 +1583,14 @@ def auth0_complete_profile_form(request: Request):
 
 @app.post("/auth/completar-perfil")
 def auth0_complete_profile(request: Request, name: str = Form(""), username: str = Form("")):
-    identity = _auth0_pending_identity(request)
-    if not identity:
-        return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
     db = db_session()
     try:
+        signed_in = _home_if_signed_in(request, db)
+        if signed_in:
+            return signed_in
+        identity = _auth0_pending_identity(request)
+        if not identity:
+            return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
         existing = find_user_by_auth0_sub(db, identity.sub)
         if existing:
             destination = _auth0_destination(db, existing, identity, request)
@@ -1673,10 +1643,8 @@ def auth0_complete_profile(request: Request, name: str = Form(""), username: str
         user = db.get(User, user_id) if user_id else None
         if outcome == "active" and user:
             return _login_auth0_user(request, db, user)
-        if outcome == "awaiting":
-            return _awaiting_auth0_user(request)
-        if outcome == "expired":
-            return _expired_auth0_user(request)
+        if outcome == "blocked" and user:
+            return RedirectResponse(_auth0_destination(db, user, identity, request), status_code=303)
         if outcome == "unverified":
             return RedirectResponse("/auth/verificar-email", status_code=303)
         return _auth0_gate_page(
@@ -1692,24 +1660,21 @@ def auth0_complete_profile(request: Request, name: str = Form(""), username: str
 
 @app.get("/auth/aguardando", response_class=HTMLResponse)
 def auth0_awaiting_page(request: Request):
-    identity = _auth0_pending_identity(request)
-    if not identity:
-        return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
     db = db_session()
     try:
+        signed_in = _home_if_signed_in(request, db)
+        if signed_in:
+            return signed_in
+        identity = _auth0_pending_identity(request)
+        if not identity:
+            return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
         user = find_user_by_auth0_sub(db, identity.sub)
         destination = _auth0_destination(db, user, identity, request)
+        if destination == "/auth/aguardando":
+            destination = "/" if user and user.is_active else "/auth/verificar-email"
         if destination == "/" and user and user.is_active and (user.auth0_sub or "").strip() == identity.sub:
             return _login_auth0_user(request, db, user)
-        if destination != "/auth/aguardando":
-            return RedirectResponse(destination, status_code=303)
-        request.session.pop("user_id", None)
-        return _auth0_gate_page(
-            request,
-            "auth0_awaiting.html",
-            identity,
-            {"profile": user, "signup_step": "aprovacao"},
-        )
+        return RedirectResponse(destination, status_code=303)
     finally:
         db.close()
 
@@ -1743,11 +1708,14 @@ def _review_followup_redirect(status: str | None) -> str:
 
 @app.get("/auth/revisao", response_class=HTMLResponse)
 def auth0_review_form(request: Request):
-    identity = _auth0_pending_identity(request)
-    if not identity:
-        return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
     db = db_session()
     try:
+        signed_in = _home_if_signed_in(request, db)
+        if signed_in:
+            return signed_in
+        identity = _auth0_pending_identity(request)
+        if not identity:
+            return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
         user = find_user_by_auth0_sub(db, identity.sub)
         destination = _auth0_destination(db, user, identity, request)
         if destination not in {"/auth/nao-aprovado", "/auth/revisao"}:
@@ -1770,11 +1738,14 @@ def auth0_review_form(request: Request):
 
 @app.post("/auth/revisao")
 def auth0_review_submit(request: Request, message: str = Form("")):
-    identity = _auth0_pending_identity(request)
-    if not identity:
-        return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
     db = db_session()
     try:
+        signed_in = _home_if_signed_in(request, db)
+        if signed_in:
+            return signed_in
+        identity = _auth0_pending_identity(request)
+        if not identity:
+            return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
         user = find_user_by_auth0_sub(db, identity.sub)
         if not user:
             return RedirectResponse(_auth0_destination(db, user, identity, request), status_code=303)
@@ -1831,17 +1802,21 @@ def auth0_review_rejected_page(request: Request):
 
 @app.get("/auth/expirada", response_class=HTMLResponse)
 def auth0_expired_page(request: Request):
-    identity = _auth0_pending_identity(request)
-    if not identity:
-        return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
     db = db_session()
     try:
+        signed_in = _home_if_signed_in(request, db)
+        if signed_in:
+            return signed_in
+        identity = _auth0_pending_identity(request)
+        if not identity:
+            return RedirectResponse("/login?error=Não+há+identidade+Auth0+pendente", status_code=303)
         user = find_user_by_auth0_sub(db, identity.sub)
         destination = _auth0_destination(db, user, identity, request)
-        if destination != "/auth/expirada":
-            return RedirectResponse(destination, status_code=303)
-        request.session.pop("user_id", None)
-        return _auth0_gate_page(request, "auth0_expired.html", identity, {"profile": user})
+        if destination == "/auth/expirada":
+            destination = "/" if user and user.is_active else "/auth/verificar-email"
+        if destination == "/" and user and user.is_active and (user.auth0_sub or "").strip() == identity.sub:
+            return _login_auth0_user(request, db, user)
+        return RedirectResponse(destination, status_code=303)
     finally:
         db.close()
 
@@ -1852,182 +1827,62 @@ def _admin_http_redirect(exc: HTTPException, fallback: str = "/"):
     if exc.status_code == 403:
         return RedirectResponse("/?error=" + quote("Acesso restrito à administração"), status_code=303)
     if exc.status_code == 404:
-        return RedirectResponse("/admin/cadastros?error=" + quote(str(exc.detail)), status_code=303)
+        return RedirectResponse("/admin/sugestoes?error=" + quote(str(exc.detail)), status_code=303)
     if exc.status_code == 400:
         return RedirectResponse(f"{fallback}?error=" + quote(str(exc.detail)), status_code=303)
     raise exc
 
 
-@app.get("/admin", response_class=HTMLResponse)
-def admin_home(request: Request):
-    return admin_registrations(request)
-
-
-@app.get("/admin/cadastros", response_class=HTMLResponse)
-def admin_registrations(request: Request):
+def _retired_cadastros_redirect(request: Request):
     db = db_session()
     try:
         user = login_required(request, db)
         require_site_admin(user)
-        aba = request.query_params.get("aba") or "pendentes"
-        if aba not in {"pendentes", "revisoes"}:
-            aba = "pendentes"
-        pending = list_pending_registrations(db)
-        reviews = list_pending_reviews(db) if aba == "revisoes" else []
-        db.commit()
-        return templates.TemplateResponse(
-            request,
-            "admin_registrations.html",
-            {
-                "user": user,
-                "pending": pending,
-                "reviews": reviews,
-                "aba": aba,
-                "error": request.query_params.get("error"),
-                "ok": request.query_params.get("ok"),
-            },
-        )
+        return RedirectResponse("/admin/sugestoes", status_code=303)
     except HTTPException as exc:
         return _admin_http_redirect(exc)
     finally:
         db.close()
 
 
+@app.get("/admin", response_class=HTMLResponse)
+def admin_home(request: Request):
+    return _retired_cadastros_redirect(request)
+
+
+@app.get("/admin/cadastros", response_class=HTMLResponse)
+def admin_registrations(request: Request):
+    return _retired_cadastros_redirect(request)
+
+
 @app.get("/admin/cadastros/{request_id}", response_class=HTMLResponse)
-def admin_registration_detail(request: Request, request_id: int):
-    db = db_session()
-    try:
-        user = login_required(request, db)
-        require_site_admin(user)
-        item = get_registration(db, request_id)
-        if not item or not item.user:
-            raise HTTPException(status_code=404, detail="Solicitação não encontrada")
-        db.commit()
-        return templates.TemplateResponse(
-            request,
-            "admin_registration_detail.html",
-            {
-                "user": user,
-                "item": item,
-                "person": item.user,
-                "status_label": STATUS_LABELS.get(item.status, item.status),
-                "error": request.query_params.get("error"),
-                "ok": request.query_params.get("ok"),
-            },
-        )
-    except HTTPException as exc:
-        return _admin_http_redirect(exc, "/admin/cadastros")
-    finally:
-        db.close()
+def admin_registration_detail_redirect(request: Request, request_id: int):
+    return _retired_cadastros_redirect(request)
 
 
 @app.post("/admin/cadastros/{request_id}/aprovar")
 def admin_registration_approve(request: Request, request_id: int):
-    db = db_session()
-    try:
-        user = login_required(request, db)
-        require_site_admin(user)
-        status = approve_registration(db, request_id, user.id)
-        if status == STATUS_EXPIRED:
-            return RedirectResponse(
-                f"/admin/cadastros/{request_id}?error=" + quote(EXPIRED_DECISION_MESSAGE),
-                status_code=303,
-            )
-        return RedirectResponse("/admin/cadastros?ok=" + quote("Solicitação aprovada."), status_code=303)
-    except HTTPException as exc:
-        return _admin_http_redirect(exc, f"/admin/cadastros/{request_id}")
-    finally:
-        db.close()
+    return _retired_cadastros_redirect(request)
 
 
 @app.post("/admin/cadastros/{request_id}/recusar")
 def admin_registration_reject(request: Request, request_id: int):
-    db = db_session()
-    try:
-        user = login_required(request, db)
-        require_site_admin(user)
-        status = reject_registration(db, request_id, user.id)
-        if status == STATUS_EXPIRED:
-            return RedirectResponse(
-                f"/admin/cadastros/{request_id}?error=" + quote(EXPIRED_DECISION_MESSAGE),
-                status_code=303,
-            )
-        return RedirectResponse("/admin/cadastros?ok=" + quote("Solicitação recusada."), status_code=303)
-    except HTTPException as exc:
-        return _admin_http_redirect(exc, f"/admin/cadastros/{request_id}")
-    finally:
-        db.close()
+    return _retired_cadastros_redirect(request)
 
 
 @app.get("/admin/cadastros/revisoes/{review_id}", response_class=HTMLResponse)
-def admin_registration_review_detail(request: Request, review_id: int):
-    db = db_session()
-    try:
-        user = login_required(request, db)
-        require_site_admin(user)
-        item = get_registration_review(db, review_id)
-        if not item or not item.user or not item.request:
-            raise HTTPException(status_code=404, detail="Revisão não encontrada")
-        return templates.TemplateResponse(
-            request,
-            "admin_registration_review_detail.html",
-            {
-                "user": user,
-                "item": item,
-                "person": item.user,
-                "status_label": REVIEW_LABELS.get(item.status, item.status),
-                "error": request.query_params.get("error"),
-                "ok": request.query_params.get("ok"),
-            },
-        )
-    except HTTPException as exc:
-        return _admin_http_redirect(exc, "/admin/cadastros?aba=revisoes")
-    finally:
-        db.close()
+def admin_registration_review_detail_redirect(request: Request, review_id: int):
+    return _retired_cadastros_redirect(request)
 
 
 @app.post("/admin/cadastros/revisoes/{review_id}/aprovar-acesso")
 def admin_registration_review_approve(request: Request, review_id: int):
-    db = db_session()
-    try:
-        user = login_required(request, db)
-        require_site_admin(user)
-        status, applied = approve_registration_review(db, review_id, user.id)
-        if not applied:
-            return RedirectResponse(
-                f"/admin/cadastros/revisoes/{review_id}?error=" + quote(REVIEW_ALREADY_DECIDED_MESSAGE),
-                status_code=303,
-            )
-        return RedirectResponse(
-            "/admin/cadastros?aba=revisoes&ok=" + quote("Acesso aprovado após revisão."),
-            status_code=303,
-        )
-    except HTTPException as exc:
-        return _admin_http_redirect(exc, f"/admin/cadastros/revisoes/{review_id}")
-    finally:
-        db.close()
+    return _retired_cadastros_redirect(request)
 
 
 @app.post("/admin/cadastros/revisoes/{review_id}/manter-recusa")
 def admin_registration_review_reject(request: Request, review_id: int):
-    db = db_session()
-    try:
-        user = login_required(request, db)
-        require_site_admin(user)
-        status, applied = reject_registration_review(db, review_id, user.id)
-        if not applied:
-            return RedirectResponse(
-                f"/admin/cadastros/revisoes/{review_id}?error=" + quote(REVIEW_ALREADY_DECIDED_MESSAGE),
-                status_code=303,
-            )
-        return RedirectResponse(
-            "/admin/cadastros?aba=revisoes&ok=" + quote("Recusa mantida."),
-            status_code=303,
-        )
-    except HTTPException as exc:
-        return _admin_http_redirect(exc, f"/admin/cadastros/revisoes/{review_id}")
-    finally:
-        db.close()
+    return _retired_cadastros_redirect(request)
 
 
 @app.get("/auth/logout")
@@ -2082,7 +1937,7 @@ def oauth_callback(request: Request, provider: str, code: str | None = None, sta
             touch_presence(user, "online")
             db.commit()
         except InviteSignupBlocked:
-            return RedirectResponse("/register?error=" + quote(MSG_OAUTH_CLOSED), status_code=303)
+            return RedirectResponse("/register", status_code=303)
         except Exception:
             return RedirectResponse("/login?error=Não+foi+possível+entrar+com+essa+conta", status_code=303)
         request.session.pop("oauth_state", None)

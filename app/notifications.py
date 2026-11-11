@@ -20,8 +20,9 @@ TYPE_REGISTRATION_REQUEST = "registration_request"
 TYPE_REGISTRATION_REVIEW = "registration_review"
 TYPE_SUGGESTION = "suggestion"
 TYPE_FRIEND_REQUEST = "friend_request"
-ADMIN_NOTICE_TYPES = {TYPE_REGISTRATION_REQUEST, TYPE_REGISTRATION_REVIEW, TYPE_SUGGESTION}
-NON_JOIN_NOTICE_TYPES = ADMIN_NOTICE_TYPES | {TYPE_FRIEND_REQUEST}
+ADMIN_NOTICE_TYPES = {TYPE_SUGGESTION}
+RETIRED_NOTICE_TYPES = {TYPE_REGISTRATION_REQUEST, TYPE_REGISTRATION_REVIEW}
+NON_JOIN_NOTICE_TYPES = ADMIN_NOTICE_TYPES | RETIRED_NOTICE_TYPES | {TYPE_FRIEND_REQUEST}
 JOIN_STATE_PENDING = "pending"
 JOIN_STATE_JOINED = "joined"
 JOIN_STATE_RESOLVED = "resolved"
@@ -200,7 +201,11 @@ def unread_count(db: Session, user_id: int) -> int:
         db.scalar(
             select(func.count())
             .select_from(Notification)
-            .where(Notification.user_id == user_id, Notification.read_at.is_(None))
+            .where(
+                Notification.user_id == user_id,
+                Notification.read_at.is_(None),
+                Notification.type.notin_(RETIRED_NOTICE_TYPES),
+            )
         )
         or 0
     )
@@ -212,7 +217,10 @@ def list_notifications(db: Session, user_id: int, limit: int = DEFAULT_LIST_LIMI
     return list(
         db.scalars(
             select(Notification)
-            .where(Notification.user_id == user_id)
+            .where(
+                Notification.user_id == user_id,
+                Notification.type.notin_(RETIRED_NOTICE_TYPES),
+            )
             .order_by(Notification.created_at.desc(), Notification.id.desc())
             .limit(limit)
         )
@@ -248,14 +256,8 @@ def mark_all_read(db: Session, user_id: int) -> int:
 
 
 def notification_destination(notification: Notification) -> str:
-    if notification.type == TYPE_REGISTRATION_REQUEST:
-        if notification.related_id:
-            return f"/admin/cadastros/{notification.related_id}"
-        return "/admin/cadastros"
-    if notification.type == TYPE_REGISTRATION_REVIEW:
-        if notification.related_id:
-            return f"/admin/cadastros/revisoes/{notification.related_id}"
-        return "/admin/cadastros?aba=revisoes"
+    if notification.type in RETIRED_NOTICE_TYPES:
+        return "/admin/sugestoes"
     if notification.type == TYPE_SUGGESTION:
         if notification.related_id:
             return f"/admin/sugestoes?sugestao={notification.related_id}"

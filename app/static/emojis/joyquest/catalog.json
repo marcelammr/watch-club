@@ -1,0 +1,769 @@
+{
+  "pack": "Rea\u00e7\u00f5es",
+  "id": "joyquest",
+  "count": 127,
+  "items": [
+    {
+      "id": 1,
+      "token": ":joyquest-1:",
+      "src": "/static/emojis/joyquest/em_outline_1.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 2,
+      "token": ":joyquest-2:",
+      "src": "/static/emojis/joyquest/em_outline_2.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 3,
+      "token": ":joyquest-3:",
+      "src": "/static/emojis/joyquest/em_outline_3.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 4,
+      "token": ":joyquest-4:",
+      "src": "/static/emojis/joyquest/em_outline_4.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 5,
+      "token": ":joyquest-5:",
+      "src": "/static/emojis/joyquest/em_outline_5.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 6,
+      "token": ":joyquest-6:",
+      "src": "/static/emojis/joyquest/em_outline_6.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 7,
+      "token": ":joyquest-7:",
+      "src": "/static/emojis/joyquest/em_outline_7.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 8,
+      "token": ":joyquest-8:",
+      "src": "/static/emojis/joyquest/em_outline_8.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 9,
+      "token": ":joyquest-9:",
+      "src": "/static/emojis/joyquest/em_outline_9.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 10,
+      "token": ":joyquest-10:",
+      "src": "/static/emojis/joyquest/em_outline_10.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 11,
+      "token": ":joyquest-11:",
+      "src": "/static/emojis/joyquest/em_outline_11.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 12,
+      "token": ":joyquest-12:",
+      "src": "/static/emojis/joyquest/em_outline_12.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 13,
+      "token": ":joyquest-13:",
+      "src": "/static/emojis/joyquest/em_outline_13.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 14,
+      "token": ":joyquest-14:",
+      "src": "/static/emojis/joyquest/em_outline_14.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 15,
+      "token": ":joyquest-15:",
+      "src": "/static/emojis/joyquest/em_outline_15.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 16,
+      "token": ":joyquest-16:",
+      "src": "/static/emojis/joyquest/em_outline_16.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 17,
+      "token": ":joyquest-17:",
+      "src": "/static/emojis/joyquest/em_outline_17.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 18,
+      "token": ":joyquest-18:",
+      "src": "/static/emojis/joyquest/em_outline_18.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 19,
+      "token": ":joyquest-19:",
+      "src": "/static/emojis/joyquest/em_outline_19.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 20,
+      "token": ":joyquest-20:",
+      "src": "/static/emojis/joyquest/em_outline_20.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 21,
+      "token": ":joyquest-21:",
+      "src": "/static/emojis/joyquest/em_outline_21.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 22,
+      "token": ":joyquest-22:",
+      "src": "/static/emojis/joyquest/em_outline_22.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 23,
+      "token": ":joyquest-23:",
+      "src": "/static/emojis/joyquest/em_outline_23.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 24,
+      "token": ":joyquest-24:",
+      "src": "/static/emojis/joyquest/em_outline_24.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 25,
+      "token": ":joyquest-25:",
+      "src": "/static/emojis/joyquest/em_outline_25.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 26,
+      "token": ":joyquest-26:",
+      "src": "/static/emojis/joyquest/em_outline_26.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 27,
+      "token": ":joyquest-27:",
+      "src": "/static/emojis/joyquest/em_outline_27.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 28,
+      "token": ":joyquest-28:",
+      "src": "/static/emojis/joyquest/em_outline_28.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 29,
+      "token": ":joyquest-29:",
+      "src": "/static/emojis/joyquest/em_outline_29.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 30,
+      "token": ":joyquest-30:",
+      "src": "/static/emojis/joyquest/em_outline_30.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 31,
+      "token": ":joyquest-31:",
+      "src": "/static/emojis/joyquest/em_outline_31.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 32,
+      "token": ":joyquest-32:",
+      "src": "/static/emojis/joyquest/em_outline_32.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 33,
+      "token": ":joyquest-33:",
+      "src": "/static/emojis/joyquest/em_outline_33.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 34,
+      "token": ":joyquest-34:",
+      "src": "/static/emojis/joyquest/em_outline_34.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 35,
+      "token": ":joyquest-35:",
+      "src": "/static/emojis/joyquest/em_outline_35.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 36,
+      "token": ":joyquest-36:",
+      "src": "/static/emojis/joyquest/em_outline_36.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 37,
+      "token": ":joyquest-37:",
+      "src": "/static/emojis/joyquest/em_outline_37.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 38,
+      "token": ":joyquest-38:",
+      "src": "/static/emojis/joyquest/em_outline_38.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 39,
+      "token": ":joyquest-39:",
+      "src": "/static/emojis/joyquest/em_outline_39.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 40,
+      "token": ":joyquest-40:",
+      "src": "/static/emojis/joyquest/em_outline_40.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 41,
+      "token": ":joyquest-41:",
+      "src": "/static/emojis/joyquest/em_outline_41.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 42,
+      "token": ":joyquest-42:",
+      "src": "/static/emojis/joyquest/em_outline_42.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 43,
+      "token": ":joyquest-43:",
+      "src": "/static/emojis/joyquest/em_outline_43.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 44,
+      "token": ":joyquest-44:",
+      "src": "/static/emojis/joyquest/em_outline_44.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 45,
+      "token": ":joyquest-45:",
+      "src": "/static/emojis/joyquest/em_outline_45.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 46,
+      "token": ":joyquest-46:",
+      "src": "/static/emojis/joyquest/em_outline_46.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 47,
+      "token": ":joyquest-47:",
+      "src": "/static/emojis/joyquest/em_outline_47.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 48,
+      "token": ":joyquest-48:",
+      "src": "/static/emojis/joyquest/em_outline_48.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 49,
+      "token": ":joyquest-49:",
+      "src": "/static/emojis/joyquest/em_outline_49.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 50,
+      "token": ":joyquest-50:",
+      "src": "/static/emojis/joyquest/em_outline_50.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 51,
+      "token": ":joyquest-51:",
+      "src": "/static/emojis/joyquest/em_outline_51.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 52,
+      "token": ":joyquest-52:",
+      "src": "/static/emojis/joyquest/em_outline_52.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 53,
+      "token": ":joyquest-53:",
+      "src": "/static/emojis/joyquest/em_outline_53.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 54,
+      "token": ":joyquest-54:",
+      "src": "/static/emojis/joyquest/em_outline_54.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 55,
+      "token": ":joyquest-55:",
+      "src": "/static/emojis/joyquest/em_outline_55.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 56,
+      "token": ":joyquest-56:",
+      "src": "/static/emojis/joyquest/em_outline_56.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 57,
+      "token": ":joyquest-57:",
+      "src": "/static/emojis/joyquest/em_outline_57.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 58,
+      "token": ":joyquest-58:",
+      "src": "/static/emojis/joyquest/em_outline_58.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 59,
+      "token": ":joyquest-59:",
+      "src": "/static/emojis/joyquest/em_outline_59.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 60,
+      "token": ":joyquest-60:",
+      "src": "/static/emojis/joyquest/em_outline_60.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 61,
+      "token": ":joyquest-61:",
+      "src": "/static/emojis/joyquest/em_outline_61.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 62,
+      "token": ":joyquest-62:",
+      "src": "/static/emojis/joyquest/em_outline_62.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 63,
+      "token": ":joyquest-63:",
+      "src": "/static/emojis/joyquest/em_outline_63.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 64,
+      "token": ":joyquest-64:",
+      "src": "/static/emojis/joyquest/em_outline_64.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 65,
+      "token": ":joyquest-65:",
+      "src": "/static/emojis/joyquest/em_outline_65.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 66,
+      "token": ":joyquest-66:",
+      "src": "/static/emojis/joyquest/em_outline_66.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 67,
+      "token": ":joyquest-67:",
+      "src": "/static/emojis/joyquest/em_outline_67.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 68,
+      "token": ":joyquest-68:",
+      "src": "/static/emojis/joyquest/em_outline_68.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 69,
+      "token": ":joyquest-69:",
+      "src": "/static/emojis/joyquest/em_outline_69.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 70,
+      "token": ":joyquest-70:",
+      "src": "/static/emojis/joyquest/em_outline_70.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 71,
+      "token": ":joyquest-71:",
+      "src": "/static/emojis/joyquest/em_outline_71.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 72,
+      "token": ":joyquest-72:",
+      "src": "/static/emojis/joyquest/em_outline_72.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 73,
+      "token": ":joyquest-73:",
+      "src": "/static/emojis/joyquest/em_outline_73.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 74,
+      "token": ":joyquest-74:",
+      "src": "/static/emojis/joyquest/em_outline_74.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 75,
+      "token": ":joyquest-75:",
+      "src": "/static/emojis/joyquest/em_outline_75.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 76,
+      "token": ":joyquest-76:",
+      "src": "/static/emojis/joyquest/em_outline_76.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 77,
+      "token": ":joyquest-77:",
+      "src": "/static/emojis/joyquest/em_outline_77.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 78,
+      "token": ":joyquest-78:",
+      "src": "/static/emojis/joyquest/em_outline_78.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 79,
+      "token": ":joyquest-79:",
+      "src": "/static/emojis/joyquest/em_outline_79.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 80,
+      "token": ":joyquest-80:",
+      "src": "/static/emojis/joyquest/em_outline_80.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 81,
+      "token": ":joyquest-81:",
+      "src": "/static/emojis/joyquest/em_outline_81.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 82,
+      "token": ":joyquest-82:",
+      "src": "/static/emojis/joyquest/em_outline_82.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 83,
+      "token": ":joyquest-83:",
+      "src": "/static/emojis/joyquest/em_outline_83.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 84,
+      "token": ":joyquest-84:",
+      "src": "/static/emojis/joyquest/em_outline_84.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 85,
+      "token": ":joyquest-85:",
+      "src": "/static/emojis/joyquest/em_outline_85.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 86,
+      "token": ":joyquest-86:",
+      "src": "/static/emojis/joyquest/em_outline_86.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 87,
+      "token": ":joyquest-87:",
+      "src": "/static/emojis/joyquest/em_outline_87.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 88,
+      "token": ":joyquest-88:",
+      "src": "/static/emojis/joyquest/em_outline_88.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 89,
+      "token": ":joyquest-89:",
+      "src": "/static/emojis/joyquest/em_outline_89.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 90,
+      "token": ":joyquest-90:",
+      "src": "/static/emojis/joyquest/em_outline_90.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 91,
+      "token": ":joyquest-91:",
+      "src": "/static/emojis/joyquest/em_outline_91.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 92,
+      "token": ":joyquest-92:",
+      "src": "/static/emojis/joyquest/em_outline_92.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 93,
+      "token": ":joyquest-93:",
+      "src": "/static/emojis/joyquest/em_outline_93.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 94,
+      "token": ":joyquest-94:",
+      "src": "/static/emojis/joyquest/em_outline_94.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 95,
+      "token": ":joyquest-95:",
+      "src": "/static/emojis/joyquest/em_outline_95.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 96,
+      "token": ":joyquest-96:",
+      "src": "/static/emojis/joyquest/em_outline_96.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 97,
+      "token": ":joyquest-97:",
+      "src": "/static/emojis/joyquest/em_outline_97.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 98,
+      "token": ":joyquest-98:",
+      "src": "/static/emojis/joyquest/em_outline_98.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 99,
+      "token": ":joyquest-99:",
+      "src": "/static/emojis/joyquest/em_outline_99.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 100,
+      "token": ":joyquest-100:",
+      "src": "/static/emojis/joyquest/em_outline_100.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 101,
+      "token": ":joyquest-101:",
+      "src": "/static/emojis/joyquest/em_outline_101.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 102,
+      "token": ":joyquest-102:",
+      "src": "/static/emojis/joyquest/em_outline_102.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 103,
+      "token": ":joyquest-103:",
+      "src": "/static/emojis/joyquest/em_outline_103.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 104,
+      "token": ":joyquest-104:",
+      "src": "/static/emojis/joyquest/em_outline_104.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 105,
+      "token": ":joyquest-105:",
+      "src": "/static/emojis/joyquest/em_outline_105.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 106,
+      "token": ":joyquest-106:",
+      "src": "/static/emojis/joyquest/em_outline_106.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 107,
+      "token": ":joyquest-107:",
+      "src": "/static/emojis/joyquest/em_outline_107.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 108,
+      "token": ":joyquest-108:",
+      "src": "/static/emojis/joyquest/em_outline_108.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 109,
+      "token": ":joyquest-109:",
+      "src": "/static/emojis/joyquest/em_outline_109.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 110,
+      "token": ":joyquest-110:",
+      "src": "/static/emojis/joyquest/em_outline_110.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 111,
+      "token": ":joyquest-111:",
+      "src": "/static/emojis/joyquest/em_outline_111.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 112,
+      "token": ":joyquest-112:",
+      "src": "/static/emojis/joyquest/em_outline_112.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 113,
+      "token": ":joyquest-113:",
+      "src": "/static/emojis/joyquest/em_outline_113.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 114,
+      "token": ":joyquest-114:",
+      "src": "/static/emojis/joyquest/em_outline_114.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 115,
+      "token": ":joyquest-115:",
+      "src": "/static/emojis/joyquest/em_outline_115.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 116,
+      "token": ":joyquest-116:",
+      "src": "/static/emojis/joyquest/em_outline_116.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 117,
+      "token": ":joyquest-117:",
+      "src": "/static/emojis/joyquest/em_outline_117.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 118,
+      "token": ":joyquest-118:",
+      "src": "/static/emojis/joyquest/em_outline_118.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 119,
+      "token": ":joyquest-119:",
+      "src": "/static/emojis/joyquest/em_outline_119.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 120,
+      "token": ":joyquest-120:",
+      "src": "/static/emojis/joyquest/em_outline_120.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 121,
+      "token": ":joyquest-121:",
+      "src": "/static/emojis/joyquest/em_outline_121.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 122,
+      "token": ":joyquest-122:",
+      "src": "/static/emojis/joyquest/em_outline_122.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 123,
+      "token": ":joyquest-123:",
+      "src": "/static/emojis/joyquest/em_outline_123.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 124,
+      "token": ":joyquest-124:",
+      "src": "/static/emojis/joyquest/em_outline_124.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 125,
+      "token": ":joyquest-125:",
+      "src": "/static/emojis/joyquest/em_outline_125.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 126,
+      "token": ":joyquest-126:",
+      "src": "/static/emojis/joyquest/em_outline_126.png",
+      "pack": "joyquest"
+    },
+    {
+      "id": 127,
+      "token": ":joyquest-127:",
+      "src": "/static/emojis/joyquest/em_outline_127.png",
+      "pack": "joyquest"
+    }
+  ]
+}

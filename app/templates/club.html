@@ -268,10 +268,10 @@
                 {% elif blocked_user_ids is defined and item.user_id in blocked_user_ids %}
                 <details class="chat-blocked">
                   <summary>Mensagem de usuário bloqueado — Mostrar</summary>
-                  <p class="chat-body">{{ item.body|chat_format }}</p>
+                  <p class="chat-body{% if item.body|sticker_message %} is-sticker{% endif %}">{{ item.body|chat_format }}</p>
                 </details>
                 {% else %}
-                <p class="chat-body">{{ item.body|chat_format }}</p>
+                <p class="chat-body{% if item.body|sticker_message %} is-sticker{% endif %}">{{ item.body|chat_format }}</p>
                 {% endif %}
                 {% if item.show %}
                   <a class="chat-show-card" href="/clubs/{{ club.id }}/shows/{{ item.show.id }}">
@@ -294,7 +294,7 @@
                     <a class="chat-pin-msg" href="/clubs/{{ club.id }}?aba=chat&amp;selecionar={{ item.id }}#msg-{{ item.id }}" title="Denunciar mensagem">Denunciar</a>
                   {% endif %}
                   {% if can_delete %}
-                    <form class="chat-pin-action" action="/clubs/{{ club.id }}/mensagens/{{ item.id }}/apagar" method="post" onsubmit="return confirm('Tem certeza que deseja apagar esta mensagem?')">
+                    <form class="chat-pin-action js-confirm-delete" action="/clubs/{{ club.id }}/mensagens/{{ item.id }}/apagar" method="post">
                       <button type="submit" class="chat-pin-msg" aria-label="Apagar mensagem" title="Apagar mensagem">Apagar</button>
                     </form>
                   {% endif %}

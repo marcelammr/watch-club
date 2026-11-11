@@ -1,4 +1,4 @@
-type CatalogItem = { id: number; token: string; src: string; pack?: string };
+type CatalogItem = { id: number; token: string; src: string; pack?: string; tab?: string };
 type CatalogPack = { id: string; label: string; count: number };
 type Catalog = { pack: string; count: number; items: CatalogItem[]; packs?: CatalogPack[] };
 
@@ -87,7 +87,7 @@ function placePanel(wrap: HTMLElement) {
 
 function itemsForPack(catalog: Catalog, packId: string | null) {
   if (!packId || packId === "all") return catalog.items || [];
-  return (catalog.items || []).filter((item) => (item.pack || "joi3") === packId);
+  return (catalog.items || []).filter((item) => (item.tab || item.pack || "joi3") === packId);
 }
 
 function renderPacks(panel: HTMLElement, wrap: HTMLElement, catalog: Catalog) {
@@ -143,8 +143,10 @@ function renderGrid(panel: HTMLElement, wrap: HTMLElement, catalog: Catalog) {
     const img = document.createElement("img");
     img.src = item.src;
     img.alt = "";
-    img.width = 28;
-    img.height = 28;
+    img.dataset.pack = item.pack || "joi3";
+    const native = item.pack === "pixelmojis" ? 18 : item.pack === "joyquest" ? 16 : 32;
+    img.width = native;
+    img.height = native;
     img.loading = "lazy";
     img.decoding = "async";
     img.draggable = false;

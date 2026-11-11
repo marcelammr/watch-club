@@ -10,10 +10,11 @@
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
 
-<section class="card">
+<section class="card account-avatar-card">
+  <h2>Avatar</h2>
   <div class="current-avatar">
-    <div class="avatar-trigger">
-      {{ user_avatar(user, 'lg') }}
+    <div class="player-avatar-frame is-compact account-avatar-frame">
+      {{ user_avatar(user, 'lg', 'portrait') }}
     </div>
     <div>
       <strong>{{ user.name }}</strong>
@@ -22,7 +23,6 @@
       <p class="mt-4"><a class="btn btn-ghost" href="/u/{{ user.username }}">Ver perfil público</a></p>
     </div>
   </div>
-  <h2>Imagem de perfil</h2>
   <div class="avatar-actions">
     <form class="js-photo-form" action="/conta/avatar/foto" method="post" enctype="multipart/form-data">
       <input class="js-photo-input" type="file" name="photo" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
@@ -113,7 +113,7 @@
 
 <section class="grid-2">
   <div class="card">
-    <h2>Perfil</h2>
+    <h2>Usuário</h2>
     {% if suggestions %}
       <p class="muted">Variações disponíveis:</p>
       <div class="suggestions">

@@ -517,7 +517,7 @@ def test_account_header_status_is_label_only():
     register_active(person, "acct_status", "acct.status@example.com", name="Conta Status")
 
     def header_parts(html: str) -> tuple[str, str]:
-        block = html.split('class="current-avatar"', 1)[1].split("<h2>Imagem de perfil</h2>", 1)[0]
+        block = html.split('class="current-avatar"', 1)[1].split('class="avatar-actions"', 1)[0]
         avatar, _, copy = block.partition('class="status')
         return avatar, copy
 

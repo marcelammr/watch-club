@@ -67,7 +67,13 @@ def test_club_members_delete_own_messages_and_cannot_delete_others():
     chat = member.get(f"/clubs/{club_id}?aba=chat")
     assert f'action="/clubs/{club_id}/mensagens/{own_id}/apagar"' in chat.text
     assert f'action="/clubs/{club_id}/mensagens/{adm_id}/apagar"' not in chat.text
-    assert "Tem certeza que deseja apagar esta mensagem?" in chat.text
+    assert "js-confirm-delete" in chat.text
+    assert "Tem certeza que deseja apagar esta mensagem?" not in chat.text
+    home = member.get("/")
+    assert "js-confirm-dialog" in home.text
+    assert "Apagar mensagem?" in home.text
+    assert "Essa ação não pode ser desfeita." in home.text
+    assert home.text.find('id="js-confirm-dialog"') < home.text.find("chat-composer.js")
 
     blocked = member.post(f"/clubs/{club_id}/mensagens/{adm_id}/apagar", follow_redirects=False)
     assert blocked.status_code == 303

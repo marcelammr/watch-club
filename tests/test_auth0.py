@@ -10,8 +10,7 @@ from app.auth0_oidc import Auth0Identity, identity_from_claims, merge_pending_pa
 from app.db import SessionLocal, engine
 from app.main import app
 from app.models import Club, Notification, RegistrationRequest, User
-from app.notifications import TYPE_REGISTRATION_REQUEST
-from app.registrations import STATUS_PENDING
+from app.notifications import TYPE_REGISTRATION_REQUEST, unread_count
 from app.schema import migrate_schema
 from tests.test_app import register_active
 
@@ -668,6 +667,10 @@ def test_auth0_verified_new_identity_opens_complete_profile(monkeypatch):
     page = http.get("/auth/completar-perfil")
     assert page.status_code == 200
     assert "Complete seu perfil" in page.text
+    assert "Conta" in page.text
+    assert "Perfil" in page.text
+    assert "Verificação" in page.text
+    assert "Aprovação" not in page.text
     assert "Escolha como você aparece no Watch Club." in page.text
     assert "Continuar" in page.text
     assert 'name="name"' in page.text
@@ -703,6 +706,13 @@ def test_auth0_unverified_cannot_create_user_via_onboarding(monkeypatch):
     )
     assert created.status_code == 303
     assert created.headers["location"] == "/auth/verificar-email"
+    verify = http.get("/auth/verificar-email")
+    assert verify.status_code == 200
+    assert "Conta" in verify.text
+    assert "Perfil" in verify.text
+    assert "Verificação" in verify.text
+    assert "Aprovação" not in verify.text
+    assert "Aguardando aprovação" not in verify.text
     db = SessionLocal()
     try:
         assert db.scalar(select(User).where(User.auth0_sub == "auth0|unv-create")) is None
@@ -731,14 +741,14 @@ def test_auth0_onboarding_name_can_repeat_username_cannot(monkeypatch):
         follow_redirects=False,
     )
     assert created.status_code == 303
-    assert created.headers["location"] == "/auth/aguardando"
+    assert created.headers["location"] == "/"
     db = SessionLocal()
     try:
         users = list(db.scalars(select(User).where(User.name == "Nome Compartilhado")))
         assert len(users) == 2
         newbie = db.scalar(select(User).where(User.auth0_sub == "auth0|repeat-name"))
         assert newbie.username_key == "auth0_repeat"
-        assert newbie.is_active is False
+        assert newbie.is_active is True
     finally:
         db.close()
 
@@ -769,7 +779,7 @@ def test_auth0_username_suggestion_uses_available_variation(monkeypatch):
     assert suggested_auth0_name(email="x@y.com", name="Maria Clara") == "Maria Clara"
 
 
-def test_auth0_complete_profile_creates_one_inactive_user(monkeypatch):
+def test_auth0_complete_profile_creates_one_active_user(monkeypatch):
     _enable_auth0(monkeypatch)
     http = TestClient(app)
     _start_callback(
@@ -789,26 +799,19 @@ def test_auth0_complete_profile_creates_one_inactive_user(monkeypatch):
         follow_redirects=False,
     )
     assert forged.status_code == 303
-    assert forged.headers["location"] == "/auth/aguardando"
-    waiting = http.get("/auth/aguardando")
-    assert waiting.status_code == 200
-    assert "Aguardando aprovação" in waiting.text
-    assert "Seu pedido já foi enviado" in waiting.text
-    assert 'href="/auth/logout"' in waiting.text
-    assert "7 dias" not in waiting.text
+    assert forged.headers["location"] == "/"
     home = http.get("/")
-    assert "Olá, Ana Auth" not in home.text
-    assert 'aria-label="Configurações"' not in home.text
+    assert "Ana Auth" in home.text or 'aria-label="Configurações"' in home.text
     conta = http.get("/conta", follow_redirects=False)
-    assert conta.status_code == 303
-    assert "/login" in conta.headers["location"]
+    assert conta.status_code == 200
     clubes = http.get("/clubes", follow_redirects=False)
-    assert clubes.status_code in (303, 401)
+    assert clubes.status_code == 200
     again = http.get("/auth/completar-perfil", follow_redirects=False)
     assert again.status_code == 303
-    assert again.headers["location"] == "/auth/aguardando"
-    waiting_again = http.get("/auth/aguardando")
-    assert waiting_again.status_code == 200
+    assert again.headers["location"] == "/"
+    waiting = http.get("/auth/aguardando", follow_redirects=False)
+    assert waiting.status_code == 303
+    assert waiting.headers["location"] == "/"
     db = SessionLocal()
     try:
         users = list(db.scalars(select(User).where(User.auth0_sub == "auth0|create-1")))
@@ -818,14 +821,11 @@ def test_auth0_complete_profile_creates_one_inactive_user(monkeypatch):
         assert user.name == "Ana Auth"
         assert user.username_key == "ana_auth"
         assert user.password_hash == ""
-        assert user.is_active is False
+        assert user.is_active is True
         assert user.is_site_admin is False
         assert user.username_changed_at is None
         requests = list(db.scalars(select(RegistrationRequest).where(RegistrationRequest.user_id == user.id)))
-        assert len(requests) == 1
-        assert requests[0].status == STATUS_PENDING
-        assert requests[0].decision_note is None
-        assert requests[0].decided_at is None
+        assert requests == []
     finally:
         db.close()
     migrate_schema()
@@ -841,7 +841,7 @@ def test_auth0_complete_profile_creates_one_inactive_user(monkeypatch):
         follow_redirects=False,
     )
     assert duplicate.status_code == 303
-    assert duplicate.headers["location"] == "/auth/aguardando"
+    assert duplicate.headers["location"] == "/"
     db = SessionLocal()
     try:
         assert len(list(db.scalars(select(User).where(User.email == "auth0.create@example.com")))) == 1
@@ -850,7 +850,7 @@ def test_auth0_complete_profile_creates_one_inactive_user(monkeypatch):
         db.close()
 
 
-def test_auth0_relogin_same_sub_goes_to_awaiting_not_home(monkeypatch):
+def test_auth0_relogin_same_sub_goes_home(monkeypatch):
     _enable_auth0(monkeypatch)
     http = TestClient(app)
     _start_callback(http, _onboard_identity(sub="auth0|relogin-1", email="auth0.relogin@example.com"))
@@ -858,17 +858,15 @@ def test_auth0_relogin_same_sub_goes_to_awaiting_not_home(monkeypatch):
     left = http.get("/auth/logout", follow_redirects=False)
     _assert_auth0_tenant_logout(left)
     callback = _start_callback(http, _onboard_identity(sub="auth0|relogin-1", email="auth0.relogin@example.com"))
-    assert callback.headers["location"] == "/auth/aguardando"
-    page = http.get("/auth/aguardando")
-    assert page.status_code == 200
-    assert "Aguardando aprovação" in page.text
+    assert callback.headers["location"] == "/"
     home = http.get("/")
-    assert 'aria-label="Configurações"' not in home.text
+    assert home.status_code == 200
+    assert 'aria-label="Configurações"' in home.text
     db = SessionLocal()
     try:
         users = list(db.scalars(select(User).where(User.auth0_sub == "auth0|relogin-1")))
         assert len(users) == 1
-        assert users[0].is_active is False
+        assert users[0].is_active is True
     finally:
         db.close()
 
@@ -1202,7 +1200,7 @@ def test_silent_auth_error_falls_back_to_interactive_login(monkeypatch):
     assert retry["client_id"] == ["test-client-id"]
 
 
-def test_continue_verified_creates_user_pending_and_one_notice_per_admin(monkeypatch):
+def test_continue_verified_activates_user_without_admin_notice(monkeypatch):
     _enable_auth0(monkeypatch)
     admin = TestClient(app)
     register_active(admin, "flow_site_a", "flow.site.a@example.com")
@@ -1226,53 +1224,51 @@ def test_continue_verified_creates_user_pending_and_one_notice_per_admin(monkeyp
         sub="auth0|flow-ok", email="flow.ok@example.com", email_verified=True
     )):
         callback = http.get(f"/callback?code=fake&state={state}", follow_redirects=False)
-    assert callback.headers["location"] == "/auth/aguardando"
-    waiting = http.get("/auth/aguardando")
-    assert "Aguardando aprovação" in waiting.text
+    assert callback.headers["location"] == "/"
+    home = http.get("/")
+    assert home.status_code == 200
+    assert "Aguardando aprovação" not in home.text
+    assert "Aprovação" not in home.text
     db = SessionLocal()
     try:
         user = db.scalar(select(User).where(User.auth0_sub == "auth0|flow-ok"))
         assert user is not None
-        assert user.is_active is False
+        assert user.is_active is True
         assert user.name == "Azi"
         assert user.username_key == "azi_ok"
         requests = list(db.scalars(select(RegistrationRequest).where(RegistrationRequest.user_id == user.id)))
-        assert len(requests) == 1
-        assert requests[0].status == STATUS_PENDING
+        assert requests == []
         notes = list(
             db.scalars(
                 select(Notification).where(
                     Notification.type == TYPE_REGISTRATION_REQUEST,
-                    Notification.related_id == requests[0].id,
+                    Notification.actor_user_id == user.id,
                 )
             )
         )
-        recipients = {note.user_id for note in notes}
-        assert db.scalar(select(User.id).where(User.email == "flow.site.a@example.com")) in recipients
-        assert db.scalar(select(User.id).where(User.email == "flow.site.b@example.com")) in recipients
-        assert user.id not in recipients
-        assert len({note.user_id for note in notes}) == len(notes)
+        assert notes == []
+        assert unread_count(db, db.scalar(select(User.id).where(User.email == "flow.site.a@example.com"))) == 0
     finally:
         db.close()
     repeated = _start_callback(
         http,
         Auth0Identity(sub="auth0|flow-ok", email="flow.ok@example.com", email_verified=True),
     )
-    assert repeated.headers["location"] == "/auth/aguardando"
+    assert repeated.headers["location"] == "/"
     db = SessionLocal()
     try:
         user = db.scalar(select(User).where(User.auth0_sub == "auth0|flow-ok"))
         requests = list(db.scalars(select(RegistrationRequest).where(RegistrationRequest.user_id == user.id)))
-        assert len(requests) == 1
+        assert requests == []
         notes = list(
             db.scalars(
                 select(Notification).where(
                     Notification.type == TYPE_REGISTRATION_REQUEST,
-                    Notification.related_id == requests[0].id,
+                    Notification.actor_user_id == user.id,
                 )
             )
         )
-        assert len(notes) == len({note.user_id for note in notes})
+        assert notes == []
     finally:
         db.close()
 
@@ -1368,3 +1364,97 @@ def test_auth0_pendente_redirects_into_new_verification_flow(monkeypatch):
     aliased = http.get("/auth/pendente", follow_redirects=False)
     assert aliased.status_code == 303
     assert aliased.headers["location"] == "/auth/verificar-email"
+
+
+def test_historical_pending_request_auto_activates_without_admin(monkeypatch):
+    _enable_auth0(monkeypatch)
+    db = SessionLocal()
+    try:
+        user = User(
+            name="Hist Pendente",
+            username="hist_pend",
+            username_key="hist_pend",
+            email="hist.pend@example.com",
+            password_hash="",
+            is_active=False,
+            auth0_sub="auth0|hist-pend",
+        )
+        db.add(user)
+        db.flush()
+        db.add(RegistrationRequest(user_id=user.id, status="pending"))
+        db.commit()
+        user_id = user.id
+    finally:
+        db.close()
+    http = TestClient(app)
+    callback = _start_callback(
+        http,
+        Auth0Identity(sub="auth0|hist-pend", email="hist.pend@example.com", email_verified=True),
+    )
+    assert callback.headers["location"] == "/"
+    landed = http.get("/")
+    assert landed.status_code == 200
+    assert 'aria-label="Configurações"' in landed.text
+    db = SessionLocal()
+    try:
+        user = db.get(User, user_id)
+        assert user.is_active is True
+        assert user.id == user_id
+        assert user.auth0_sub == "auth0|hist-pend"
+    finally:
+        db.close()
+
+
+def test_banned_and_historically_rejected_stay_blocked(monkeypatch):
+    _enable_auth0(monkeypatch)
+    from app.accounts import utcnow
+    from app.registrations import STATUS_REJECTED
+
+    db = SessionLocal()
+    try:
+        banned = User(
+            name="Banido",
+            username="ban_auto",
+            username_key="ban_auto",
+            email="ban.auto@example.com",
+            password_hash="",
+            is_active=False,
+            auth0_sub="auth0|ban-auto",
+            banned_at=utcnow(),
+        )
+        rejected = User(
+            name="Recusado",
+            username="rej_auto",
+            username_key="rej_auto",
+            email="rej.auto@example.com",
+            password_hash="",
+            is_active=False,
+            auth0_sub="auth0|rej-auto",
+        )
+        db.add(banned)
+        db.add(rejected)
+        db.flush()
+        db.add(RegistrationRequest(user_id=rejected.id, status=STATUS_REJECTED))
+        db.commit()
+        banned_id = banned.id
+        rejected_id = rejected.id
+    finally:
+        db.close()
+    banned_http = TestClient(app)
+    banned_cb = _start_callback(
+        banned_http,
+        Auth0Identity(sub="auth0|ban-auto", email="ban.auto@example.com", email_verified=True),
+    )
+    assert banned_cb.headers["location"] != "/"
+    rejected_http = TestClient(app)
+    rejected_cb = _start_callback(
+        rejected_http,
+        Auth0Identity(sub="auth0|rej-auto", email="rej.auto@example.com", email_verified=True),
+    )
+    assert rejected_cb.headers["location"] == "/auth/nao-aprovado"
+    db = SessionLocal()
+    try:
+        assert db.get(User, banned_id).is_active is False
+        assert db.get(User, rejected_id).is_active is False
+    finally:
+        db.close()

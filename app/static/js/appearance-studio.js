@@ -31,11 +31,16 @@
       paperClass;
     if (kind === "image" && paperBtn?.getAttribute("data-paper-src")) {
       preview.style.setProperty("--wc-wallpaper-src", "url('" + paperBtn.getAttribute("data-paper-src") + "')");
+      preview.style.setProperty(
+        "--wc-wallpaper-thumb",
+        "url('" + (paperBtn.getAttribute("data-paper-thumb") || paperBtn.getAttribute("data-paper-src")) + "')",
+      );
       preview.style.setProperty("--wc-wallpaper-size", paperBtn.getAttribute("data-paper-size") || "cover");
       preview.style.setProperty("--wc-wallpaper-repeat", paperBtn.getAttribute("data-paper-repeat") || "no-repeat");
       preview.style.setProperty("--wc-wallpaper-position", paperBtn.getAttribute("data-paper-position") || "center");
     } else {
       preview.style.removeProperty("--wc-wallpaper-src");
+      preview.style.removeProperty("--wc-wallpaper-thumb");
     }
   }
 

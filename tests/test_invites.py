@@ -8,13 +8,8 @@ from app.db import SessionLocal, engine
 from app.invites import (
     CODE_BYTES,
     CODE_LENGTH,
-    MSG_INVALID,
-    MSG_REVOKED,
-    MSG_USED,
     STATUS_AVAILABLE,
     STATUS_REVOKED,
-    STATUS_USED,
-    InviteSignupBlocked,
     create_invite,
     format_invite_code,
     generate_canonical_code,
@@ -88,58 +83,30 @@ def test_open_signup_does_not_require_invite():
         db.close()
 
 
-def test_closed_signup_requires_invite_and_messages(monkeypatch):
+def test_invite_flag_does_not_block_public_signup(monkeypatch):
     _closed(monkeypatch)
     page = TestClient(app).get("/register")
-    assert 'name="invite_code"' in page.text
-    assert '"invite_required": true' in page.text
-
-    blank = TestClient(app).post(
+    assert 'name="invite_code"' not in page.text
+    assert '"invite_required": true' not in page.text
+    created = TestClient(app).post(
         "/register",
         data={"name": "Sem", "username": "sem_convite", "email": "sem.convite@example.com", "password": "segredo"},
         follow_redirects=False,
     )
-    assert blank.status_code == 400
-    assert MSG_INVALID in blank.text
-
-    missing = TestClient(app).post(
-        "/register",
-        data={
-            "name": "Sem",
-            "username": "sem_convite2",
-            "email": "sem.convite2@example.com",
-            "password": "segredo",
-            "invite_code": "WC-ZZZZ-ZZZZ-ZZZZ-Z",
-        },
-    )
-    assert missing.status_code == 400
-    assert MSG_INVALID in missing.text
-
+    assert created.status_code == 303
+    assert created.headers["location"] == "/verificar-email"
     db = SessionLocal()
     try:
-        invite = create_invite(db)
-        db.commit()
-        display = format_invite_code(invite.code)
-        ok, _msg = revoke_invite(db, display)
-        assert ok
-        db.commit()
+        user = db.scalar(select(User).where(User.email == "sem.convite@example.com"))
+        assert user is not None
+        assert user.is_active is False
+        invite = db.scalar(select(AccountInvite).where(AccountInvite.used_by_user_id == user.id))
+        assert invite is None
     finally:
         db.close()
-    revoked = TestClient(app).post(
-        "/register",
-        data={
-            "name": "Rev",
-            "username": "rev_convite",
-            "email": "rev.convite@example.com",
-            "password": "segredo",
-            "invite_code": display,
-        },
-    )
-    assert revoked.status_code == 400
-    assert MSG_REVOKED in revoked.text
 
 
-def test_valid_invite_creates_inactive_user_and_cannot_be_reused(monkeypatch):
+def test_register_does_not_consume_legacy_invite(monkeypatch):
     _closed(monkeypatch)
     code = _issue_invite()
     http = TestClient(app)
@@ -161,41 +128,11 @@ def test_valid_invite_creates_inactive_user_and_cannot_be_reused(monkeypatch):
         user = db.scalar(select(User).where(User.email == "convite.ok@example.com"))
         assert user is not None
         assert user.is_active is False
-        token = db.scalar(select(EmailToken).where(EmailToken.user_id == user.id))
-        assert token is not None
-        invite = db.scalar(select(AccountInvite).where(AccountInvite.used_by_user_id == user.id))
-        assert invite is not None
-        assert invite.status == STATUS_USED
+        invite = db.scalar(select(AccountInvite).where(AccountInvite.code == normalize_invite_code(code)))
+        assert invite.status == STATUS_AVAILABLE
+        assert invite.used_by_user_id is None
     finally:
         db.close()
-    blocked = http.post(
-        "/login",
-        data={"email": "convite.ok@example.com", "password": "segredo"},
-        follow_redirects=False,
-    )
-    assert blocked.status_code == 303
-    assert "/verificar-email" in blocked.headers["location"]
-    db = SessionLocal()
-    try:
-        user = db.scalar(select(User).where(User.email == "convite.ok@example.com"))
-        token = db.scalar(select(EmailToken).where(EmailToken.user_id == user.id))
-        raw = token.token
-    finally:
-        db.close()
-    verified = http.get(f"/verificar-email?token={raw}", follow_redirects=False)
-    assert verified.status_code == 303
-    second = TestClient(app).post(
-        "/register",
-        data={
-            "name": "Outro",
-            "username": "convite_dois",
-            "email": "convite.dois@example.com",
-            "password": "segredo",
-            "invite_code": code,
-        },
-    )
-    assert second.status_code == 400
-    assert MSG_USED in second.text
 
 
 def test_failed_register_does_not_consume_invite(monkeypatch):
@@ -244,24 +181,22 @@ def test_oauth_existing_user_still_works_when_closed(monkeypatch):
         db.close()
 
 
-def test_oauth_new_user_blocked_when_closed(monkeypatch):
+def test_oauth_new_user_is_allowed_when_invite_flag_is_on(monkeypatch):
     _closed(monkeypatch)
     db = SessionLocal()
     try:
-        try:
-            login_or_create_oauth(
-                db,
-                {
-                    "provider": "google",
-                    "provider_id": "google-new-blocked",
-                    "email": "oauth.new.blocked@example.com",
-                    "name": "Nova Pessoa",
-                },
-            )
-            raise AssertionError("expected InviteSignupBlocked")
-        except InviteSignupBlocked:
-            db.rollback()
-        assert db.scalar(select(User).where(User.email == "oauth.new.blocked@example.com")) is None
+        user = login_or_create_oauth(
+            db,
+            {
+                "provider": "google",
+                "provider_id": "google-new-open",
+                "email": "oauth.new.open@example.com",
+                "name": "Nova Pessoa",
+            },
+        )
+        db.commit()
+        assert user.email == "oauth.new.open@example.com"
+        assert user.is_active is True
     finally:
         db.close()
 
@@ -273,9 +208,8 @@ def test_login_keeps_oauth_buttons_when_closed(monkeypatch):
     assert "Continuar com Facebook" in page.text
 
 
-def test_invite_race_allows_only_one_account(monkeypatch):
+def test_public_register_allows_two_accounts_without_invite(monkeypatch):
     _closed(monkeypatch)
-    code = _issue_invite()
 
     def try_register(index: int):
         http = TestClient(app)
@@ -286,25 +220,19 @@ def test_invite_race_allows_only_one_account(monkeypatch):
                 "username": f"race_inv_{index}",
                 "email": f"race.inv{index}@example.com",
                 "password": "segredo",
-                "invite_code": code,
             },
             follow_redirects=False,
         )
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(try_register, [1, 2]))
-    statuses = sorted(item.status_code for item in results)
-    assert statuses == [303, 400]
-    assert any(MSG_USED in item.text or MSG_INVALID in item.text for item in results if item.status_code == 400)
+    assert sorted(item.status_code for item in results) == [303, 303]
     db = SessionLocal()
     try:
         users = list(
             db.scalars(select(User).where(User.email.in_(["race.inv1@example.com", "race.inv2@example.com"])))
         )
-        assert len(users) == 1
-        invite = db.scalar(select(AccountInvite).where(AccountInvite.code == normalize_invite_code(code)))
-        assert invite.status == STATUS_USED
-        assert invite.used_by_user_id == users[0].id
+        assert len(users) == 2
     finally:
         db.close()
 

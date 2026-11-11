@@ -9,6 +9,7 @@ from app.pixel_emoji import (
     TOKEN_RE,
     catalog,
     catalog_for,
+    is_sticker_message,
     pack_available,
     picker_catalog,
     render_tokens,
@@ -140,18 +141,30 @@ def test_club_member_cannot_change_icon_preset():
 def test_pack_registry_keeps_joi3_namespace_and_future_slots():
     assert "joi3" in PACKS
     assert PACKS["joi3"]["picker"] is True
+    assert PACKS["joi3"]["label"] == "Emojis"
+    assert PACKS["joyquest"]["picker"] is True
+    assert PACKS["joyquest"]["label"] == "Reações"
+    assert PACKS["social"]["picker"] is True
+    assert PACKS["social"]["label"] == "Social"
     assert "pixelmojis" in PACKS
     assert PACKS["pixelmojis"]["picker"] is True
+    assert PACKS["pixelmojis"]["tab"] == "emojis"
     data = picker_catalog()
     assert data["pack"] == "JOI3"
-    assert any(pack["id"] == "joi3" for pack in data["packs"])
-    assert any(pack["id"] == "pixelmojis" for pack in data["packs"])
+    picker_ids = {pack["id"] for pack in data["packs"]}
+    assert "emojis" in picker_ids
+    assert "reactions" in picker_ids
+    assert "social" in picker_ids
+    assert "pixelmojis" not in picker_ids
+    assert "joi3" not in picker_ids
     unknown = str(render_tokens("oi :packb-25:"))
     assert ":packb-25:" in unknown
     assert "<img" not in unknown
     assert PACK_TOKEN_RE.fullmatch(":joi3-12:")
     assert PACK_TOKEN_RE.fullmatch(":packb-25:")
     assert PACK_TOKEN_RE.fullmatch(":pixelmojis-12:")
+    assert PACK_TOKEN_RE.fullmatch(":joyquest-3:")
+    assert PACK_TOKEN_RE.fullmatch(":social-8:")
     if catalog()["items"]:
         assert catalog()["items"][0]["token"].startswith(":joi3-")
     traversal = str(render_tokens(":../secret-1:"))
@@ -172,10 +185,14 @@ def test_emoji_picker_is_reused_and_sits_above_page():
     chat = owner.get(f"/clubs/{club_id}?aba=chat")
     assert chat.status_code == 200
     assert "js-emoji-panel" in chat.text
+    assert "js-emoji-toggle" in chat.text
     assert "emoji-panel" in chat.text
     css = owner.get("/static/style.css").text
-    assert "z-index:80" in css.replace(" ", "") or "z-index: 80" in css
+    compact = css.replace(" ", "")
+    assert "z-index:80" in compact or "z-index: 80" in css
     assert "999999" not in css
+    assert "image-rendering:pixelated" in compact
+    assert ".chat-body.is-sticker" in css or ".chat-body.is-sticker" in compact
     settings = owner.get(f"/clubs/{club_id}/config")
     assert "js-emoji-picker" in settings.text
     assert "Escolher emoji da tag" in settings.text or "emoji da tag" in settings.text.lower()
@@ -187,19 +204,20 @@ def test_emoji_picker_is_reused_and_sits_above_page():
     home = owner.get("/")
     assert "nav-icon-px" in home.text
     assert "wc-px" in home.text
-    assert 'viewBox="0 0 16 16"' in home.text
+    assert 'viewBox="0 0 32 32"' in home.text
 
 
 def test_pixelmojis_pack_renders_and_stays_namespaced():
     picker = picker_catalog()
     packs = {pack["id"]: pack for pack in picker["packs"]}
-    assert "pixelmojis" in packs
+    assert "pixelmojis" not in packs
+    assert packs["emojis"]["count"] >= 1
     if not pack_available("pixelmojis"):
         html = str(render_tokens("oi :pixelmojis-1:"))
         assert ":pixelmojis-1:" in html
         return
-    assert packs["pixelmojis"]["count"] >= 1
     px = catalog_for("pixelmojis")
+    assert px["count"] >= 1
     first = px["items"][0]
     assert first["token"].startswith(":pixelmojis-")
     assert first["src"].startswith("/static/emojis/pixelmojis/")
@@ -207,17 +225,16 @@ def test_pixelmojis_pack_renders_and_stays_namespaced():
     assert sprite_exists(int(first["id"]), "pixelmojis")
     html = str(format_chat("oi " + first["token"]))
     assert "<img class=\"px-emoji\"" in html
+    assert 'data-pack="pixelmojis"' in html
     assert first["src"] in html
     missing = str(render_tokens(":pixelmojis-99999:"))
     assert ":pixelmojis-99999:" in missing
     assert "<img" not in missing
     tokens = [item["token"] for item in picker["items"]]
     assert len(tokens) == len(set(tokens))
+    assert any(item["pack"] == "pixelmojis" for item in picker["items"])
     joi_tokens = [item["token"] for item in picker["items"] if item["pack"] == "joi3"]
-    px_tokens = [item["token"] for item in picker["items"] if item["pack"] == "pixelmojis"]
     assert joi_tokens
-    assert px_tokens
-    assert not set(joi_tokens) & set(px_tokens)
 
 
 def test_picker_lists_pack_switcher_when_multiple_packs_exist():
@@ -232,9 +249,49 @@ def test_picker_lists_pack_switcher_when_multiple_packs_exist():
     chat = owner.get(f"/clubs/{club_id}?aba=chat")
     assert "js-emoji-packs" in chat.text
     catalog = owner.get("/")
-    assert ":pixelmojis-" in catalog.text
-    assert "Pixelmojis" in catalog.text
+    assert ":joyquest-" in catalog.text
+    assert ":social-" in catalog.text
+    assert '"id": "reactions"' in catalog.text or '"id":"reactions"' in catalog.text
+    assert '"id": "social"' in catalog.text or '"id":"social"' in catalog.text
+    assert '"id": "emojis"' in catalog.text or '"id":"emojis"' in catalog.text
+    picker = picker_catalog()
+    labels = {pack["id"]: pack["label"] for pack in picker["packs"]}
+    assert labels["emojis"] == "Emojis"
+    assert labels["reactions"] == "Reações"
+    assert labels["social"] == "Social"
     look = owner.get("/u/pxmoji_own?aba=aparencia")
     assert "look-swatch" in look.text
     assert "js-look-preview" in look.text
-    assert look.text.count("data-theme-pick=") == 5
+    assert look.text.count("data-theme-pick=") == 22
+
+
+def test_joyquest_and_social_tokens_render_with_stable_namespaces():
+    picker = picker_catalog()
+    packs = {pack["id"]: pack for pack in picker["packs"]}
+    assert packs["reactions"]["count"] >= 1
+    assert packs["social"]["count"] >= 1
+    assert packs["emojis"]["count"] >= 1
+    jq = catalog_for("joyquest")["items"][0]
+    so = catalog_for("social")["items"][0]
+    assert jq["token"].startswith(":joyquest-")
+    assert jq["src"].startswith("/static/emojis/joyquest/")
+    assert so["token"].startswith(":social-")
+    assert so["src"].startswith("/static/emojis/social/")
+    mixed = str(format_chat(f"oi {jq['token']} {so['token']} :joi3-1:"))
+    assert jq["src"] in mixed
+    assert so["src"] in mixed
+    assert mixed.count("<img class=\"px-emoji\"") >= 2
+    missing = str(render_tokens(":joyquest-99999: :social-99999:"))
+    assert ":joyquest-99999:" in missing
+    assert ":social-99999:" in missing
+    assert "<img" not in missing
+
+
+def test_sticker_message_detects_emoji_only_bodies():
+    assert is_sticker_message("😺") is True
+    assert is_sticker_message("Oi 😺 tudo bem?") is False
+    assert is_sticker_message(":joi3-1:") is True
+    assert is_sticker_message("oi :joi3-1:") is False
+    assert is_sticker_message(":joi3-1::pixelmojis-2:") is True
+    assert is_sticker_message("") is False
+    assert is_sticker_message("   ") is False

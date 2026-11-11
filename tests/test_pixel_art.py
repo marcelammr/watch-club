@@ -222,8 +222,9 @@ def test_avatar_style_persists_and_keeps_original():
         db.commit()
     finally:
         db.close()
-    admin = person.get("/admin/cadastros")
-    assert admin.status_code == 200
+    admin = person.get("/admin/cadastros", follow_redirects=False)
+    assert admin.status_code == 303
+    assert admin.headers["location"] == "/admin/sugestoes"
     home2 = person.get("/")
     assert "Meus Clubes" in home2.text
     assert 'href="/clubes"' in home2.text

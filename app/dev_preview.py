@@ -110,16 +110,10 @@ def register_ui_preview_routes(app, templates) -> None:
 PREVIEW_SCREENS = [
     ("perfil", "Completar perfil"),
     ("verificacao", "Verificar e-mail"),
-    ("aguardando", "Aguardando aprovação"),
     ("nao-aprovado", "Solicitação não aprovada"),
     ("revisao", "Solicitar revisão"),
     ("revisao-solicitada", "Revisão solicitada"),
     ("revisao-nao-aprovada", "Revisão não aprovada"),
-    ("expirada", "Solicitação expirada"),
-    ("cadastros", "Administração · Pendentes"),
-    ("revisoes", "Administração · Revisões"),
-    ("cadastro-detalhe", "Detalhe do cadastro"),
-    ("revisao-detalhe", "Detalhe da revisão"),
 ]
 
 

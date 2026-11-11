@@ -83,14 +83,14 @@
                   {% endif %}
                   <time class="muted dm-msg-time" datetime="{{ item.created_at.isoformat() if item.created_at else '' }}">{{ item.created_at|chat_clock }}</time>
                 </p>
-                <p class="chat-body">{{ item.body|pixel_emoji }}</p>
+                <p class="chat-body{% if item.body|sticker_message %} is-sticker{% endif %}">{{ item.body|pixel_emoji }}</p>
               </div>
               <div class="chat-msg-actions">
                 {% if not mine %}
                   <a class="chat-pin-msg" href="/mensagens/{{ person.username }}?selecionar={{ item.id }}" title="Denunciar mensagem">Denunciar</a>
                 {% endif %}
                 {% if mine %}
-                <form class="chat-pin-action" action="/mensagens/{{ person.username }}/{{ item.id }}/apagar" method="post" onsubmit="return confirm('Tem certeza que deseja apagar esta mensagem?')">
+                <form class="chat-pin-action js-confirm-delete" action="/mensagens/{{ person.username }}/{{ item.id }}/apagar" method="post">
                   <button type="submit" class="chat-pin-msg" aria-label="Apagar mensagem" title="Apagar mensagem">Apagar</button>
                 </form>
                 {% endif %}

@@ -60,6 +60,37 @@
 
   document.querySelectorAll(".js-chat-log-wrap .chat-log").forEach(bindDayFloat);
 
+  const confirmDialog = document.getElementById("js-confirm-dialog");
+  if (confirmDialog && typeof confirmDialog.showModal === "function") {
+    let pendingForm = null;
+    document.addEventListener("submit", (event) => {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement) || !form.classList.contains("js-confirm-delete")) return;
+      if (form.dataset.confirmed === "1") {
+        form.dataset.confirmed = "0";
+        return;
+      }
+      event.preventDefault();
+      pendingForm = form;
+      if (typeof confirmDialog.showModal === "function") confirmDialog.showModal();
+    });
+    confirmDialog.querySelector(".js-confirm-cancel")?.addEventListener("click", () => {
+      pendingForm = null;
+      confirmDialog.close();
+    });
+    confirmDialog.querySelector(".js-confirm-ok")?.addEventListener("click", () => {
+      const form = pendingForm;
+      pendingForm = null;
+      confirmDialog.close();
+      if (!form) return;
+      form.dataset.confirmed = "1";
+      form.requestSubmit();
+    });
+    confirmDialog.addEventListener("cancel", () => {
+      pendingForm = null;
+    });
+  }
+
   const enterToggle = document.querySelector(".js-enter-sends");
   if (enterToggle) {
     const status = document.querySelector(".js-enter-sends-status");

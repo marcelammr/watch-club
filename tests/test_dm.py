@@ -324,7 +324,8 @@ def test_dm_sender_deletes_own_message_and_updates_preview_unread():
     assert "Você: msg-c" in inbox.text
     thread = host.get("/mensagens/dm_del_b")
     assert f'action="/mensagens/dm_del_b/{c_id}/apagar"' in thread.text
-    assert "Tem certeza que deseja apagar esta mensagem?" in thread.text
+    assert "js-confirm-delete" in thread.text
+    assert "Tem certeza que deseja apagar esta mensagem?" not in thread.text
 
     stolen = guest.post(f"/mensagens/dm_del_a/{c_id}/apagar", follow_redirects=False)
     assert stolen.status_code == 303

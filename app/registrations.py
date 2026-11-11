@@ -136,9 +136,8 @@ def ensure_pending_registration(db: Session, user_id: int, *, created_at=None) -
     )
     db.add(request)
     db.flush()
-    from app.notifications import notify_registration_request
-
-    notify_registration_request(db, user_id, request.id)
+    # New signups no longer notify admins. Historical callers of this helper
+    # still persist a pending row without creating a badge.
     return request
 
 
@@ -291,9 +290,9 @@ def registration_followup_path(db: Session, user: User) -> str:
         return "/"
     request = expire_registration_if_needed(db, latest_registration_for_user(db, user.id))
     if request is None:
-        return "/auth/aguardando"
+        return "/auth/verificar-email"
     if request.status == STATUS_EXPIRED:
-        return "/auth/expirada"
+        return "/auth/verificar-email"
     if request.status == STATUS_REJECTED:
         review = review_for_registration(db, request.id)
         if review is None:
@@ -305,7 +304,7 @@ def registration_followup_path(db: Session, user: User) -> str:
         if review.status == REVIEW_APPROVED:
             return "/"
         return "/auth/nao-aprovado"
-    return "/auth/aguardando"
+    return "/auth/verificar-email"
 
 
 def review_for_registration(db: Session, request_id: int) -> RegistrationReview | None:
@@ -387,9 +386,6 @@ def create_registration_review(source: Session, user_id: int, message: str) -> t
                 )
                 write.add(review)
                 write.flush()
-                from app.notifications import notify_registration_review
-
-                notify_registration_review(write, user_id, review.id)
                 write.commit()
                 status = review.status
                 review_id = review.id

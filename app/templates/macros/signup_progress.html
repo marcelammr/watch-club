@@ -1,8 +1,8 @@
 {% macro signup_progress(current) %}
 {% if current %}
 <ol class="auth-stepper" aria-label="Etapas do cadastro">
-  {% set steps = [('conta', 'Conta'), ('perfil', 'Perfil'), ('verificacao', 'Verificação'), ('aprovacao', 'Aprovação')] %}
-  {% set order = {'conta': 0, 'perfil': 1, 'verificacao': 2, 'aprovacao': 3} %}
+  {% set steps = [('conta', 'Conta'), ('perfil', 'Perfil'), ('verificacao', 'Verificação')] %}
+  {% set order = {'conta': 0, 'perfil': 1, 'verificacao': 2} %}
   {% set here = order.get(current, 0) %}
   {% for key, label in steps %}
     {% if loop.index0 < here %}

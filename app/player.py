@@ -24,7 +24,38 @@ THEMES = {
     "dreamy": "Dreamy",
     "matcha": "Matcha",
     "cyber": "Cyber",
+    "campfire": "Campfire Songs",
+    "piece": "A Piece of a Dream",
+    "mocha": "Smoky Mocha",
+    "nightclub": "Night Clubs",
+    "cherries": "Fizzy Cherries",
+    "cotton": "Cotton Candy Skies",
+    "castle": "Castle in the Sky",
+    "muddy": "Muddy Waters",
+    "lagoon": "Lagoon",
+    "frost": "Deep Frost",
+    "lemon": "Lemon Tape",
+    "brick": "Red Brick",
+    "pine": "Pine Cabinet",
+    "lime": "Arcade Lime",
+    "bluebird": "Bluebird",
+    "voltage": "Hot Signal",
+    "peach": "Peach Soda",
 }
+
+def _image_paper(label: str, file: str, thumb: str) -> dict:
+    return {
+        "label": label,
+        "kind": "image",
+        "file": file,
+        "thumb": thumb,
+        "css_class": "wc-paper-asset",
+        "size": "cover",
+        "repeat": "no-repeat",
+        "position": "center",
+    }
+
+
 # kind: css (class pattern) | image (local raster/SVG file).
 # Image specs stay hidden until the file exists under static/wallpapers/.
 WALLPAPER_SPECS = {
@@ -35,51 +66,16 @@ WALLPAPER_SPECS = {
     "night": {"label": "Night", "kind": "css", "css_class": "wc-paper-night"},
     "checker": {"label": "Checker", "kind": "css", "css_class": "wc-paper-checker"},
     "doodles": {"label": "Watch Doodles", "kind": "css", "css_class": "wc-paper-doodles"},
-    "dreamy-pixel-sky": {
-        "label": "Dreamy Pixel Sky",
-        "kind": "image",
-        "file": "dreamy-pixel-sky.png",
-        "css_class": "wc-paper-asset",
-        "size": "cover",
-        "repeat": "no-repeat",
-        "position": "center",
-    },
-    "kawaii-desktop": {
-        "label": "Kawaii Desktop",
-        "kind": "image",
-        "file": "kawaii-desktop.png",
-        "css_class": "wc-paper-asset",
-        "size": "cover",
-        "repeat": "no-repeat",
-        "position": "center",
-    },
-    "retro-computer": {
-        "label": "Retro Computer",
-        "kind": "image",
-        "file": "retro-computer.png",
-        "css_class": "wc-paper-asset",
-        "size": "cover",
-        "repeat": "no-repeat",
-        "position": "center",
-    },
-    "gingham-garden": {
-        "label": "Gingham Garden",
-        "kind": "image",
-        "file": "gingham-garden.png",
-        "css_class": "wc-paper-asset",
-        "size": "cover",
-        "repeat": "no-repeat",
-        "position": "center",
-    },
-    "pastel-sparkles": {
-        "label": "Pastel Sparkles",
-        "kind": "image",
-        "file": "pastel-sparkles.png",
-        "css_class": "wc-paper-asset",
-        "size": "cover",
-        "repeat": "no-repeat",
-        "position": "center",
-    },
+    "azure-cove": _image_paper("Azure Cove", "azure-cove.png", "azure-cove.jpg"),
+    "sunset-mirror": _image_paper("Sunset Mirror", "sunset-mirror.png", "sunset-mirror.jpg"),
+    "moonlit-sea": _image_paper("Moonlit Sea", "moonlit-sea.png", "moonlit-sea.jpg"),
+    "sea-stacks": _image_paper("Sea Stacks", "sea-stacks.png", "sea-stacks.jpg"),
+    "teal-city": _image_paper("Teal City", "teal-city.png", "teal-city.jpg"),
+    "candy-city": _image_paper("Candy City", "candy-city.png", "candy-city.jpg"),
+    "golden-clouds": _image_paper("Golden Clouds", "golden-clouds.png", "golden-clouds.jpg"),
+    "dusk-skyline": _image_paper("Dusk Skyline", "dusk-skyline.png", "dusk-skyline.jpg"),
+    "sunflower-field": _image_paper("Sunflower Field", "sunflower-field.png", "sunflower-field.jpg"),
+    "lilac-peaks": _image_paper("Lilac Peaks", "lilac-peaks.png", "lilac-peaks.jpg"),
 }
 PROFILE_TABS = ("perfil", "favoritos", "clubes", "aparencia")
 
@@ -116,6 +112,13 @@ def wallpaper_src(spec: dict) -> str:
     return f"/static/wallpapers/{name}"
 
 
+def wallpaper_thumb_src(spec: dict) -> str:
+    thumb = spec.get("thumb")
+    if thumb:
+        return f"/static/wallpapers/thumbs/{thumb}"
+    return wallpaper_src(spec)
+
+
 def wallpaper_class(key: str | None) -> str:
     resolved = normalize_wallpaper(key)
     spec = WALLPAPER_SPECS[resolved]
@@ -132,8 +135,10 @@ def wallpaper_style(key: str | None) -> str:
     size = spec.get("size") or "cover"
     repeat = spec.get("repeat") or "no-repeat"
     position = spec.get("position") or "center"
+    thumb = wallpaper_thumb_src(spec)
     return (
         f"--wc-wallpaper-src:url('{src}');"
+        f"--wc-wallpaper-thumb:url('{thumb}');"
         f"--wc-wallpaper-size:{size};"
         f"--wc-wallpaper-repeat:{repeat};"
         f"--wc-wallpaper-position:{position};"

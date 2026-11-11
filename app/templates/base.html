@@ -1,10 +1,8 @@
 {% from "macros/avatar.html" import user_avatar %}
 {% from "macros/sidebar.html" import app_sidebar, hamburger %}
-{% from "macros/presence.html" import presence_mark %}
-{% from "macros/club_tag.html" import club_tag_chip %}
 {% from "macros/notifications.html" import bell_popover_inner, notice_inbox_inner %}
 {% from "macros/pixel.html" import px_icon %}
-{% from "macros/window.html" import window_close %}
+{% from "macros/player_card.html" import player_card_sheet %}
 <!DOCTYPE html>
 <html lang="pt-BR" class="dark wc-theme-{{ visitor_theme|default('watchclub') }} {{ wallpaper_class(visitor_wallpaper|default('grid')) }}" dir="ltr"{% set paper_style = wallpaper_style(visitor_wallpaper|default('grid')) %}{% if paper_style %} style="{{ paper_style }}"{% endif %}{% if user %} data-enter-sends="{% if user.enter_sends %}1{% else %}0{% endif %}"{% endif %}>
 <head>
@@ -62,65 +60,7 @@
               <span class="account-label">Minha conta</span>
             </button>
             <div id="account-popover" class="account-popover player-card wc-theme-{{ visitor_theme|default('watchclub') }}" hidden role="dialog" aria-label="{{ user.name }}">
-              <header class="wc-titlebar">
-                <span class="wc-titlebar-mark" aria-hidden="true">{{ px_icon('heart') }}</span>
-                <span class="wc-titlebar-label player-card-title">
-                  <span class="player-card-title-name">{{ user.name }}</span>
-                  {{ club_tag_chip(user.display_tag) }}
-                </span>
-                {{ window_close('js-account-close', 'Fechar cartão de ' ~ user.name) }}
-              </header>
-              <div class="account-popover-body player-card-sheet">
-                <div class="account-popover-head">
-                  <div class="player-avatar-frame is-compact">
-                    {{ user_avatar(user, 'lg', 'portrait') }}
-                  </div>
-                  <div>
-                    <strong class="player-card-name">{{ user.name }}</strong>
-                    {{ club_tag_chip(user.display_tag) }}
-                    <p class="muted">@{{ user.username }}</p>
-                    <p class="status {{ presence_of(user) }} js-account-status">{{ presence_label(user) }}</p>
-                  </div>
-                </div>
-                {% if viewer_player %}
-                <p class="player-level"><span class="player-level-kicker">LV.</span> {{ '%02d'|format(viewer_player.level) }}</p>
-                <p class="player-exp-label">EXP</p>
-                <div class="player-exp" role="meter" aria-label="Progresso até o próximo nível" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ viewer_player.percent }}">
-                  <span class="player-exp-fill" style="width: {{ viewer_player.percent }}%"></span>
-                </div>
-                <p class="player-energy-label">Energia</p>
-                <p class="player-energy" aria-label="Energia {{ viewer_player.energy }} de {{ viewer_player.energy_max }}">
-                  {% for i in range(viewer_player.energy_max) %}
-                    <span class="player-heart{% if i < viewer_player.energy %} is-on{% endif %}" aria-hidden="true">{{ px_icon('heart') }}</span>
-                  {% endfor %}
-                </p>
-                {% if viewer_player.status %}
-                  <p class="player-status">{{ viewer_player.status|pixel_emoji }}</p>
-                {% endif %}
-                <dl class="player-stats-grid is-compact" aria-label="Player stats">
-                  <div class="player-stat"><dt>Clubes</dt><dd>{{ '%02d'|format(viewer_player.stats.clubs) }}</dd></div>
-                  <div class="player-stat"><dt>Amigos</dt><dd>{{ '%02d'|format(viewer_player.stats.friends) }}</dd></div>
-                  <div class="player-stat"><dt>Favoritos</dt><dd>{{ '%02d'|format(viewer_player.stats.favorites) }}</dd></div>
-                </dl>
-                {% endif %}
-                <a class="account-popover-link" href="/u/{{ user.username }}">Ver perfil</a>
-                <a class="account-popover-link" href="/conta">Editar perfil</a>
-                <form action="/logout" method="post">
-                  <button type="submit" class="account-popover-link muted">Sair da sessão</button>
-                </form>
-                <button type="button" class="account-popover-link js-status-toggle" aria-expanded="false" aria-controls="status-submenu">Status</button>
-                <div id="status-submenu" class="status-submenu" hidden>
-                  <button type="button" class="status-option js-set-status" data-status="online">
-                    <span class="status online">{{ presence_mark('online') }}Online</span>
-                  </button>
-                  <button type="button" class="status-option js-set-status" data-status="away">
-                    <span class="status away">{{ presence_mark('away') }}Ausente</span>
-                  </button>
-                  <button type="button" class="status-option js-set-status" data-status="offline">
-                    <span class="status offline">{{ presence_mark('offline') }}Offline</span>
-                  </button>
-                </div>
-              </div>
+              {{ player_card_sheet(user, viewer_player) }}
             </div>
           </div>
         </nav>
@@ -493,6 +433,14 @@
       sync();
     })();
   </script>
+  <dialog class="leave-dialog" id="js-confirm-dialog" aria-labelledby="js-confirm-title">
+    <h2 id="js-confirm-title">Apagar mensagem?</h2>
+    <p id="js-confirm-body">Tem certeza de que deseja apagar esta mensagem? Essa ação não pode ser desfeita.</p>
+    <div class="leave-dialog-actions">
+      <button type="button" class="btn btn-ghost js-confirm-cancel">Cancelar</button>
+      <button type="button" class="btn btn-danger js-confirm-ok">Apagar</button>
+    </div>
+  </dialog>
   <script src="/static/js/chat-composer.js"></script>
   <script src="/static/js/appearance-studio.js"></script>
   {% endif %}
