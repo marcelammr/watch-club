@@ -78,7 +78,7 @@
     </span>
   </div>
   <label>Sigla
-    <input name="tag_slug" class="js-tag-slug" maxlength="4" value="{{ current.slug or '' }}" placeholder="WC" autocomplete="off">
+    <input name="tag_slug" class="js-tag-slug" maxlength="{{ TAG_SLUG_MAX }}" value="{{ current.slug or '' }}" placeholder="SO+1" autocomplete="off">
   </label>
   <p class="bio-label">Emojis</p>
   <div class="tag-emoji-field js-tag-emoji">

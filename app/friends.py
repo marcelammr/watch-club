@@ -79,6 +79,68 @@ def list_friends(db: Session, user_id: int) -> list[User]:
     return _users_by_ids(db, list(friend_id_set(db, user_id)))
 
 
+SEARCH_MIN = 2
+SEARCH_LIMIT = 20
+
+
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%")
+
+
+def relations_for(db: Session, viewer_id: int, people: list[User]) -> dict[int, str]:
+    result = {person.id: "self" if person.id == viewer_id else "none" for person in people}
+    others = [person.id for person in people if person.id != viewer_id]
+    if not others:
+        return result
+    clauses = []
+    for other in others:
+        low, high = pair_ids(viewer_id, other)
+        clauses.append(and_(Friendship.user_low_id == low, Friendship.user_high_id == high))
+    rows = list(db.scalars(select(Friendship).where(or_(*clauses))))
+    for row in rows:
+        other = other_id(row, viewer_id)
+        if row.status == ACCEPTED:
+            result[other] = "friends"
+        elif row.requested_by_id == viewer_id:
+            result[other] = "outgoing"
+        else:
+            result[other] = "incoming"
+    return result
+
+
+def search_people(db: Session, viewer: User, query: str, limit: int = SEARCH_LIMIT) -> list[dict]:
+    from app.accounts import utcnow
+    from app.blocks import blocked_pair_ids
+
+    raw = (query or "").strip().lstrip("@")
+    if len(raw) < SEARCH_MIN:
+        return []
+    blocked = blocked_pair_ids(db, viewer.id)
+    pattern = f"%{_escape_like(raw)}%"
+    now = utcnow()
+    filters = [
+        User.is_active.is_(True),
+        User.banned_at.is_(None),
+        or_(User.suspended_until.is_(None), User.suspended_until <= now),
+        or_(User.username_key.ilike(pattern, escape="\\"), User.name.ilike(pattern, escape="\\")),
+    ]
+    if blocked:
+        filters.append(User.id.notin_(blocked))
+    people = list(
+        db.scalars(
+            select(User)
+            .where(*filters)
+            .order_by(
+                case((User.id == viewer.id, 0), else_=1),
+                User.name.asc(),
+            )
+            .limit(limit)
+        )
+    )
+    relations = relations_for(db, viewer.id, people)
+    return [{"person": person, "relation": relations[person.id]} for person in people]
+
+
 def incoming_invites(db: Session, user_id: int) -> list[User]:
     rows = db.scalars(
         select(Friendship).where(

@@ -70,6 +70,8 @@ def migrate_schema() -> None:
         alters.append("ALTER TABLE users ADD COLUMN avatar_pixel VARCHAR(120)")
     if "avatar_pixel_status" not in columns:
         alters.append("ALTER TABLE users ADD COLUMN avatar_pixel_status VARCHAR(16) DEFAULT 'none'")
+    if "avatar_portrait" not in columns:
+        alters.append("ALTER TABLE users ADD COLUMN avatar_portrait TEXT")
     with engine.begin() as connection:
         for statement in alters:
             connection.execute(text(statement))
@@ -412,6 +414,9 @@ def migrate_schema() -> None:
     _ensure_suggestions()
     _ensure_club_message_removed_at()
     _ensure_safety_tables()
+    from app.pixel_portrait import ensure_assets
+
+    ensure_assets()
 
 
 def _migrate_club_schedules() -> None:

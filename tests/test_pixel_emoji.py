@@ -1,9 +1,14 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
-from app.club_tags import parse_tag_emojis
+from app.club_tags import club_has_tag, parse_tag_emojis, tag_payload
+from app.db import SessionLocal
 from app.main import app
 from app.markup import format_chat
+from app.models import Club
 from app.pixel_emoji import (
+    EMOJI_ROOT,
     PACKS,
     PACK_TOKEN_RE,
     TOKEN_RE,
@@ -16,6 +21,7 @@ from app.pixel_emoji import (
     sprite_exists,
 )
 from tests.test_app import register_active
+from tests.test_dm import _befriend
 from tests.test_pixel_art import _png
 
 
@@ -148,6 +154,8 @@ def test_pack_registry_keeps_joi3_namespace_and_future_slots():
     assert PACKS["social"]["label"] == "Social"
     assert "pixelmojis" in PACKS
     assert PACKS["pixelmojis"]["picker"] is True
+    assert "icons24" not in PACKS
+    assert set(PACKS) == {"joi3", "joyquest", "social", "pixelmojis"}
     assert PACKS["pixelmojis"]["tab"] == "emojis"
     data = picker_catalog()
     assert data["pack"] == "JOI3"
@@ -259,6 +267,7 @@ def test_picker_lists_pack_switcher_when_multiple_packs_exist():
     assert labels["emojis"] == "Emojis"
     assert labels["reactions"] == "Reações"
     assert labels["social"] == "Social"
+    assert "icons" not in labels
     look = owner.get("/u/pxmoji_own?aba=aparencia")
     assert "look-swatch" in look.text
     assert "js-look-preview" in look.text
@@ -295,3 +304,108 @@ def test_sticker_message_detects_emoji_only_bodies():
     assert is_sticker_message(":joi3-1::pixelmojis-2:") is True
     assert is_sticker_message("") is False
     assert is_sticker_message("   ") is False
+
+
+def test_discord_icons24_pack_is_gone():
+    assert "icons24" not in PACKS
+    assert not (Path(EMOJI_ROOT) / "icons2024").exists()
+    leftover = str(render_tokens("oi :icons24-1:"))
+    assert ":icons24-1:" in leftover
+    assert "<img" not in leftover
+    picker = picker_catalog()
+    assert not any(pack["id"] == "icons" for pack in picker["packs"])
+    assert not any(item.get("pack") == "icons24" for item in picker["items"])
+
+
+def test_tag_plus_valid_pack_emoji_stays_separate_from_slug():
+    if not pack_available("joi3"):
+        return
+    owner = TestClient(app)
+    pal = TestClient(app)
+    register_active(owner, "tagmoji_own", "tagmoji.own@example.com")
+    register_active(pal, "tagmoji_pal", "tagmoji.pal@example.com")
+    token = catalog_for("joi3")["items"][0]["token"]
+    created = owner.post("/clubs", data={"name": "Clube Tag Emoji"}, follow_redirects=False)
+    club_id = int(created.headers["location"].rsplit("/", 1)[-1])
+    chat_sent = owner.post(
+        f"/clubs/{club_id}/mensagens",
+        data={"body": f"oi {token}"},
+        follow_redirects=False,
+    )
+    assert chat_sent.status_code == 303
+    chat = owner.get(f"/clubs/{club_id}?aba=chat")
+    assert token.replace(":", "") in chat.text or "/static/emojis/joi3/" in chat.text
+    assert "js-emoji-picker" in chat.text
+    sticker = owner.post(f"/clubs/{club_id}/mensagens", data={"body": token}, follow_redirects=False)
+    assert sticker.status_code == 303
+    assert "is-sticker" in owner.get(f"/clubs/{club_id}?aba=chat").text
+    _befriend(owner, pal, "tagmoji_own", "tagmoji_pal")
+    dm_sent = owner.post("/mensagens/tagmoji_pal", data={"body": f"dm {token}"}, follow_redirects=False)
+    assert dm_sent.status_code == 303
+    assert "/static/emojis/joi3/" in owner.get("/mensagens/tagmoji_pal").text
+    bio = owner.post(
+        "/conta/perfil",
+        data={"name": "Tagmoji Own", "username": "tagmoji_own", "email": "tagmoji.own@example.com", "bio": token},
+        follow_redirects=False,
+    )
+    assert bio.status_code == 303
+    assert "/static/emojis/joi3/" in owner.get("/u/tagmoji_own").text
+    saved = owner.post(
+        f"/clubs/{club_id}/tag",
+        data={"tag_slug": "SO+1", "tag_emoji": token, "tag_color_mode": "solid", "tag_color_1": "#B892FF"},
+        follow_redirects=False,
+    )
+    assert saved.status_code == 303
+    db = SessionLocal()
+    try:
+        club = db.get(Club, club_id)
+        assert club.tag_slug == "SO+1"
+        assert club.tag_emoji == token
+        assert club_has_tag(club)
+        payload = tag_payload(club)
+        assert payload["slug"] == "SO+1"
+        assert payload["emojis"] == [token]
+    finally:
+        db.close()
+    tag_page = owner.get(f"/clubs/{club_id}/tag")
+    assert "SO+1" in tag_page.text
+    assert "/static/emojis/joi3/" in tag_page.text
+    displayed = owner.post("/conta/tag", data={"displayed_club_id": str(club_id)}, follow_redirects=False)
+    assert displayed.status_code == 303
+    home = owner.get("/")
+    assert "SO+1" in home.text
+    assert "club-tag-slug" in home.text
+    assert "/static/emojis/joi3/" in home.text.split("player-nameplate", 1)[-1][:2500]
+    swapped = owner.post(
+        f"/clubs/{club_id}/tag",
+        data={"tag_slug": "EP01", "tag_emoji": catalog_for("joi3")["items"][1]["token"], "tag_color_mode": "solid", "tag_color_1": "#B892FF"},
+        follow_redirects=False,
+    )
+    assert swapped.status_code == 303
+    cleared = owner.post(
+        f"/clubs/{club_id}/tag",
+        data={"tag_slug": "SO+1", "tag_emoji": "", "tag_color_mode": "solid", "tag_color_1": "#B892FF"},
+        follow_redirects=False,
+    )
+    assert cleared.status_code == 303
+    db = SessionLocal()
+    try:
+        club = db.get(Club, club_id)
+        assert club.tag_slug == "SO+1"
+        assert club.tag_emoji == ""
+        assert club_has_tag(club)
+    finally:
+        db.close()
+    rejected = owner.post(
+        f"/clubs/{club_id}/tag",
+        data={"tag_slug": "SO+1", "tag_emoji": ":icons24-1:", "tag_color_mode": "solid", "tag_color_1": "#B892FF"},
+        follow_redirects=False,
+    )
+    assert rejected.status_code == 400
+    db = SessionLocal()
+    try:
+        club = db.get(Club, club_id)
+        assert club.tag_emoji == ""
+    finally:
+        db.close()
+    assert parse_tag_emojis(":icons24-1:") is None

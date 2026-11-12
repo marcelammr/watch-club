@@ -38,6 +38,18 @@ def ids_blocked_by(db: Session, blocker_id: int) -> set[int]:
     return set(db.scalars(select(UserBlock.blocked_id).where(UserBlock.blocker_id == blocker_id)))
 
 
+def blocked_pair_ids(db: Session, user_id: int) -> set[int]:
+    rows = db.execute(
+        select(UserBlock.blocker_id, UserBlock.blocked_id).where(
+            or_(UserBlock.blocker_id == user_id, UserBlock.blocked_id == user_id)
+        )
+    )
+    ids: set[int] = set()
+    for blocker_id, blocked_id in rows:
+        ids.add(blocked_id if blocker_id == user_id else blocker_id)
+    return ids
+
+
 def block_row(db: Session, blocker_id: int, blocked_id: int) -> UserBlock | None:
     return db.scalar(
         select(UserBlock).where(UserBlock.blocker_id == blocker_id, UserBlock.blocked_id == blocked_id)

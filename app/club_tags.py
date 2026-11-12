@@ -18,7 +18,8 @@ from app.colors import (
 )
 from app.models import Club, ClubMember, User
 
-TAG_SLUG_RE = re.compile(r"^[A-Za-z0-9]{1,4}$")
+TAG_SLUG_MAX = 8
+TAG_SLUG_RE = re.compile(rf"^[A-Za-z0-9+\-_]{{1,{TAG_SLUG_MAX}}}$")
 TAG_POSITIONS = ("start", "end", "split")
 TAG_POSITION_DEFAULT = "start"
 TAG_BG_MIN = 10
@@ -114,7 +115,7 @@ def club_has_tag(club: Club | None) -> bool:
         return False
     return bool(
         club.tag_slug
-        and parse_tag_emojis(club.tag_emoji)
+        and parse_tag_emojis(club.tag_emoji) is not None
         and valid_hex(club.tag_color_1)
     )
 
@@ -185,7 +186,7 @@ def apply_club_tag(
     cleaned_slug = valid_tag_slug(slug)
     parsed_emojis = parse_tag_emojis(emoji_value)
     if parsed_emojis is None:
-        return "Escolha 1 ou 2 emojis válidos para a tag."
+        return "Escolha um emoji válido para a tag, ou deixe em branco."
     if not cleaned_slug and not parsed_emojis:
         club.tag_slug = ""
         club.tag_emoji = ""
@@ -198,9 +199,7 @@ def apply_club_tag(
         club.tag_emoji_position = TAG_POSITION_DEFAULT
         return None
     if not cleaned_slug:
-        return "A sigla da tag precisa ter de 1 a 4 letras ou números."
-    if not parsed_emojis:
-        return "Escolha 1 ou 2 emojis válidos para a tag."
+        return "A sigla da tag precisa ter de 1 a 8 caracteres (letras, números, +, - ou _)."
     surface, color_error = parse_surface_colors(color_mode, color_1, color_2, gradient_direction)
     if color_error or not surface:
         return color_error or "Escolha uma cor válida."

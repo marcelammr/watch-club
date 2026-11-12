@@ -1,3 +1,4 @@
+import json
 import secrets
 from datetime import date, datetime, timedelta, timezone
 from urllib.parse import quote
@@ -55,11 +56,12 @@ from app.pixel_art import (
 from app.avatars import (
     AVATARS,
     avatar_initials,
+    avatar_kind,
     avatar_original_url,
     avatar_url,
-    illustrated_catalogs,
     parse_illustrated_choice,
     set_illustrated_avatar,
+    set_pixel_avatar,
     set_upload_avatar,
     valid_avatar,
 )
@@ -158,6 +160,7 @@ from app.club_tags import (
     TAG_BORDER_MAX,
     TAG_BORDER_MIN,
     TAG_POSITION_DEFAULT,
+    TAG_SLUG_MAX,
     apply_club_tag,
     clear_tag_preferences,
     club_has_tag,
@@ -201,6 +204,10 @@ from app.pixel_emoji import pack_available as joi3_pack_available
 from app.pixel_emoji import picker_catalog as joi3_catalog
 from app.pixel_emoji import render_tokens
 from app.pixel_icons import pixel_icon
+from app.pixel_portrait import catalog as portrait_catalog
+from app.pixel_portrait import config_from_user, parse_config as parse_portrait_config
+from app.pixel_portrait import preview_urls as portrait_preview_urls
+from app.pixel_portrait import save_composed as save_portrait
 from app import config as app_config
 from app.config import BASE_DIR, BIO_MAX, EMAIL_DEV_SHOW_LINK, SECRET_KEY, SESSION_HTTPS_ONLY, uploads_dir
 from app.dev_preview import register_ui_preview_routes
@@ -223,6 +230,7 @@ from app.friends import (
     person_href,
     post_dm,
     relation_status,
+    search_people,
     send_invite,
     unfriend,
 )
@@ -465,6 +473,7 @@ def stylesheet_href() -> str:
 templates.env.globals["presence_of"] = presence_of
 templates.env.globals["presence_label"] = lambda user: PRESENCE_LABELS[presence_of(user)]
 templates.env.globals["avatar_initials"] = avatar_initials
+templates.env.globals["avatar_kind"] = avatar_kind
 templates.env.globals["avatar_url"] = avatar_url
 templates.env.globals["avatar_original_url"] = avatar_original_url
 templates.env.globals["cover_original_url"] = cover_original_url
@@ -498,6 +507,7 @@ templates.env.globals["TAG_BORDER_MIN"] = TAG_BORDER_MIN
 templates.env.globals["TAG_BORDER_MAX"] = TAG_BORDER_MAX
 templates.env.globals["TAG_BORDER_DEFAULT"] = TAG_BORDER_DEFAULT
 templates.env.globals["TAG_POSITION_DEFAULT"] = TAG_POSITION_DEFAULT
+templates.env.globals["TAG_SLUG_MAX"] = TAG_SLUG_MAX
 templates.env.globals["SUPPORT_PERMS"] = SUPPORT_PERMS
 templates.env.globals["SUPPORT_PERM_LABELS"] = SUPPORT_PERM_LABELS
 templates.env.globals["ROLE_LABELS"] = ROLE_LABELS
@@ -699,10 +709,15 @@ def _account_extras(user: User) -> dict:
     now = utcnow()
     locked = not nickname_can_change(user.username_changed_at, now)
     unlock = nickname_unlock_at(user.username_changed_at)
+    config = config_from_user(user)
     return {
         "nickname_locked": locked,
         "nickname_unlock": unlock.strftime("%d/%m/%Y") if locked and unlock else None,
         "nickname_days": NICKNAME_DAYS,
+        "portrait_catalog": portrait_catalog(),
+        "portrait_config": config,
+        "portrait_preview": portrait_preview_urls(config),
+        "portrait_config_json": json.dumps(config),
     }
 
 
@@ -3054,7 +3069,6 @@ def account(request: Request):
                 "error": request.query_params.get("error"),
                 "ok": request.query_params.get("ok"),
                 "suggestions": [],
-                "avatar_groups": illustrated_catalogs(),
                 **_account_extras(user),
             },
         )
@@ -3079,7 +3093,6 @@ def update_profile(
         display = name.strip()[:80]
         email = normalize_email(email)
         clubs = _user_clubs(db, user.id)
-        groups = illustrated_catalogs()
 
         def account_error(message: str, suggestions=None):
             return templates.TemplateResponse(
@@ -3093,7 +3106,6 @@ def update_profile(
                     "error": message,
                     "ok": None,
                     "suggestions": suggestions or [],
-                    "avatar_groups": groups,
                     **_account_extras(user),
                 },
                 status_code=400,
@@ -3168,11 +3180,44 @@ def update_avatar(
             parsed = parse_illustrated_choice(f"watchclub:{valid_avatar(avatar)}")
         if not parsed:
             return RedirectResponse("/conta?error=Escolha+um+avatar+valido", status_code=303)
-        if user.avatar_type == "upload":
-            delete_upload(user.avatar_value)
         set_illustrated_avatar(user, parsed[0], parsed[1])
         db.commit()
         return RedirectResponse("/conta?ok=Foto+de+perfil+atualizada", status_code=303)
+    except HTTPException:
+        return RedirectResponse("/login", status_code=303)
+    finally:
+        db.close()
+
+
+@app.post("/conta/avatar/personagem")
+def update_avatar_portrait(
+    request: Request,
+    base: str = Form(""),
+    face: str = Form(""),
+    eyes: str = Form(""),
+    hair: str = Form(""),
+    clothes: str = Form(""),
+    acc: str = Form(""),
+):
+    db = db_session()
+    try:
+        user = login_required(request, db)
+        config = parse_portrait_config(
+            {
+                "base": base,
+                "face": face,
+                "eyes": eyes,
+                "hair": hair,
+                "clothes": clothes,
+                "acc": acc,
+            }
+        )
+        if not config:
+            return RedirectResponse("/conta?error=Escolha+pecas+validas+do+personagem", status_code=303)
+        filename = save_portrait(config)
+        set_pixel_avatar(user, filename, config)
+        db.commit()
+        return RedirectResponse("/conta?ok=Personagem+salvo", status_code=303)
     except HTTPException:
         return RedirectResponse("/login", status_code=303)
     finally:
@@ -3194,8 +3239,6 @@ async def update_avatar_photo(
         path = stored_upload_path(filename)
         if path:
             enforce_image(db, user, path.read_bytes(), mime="image/*", origin="avatar")
-        if user.avatar_type == "upload":
-            delete_upload(user.avatar_value)
         set_upload_avatar(user, filename)
         chosen = normalize_style(preset)
         pixel_name, style = attach_preset(
@@ -4720,12 +4763,20 @@ def _friend_redirect(exc: HTTPException, fallback: str):
 
 
 @app.get("/amigos", response_class=HTMLResponse)
-def friends_page(request: Request):
+def friends_page(request: Request, q: str = Query("")):
     db = db_session()
     try:
         user = login_required(request, db)
         friends = list_friends(db, user.id)
         incoming = incoming_invites(db, user.id)
+        query = (q or "").strip()
+        search_error = ""
+        results = []
+        if query:
+            if len(query.lstrip("@")) < 2:
+                search_error = "Digite pelo menos 2 caracteres para buscar."
+            else:
+                results = search_people(db, user, query)
         stamp_display_tags(db, friends + incoming)
         return templates.TemplateResponse(
             request,
@@ -4734,6 +4785,9 @@ def friends_page(request: Request):
                 "user": user,
                 "friends": friends,
                 "incoming": incoming,
+                "search_q": query,
+                "search_results": results,
+                "search_error": search_error,
                 "error": request.query_params.get("error"),
                 "ok": request.query_params.get("ok"),
             },

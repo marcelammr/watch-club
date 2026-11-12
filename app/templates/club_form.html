@@ -484,11 +484,11 @@
   <div class="tag-guide-body">
     <p>A tag é uma pequena identificação do seu clube que os membros podem escolher exibir ao lado do nome.</p>
     <h3>Sigla</h3>
-    <p>Escolha de 1 a 4 letras ou números que representem o clube.</p>
-    <p class="muted">Exemplos: MC, CERI</p>
+    <p>Escolha de 1 a 8 caracteres com letras, números e, se quiser, +, - ou _.</p>
+    <p class="muted">Exemplos: MC, SO+1, EP01, 404TV</p>
     <h3>Emoji</h3>
-    <p>Escolha 1 ou até 2 emojis para representar o clube.</p>
-    <p class="muted">Exemplos: 😇 MC, 😇😈 MC</p>
+    <p>O ícone/emoji é opcional e fica separado da sigla. Dá para usar 1 ou até 2.</p>
+    <p class="muted">Exemplos: 🌙 SO+1, SO+1 ✦, ou só SO+1</p>
     <h3>Posição dos emojis</h3>
     <p>Escolha se os emojis ficam no início, no final ou, com dois emojis, um de cada lado da sigla.</p>
     <p class="muted">Exemplos: 😇😈 MC, MC 😇😈, 😇 MC 😈</p>
@@ -670,7 +670,8 @@
       if (splitOption) splitOption.hidden = !canSplit;
       if (!canSplit && selectedPosition() === "split") setPosition("start");
       const position = selectedPosition();
-      const slug = (slugInput.value || "MC").toUpperCase().slice(0, 4) || "MC";
+      const slugMax = Number(slugInput.getAttribute("maxlength") || {{ TAG_SLUG_MAX }});
+      const slug = (slugInput.value || "MC").toUpperCase().slice(0, slugMax) || "MC";
       const parts = layoutParts(emojis, slug, position);
       const dir = selectedDir();
       function paintSurface(node, extra) {

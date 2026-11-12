@@ -1,5 +1,5 @@
 type CatalogItem = { id: number; token: string; src: string; pack?: string; tab?: string };
-type CatalogPack = { id: string; label: string; count: number };
+type CatalogPack = { id: string; label: string; count: number; catalog?: string };
 type Catalog = { pack: string; count: number; items: CatalogItem[]; packs?: CatalogPack[] };
 
 let catalogCache: Catalog | null = null;
@@ -90,6 +90,21 @@ function itemsForPack(catalog: Catalog, packId: string | null) {
   return (catalog.items || []).filter((item) => (item.tab || item.pack || "joi3") === packId);
 }
 
+async function ensurePackItems(catalog: Catalog, packId: string | null) {
+  if (!packId) return;
+  const pack = catalog.packs?.find((item) => item.id === packId);
+  if (!pack?.catalog) return;
+  if (itemsForPack(catalog, packId).length) return;
+  const response = await fetch(pack.catalog, { credentials: "same-origin" });
+  if (!response.ok) return;
+  const extra = (await response.json()) as { items?: CatalogItem[] };
+  const incoming = Array.isArray(extra.items) ? extra.items : [];
+  catalog.items = [
+    ...(catalog.items || []),
+    ...incoming.map((item) => ({ ...item, tab: packId, pack: item.pack || packId })),
+  ];
+}
+
 function renderPacks(panel: HTMLElement, wrap: HTMLElement, catalog: Catalog) {
   const nav = packsOf(panel);
   if (!nav) return;
@@ -110,9 +125,12 @@ function renderPacks(panel: HTMLElement, wrap: HTMLElement, catalog: Catalog) {
     button.textContent = pack.label;
     button.addEventListener("click", () => {
       panel.dataset.pack = pack.id;
-      renderGrid(panel, wrap, catalog);
-      renderPacks(panel, wrap, catalog);
-      placePanel(wrap);
+      void (async () => {
+        await ensurePackItems(catalog, pack.id);
+        renderGrid(panel, wrap, catalog);
+        renderPacks(panel, wrap, catalog);
+        placePanel(wrap);
+      })();
     });
     nav.append(button);
   });
@@ -144,7 +162,7 @@ function renderGrid(panel: HTMLElement, wrap: HTMLElement, catalog: Catalog) {
     img.src = item.src;
     img.alt = "";
     img.dataset.pack = item.pack || "joi3";
-    const native = item.pack === "pixelmojis" ? 18 : item.pack === "joyquest" ? 16 : 32;
+      const native = item.pack === "pixelmojis" ? 18 : item.pack === "joyquest" ? 16 : 32;
     img.width = native;
     img.height = native;
     img.loading = "lazy";
@@ -179,6 +197,8 @@ async function openEmojiPicker(wrap: HTMLElement) {
   dockPanel(wrap, panel);
   if (!panel.dataset.ready) {
     const catalog = await loadCatalog();
+    if (!panel.dataset.pack) panel.dataset.pack = catalog.packs?.find((pack) => pack.count > 0)?.id || "joi3";
+    await ensurePackItems(catalog, panel.dataset.pack);
     renderPacks(panel, wrap, catalog);
     renderGrid(panel, wrap, catalog);
   }

@@ -16,6 +16,9 @@ EMOJI_ID_RE = re.compile(r"(\d+)$")
 EMOJI_ROOT = Path(__file__).resolve().parent / "static" / "emojis"
 
 # Register packs here. Do not auto-import random folders.
+# Git history has no deleted fifth pixel pack: only the unicode catalog in
+# app/emojis.py was removed (16bbeca). Viral Emojis in Downloads is a
+# 4-sprite sample with a no-redistribute license and was never committed.
 # picker=True means the pack appears in the emoji window.
 # Tokens stay namespaced (`:joi3-25:` vs `:pixelmojis-25:`). Messages keep the original token.
 PACKS = {
@@ -169,6 +172,12 @@ def picker_catalog() -> dict:
             tabs[tab_id] = {"id": tab_id, "label": spec["label"], "count": 0}
             order.append(tab_id)
         pack = catalog_for(slug)
+        if spec.get("lazy"):
+            catalog_url = spec.get("catalog")
+            if catalog_url:
+                tabs[tab_id]["catalog"] = f"/static/emojis/{Path(catalog_url).parent.name}/{Path(catalog_url).name}"
+            tabs[tab_id]["count"] += pack.get("count") or len(pack.get("items") or [])
+            continue
         for raw in pack.get("items", []):
             try:
                 emoji_id = int(raw["id"])

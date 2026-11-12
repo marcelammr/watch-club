@@ -24,6 +24,7 @@ class User(Base):
     avatar_style: Mapped[str] = mapped_column(String(16), default="original", nullable=False)
     avatar_pixel: Mapped[str | None] = mapped_column(String(120), nullable=True)
     avatar_pixel_status: Mapped[str] = mapped_column(String(16), default="none", nullable=False)
+    avatar_portrait: Mapped[str | None] = mapped_column(Text, nullable=True)
     bio: Mapped[str] = mapped_column(String(150), default="", nullable=False)
     profile_status: Mapped[str] = mapped_column(String(80), default="", nullable=False)
     theme_key: Mapped[str] = mapped_column(String(24), default="watchclub", nullable=False)
@@ -125,7 +126,7 @@ class Club(Base):
     icon_image: Mapped[str | None] = mapped_column(String(120), nullable=True)
     icon_style: Mapped[str] = mapped_column(String(16), default="original", nullable=False)
     icon_pixel: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    tag_slug: Mapped[str] = mapped_column(String(4), default="", nullable=False)
+    tag_slug: Mapped[str] = mapped_column(String(8), default="", nullable=False)
     tag_emoji: Mapped[str] = mapped_column(String(64), default="", nullable=False)
     # legado: token antigo (lavender, …). Não é lido nem escrito pelo código novo; remover depois.
     tag_color: Mapped[str] = mapped_column(String(20), default="", nullable=False)

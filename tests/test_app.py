@@ -1651,11 +1651,11 @@ def test_avatar_registry_upload_and_fallback():
     account = person.get("/conta")
     assert 'src="/static/avatars/popcorn.svg"' in account.text
     assert 'data-presence="' in account.text
-    assert "Enviar foto" in account.text
-    assert "Escolher avatar" in account.text
-    assert "Escolha seu avatar" in account.text
+    assert "Enviar uma imagem" in account.text
+    assert "Criar meu personagem" in account.text
     assert 'id="photo-crop-dialog"' in account.text
-    assert 'value="tyger:TrIggy"' in account.text
+    assert "portrait-preview" in account.text
+    assert 'name="hair"' in account.text
     assert "Buscar na TVMaze" not in account.text
 
     legacy = person.post("/conta/avatar", data={"avatar": "fox"}, follow_redirects=False)

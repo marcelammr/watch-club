@@ -80,10 +80,49 @@ def test_can_uses_role_and_allowlist():
     assert can_moderate_club_chat(member) is False
 
 
+def test_tag_slug_accepts_alphanumeric_symbols_and_stays_escaped():
+    owner = TestClient(app)
+    register_active(owner, "tag_plus", "tag.plus@example.com")
+    created = owner.post("/clubs", data={"name": "Tag Plus"}, follow_redirects=False)
+    club_id = int(created.headers["location"].rsplit("/", 1)[-1])
+    saved = owner.post(
+        f"/clubs/{club_id}/tag",
+        data={"tag_slug": "SO+1", "tag_emoji": EMOJI, "tag_color_mode": "solid", "tag_color_1": "#B892FF"},
+        follow_redirects=False,
+    )
+    assert saved.status_code == 303
+    page = owner.get(f"/clubs/{club_id}/tag")
+    assert "SO+1" in page.text
+    assert 'maxlength="8"' in page.text
+    assert "club-tag-slug" in page.text
+    assert "SO+1" in page.text.split("club-tag-slug", 1)[1][:200]
+    rejected = owner.post(
+        f"/clubs/{club_id}/tag",
+        data={"tag_slug": "SO@1", "tag_emoji": EMOJI, "tag_color_mode": "solid", "tag_color_1": "#B892FF"},
+        follow_redirects=False,
+    )
+    assert rejected.status_code == 400
+    db = SessionLocal()
+    try:
+        club = db.get(Club, club_id)
+        assert club.tag_slug == "SO+1"
+    finally:
+        db.close()
+
+
 def test_tag_validations_reject_unsafe_values():
     assert valid_tag_slug("wc12") == "WC12"
-    assert valid_tag_slug("toolong") == ""
+    assert valid_tag_slug("SO+1") == "SO+1"
+    assert valid_tag_slug("ep01") == "EP01"
+    assert valid_tag_slug("404tv") == "404TV"
+    assert valid_tag_slug("club77") == "CLUB77"
+    assert valid_tag_slug("lv99") == "LV99"
+    assert valid_tag_slug("ok_hi") == "OK_HI"
+    assert valid_tag_slug("a-b") == "A-B"
+    assert valid_tag_slug("toolong99") == ""
     assert valid_tag_slug("w c") == ""
+    assert valid_tag_slug("SO@1") == ""
+    assert valid_tag_slug("<b>") == ""
     assert valid_hex("#b892ff") == "#B892FF"
     assert valid_hex("red") is None
     assert valid_hex("rgb(1,2,3)") is None

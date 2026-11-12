@@ -177,6 +177,7 @@ def test_emoji_picker_catalog_is_local_and_restores_pixelmojis():
     assert labels["emojis"] == "Emojis"
     assert labels["reactions"] == "Reações"
     assert labels["social"] == "Social"
+    assert "icons" not in labels
     assert "pixelmojis" not in labels
     assert PACKS["pixelmojis"]["picker"] is True
     assert any(item["token"].startswith(":pixelmojis-") for item in data["items"])

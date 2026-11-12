@@ -3,6 +3,7 @@
 {% from "macros/emoji.html" import emoji_picker %}
 {% from "macros/club_tag.html" import club_tag_chip %}
 {% from "macros/image_style.html" import style_choices %}
+{% from "macros/pixel.html" import px_icon %}
 {% block title %}Configurações · Watch Club{% endblock %}
 {% block page_heading %}Configurações{% endblock %}
 {% block body_class %}account-page{% endblock %}
@@ -24,14 +25,16 @@
     </div>
   </div>
   <div class="avatar-actions">
+    <button type="button" id="open-avatar" class="btn btn-secondary" aria-haspopup="dialog" aria-controls="avatar-modal">
+      {% if user.avatar_type == 'pixel' %}Editar personagem{% else %}Criar meu personagem{% endif %}
+    </button>
     <form class="js-photo-form" action="/conta/avatar/foto" method="post" enctype="multipart/form-data">
       <input class="js-photo-input" type="file" name="photo" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
       <input type="hidden" name="preset" class="js-image-preset" value="original">
-      <button type="button" class="btn btn-secondary js-photo-open">Enviar foto</button>
+      <button type="button" class="btn btn-secondary js-photo-open">Enviar uma imagem</button>
     </form>
-    <button type="button" id="open-avatar" class="btn btn-secondary" aria-haspopup="dialog" aria-controls="avatar-modal">Escolher avatar</button>
   </div>
-  <p class="muted">O estilo pixel é escolhido ao enviar a foto. A original fica guardada e você pode estilizar de novo depois.</p>
+  <p class="muted">Monte um personagem pixel ou envie uma imagem. Você pode trocar depois. O estilo da foto continua valendo só para imagens enviadas.</p>
   {% if user.avatar_type == 'upload' %}
   <form class="avatar-style-form" action="/conta/avatar/estilo" method="post" data-preview=".current-avatar [data-user-avatar] img" data-original-url="{{ avatar_original_url(user) or '' }}">
     <p class="avatar-style-label">Estilo da foto atual</p>
@@ -43,38 +46,65 @@
   {% endif %}
 </section>
 
-<dialog id="avatar-modal" class="avatar-modal">
-  <div class="avatar-modal-card">
+<dialog id="avatar-modal" class="avatar-modal" aria-labelledby="avatar-modal-title">
+  <div class="avatar-modal-card portrait-creator">
     <div class="avatar-modal-head">
-      <h2>Escolha seu avatar</h2>
+      <h2 id="avatar-modal-title">{% if user.avatar_type == 'pixel' %}Editar personagem{% else %}Criar meu personagem{% endif %}</h2>
       <button type="button" class="btn btn-ghost" id="close-avatar" aria-label="Fechar">Fechar</button>
     </div>
-    <div class="avatar-preview">
-      <img class="js-avatar-preview" src="{{ avatar_url(user) }}" alt="Prévia do avatar">
-    </div>
-    <form action="/conta/avatar" method="post" class="avatar-form">
-      {% for group in avatar_groups %}
-        <h3>{{ group.heading }}</h3>
-        <div class="avatar-grid">
-          {% for icon in group.icons %}
-            <label class="avatar-option">
-              <input
-                type="radio"
-                name="choice"
-                value="{{ group.provider }}:{{ icon.id }}"
-                data-preview="{{ icon.url }}"
-                {% if user.avatar_type != 'upload' and user.avatar_provider == group.provider and user.avatar_value == icon.id %}checked{% endif %}
-                {% if user.avatar_type != 'upload' and not user.avatar_provider and group.provider == 'watchclub' and user.avatar == icon.id %}checked{% endif %}
-              >
-              <img src="{{ icon.url }}" alt="{{ icon.label }}">
-              <span>{{ icon.label }}</span>
-            </label>
+    <form action="/conta/avatar/personagem" method="post" class="portrait-form js-portrait-form">
+      <div class="portrait-stage" aria-hidden="true">
+        <div class="portrait-preview">
+          {% for layer in portrait_preview %}
+            <img class="js-portrait-layer" data-layer="{{ layer.layer }}" src="{{ layer.url }}" alt="">
           {% endfor %}
         </div>
+      </div>
+      <div class="portrait-cats" role="tablist" aria-label="Categorias do personagem">
+        {% for group in portrait_catalog %}
+          <button
+            type="button"
+            class="portrait-cat js-portrait-cat"
+            role="tab"
+            id="portrait-tab-{{ group.id }}"
+            data-cat="{{ group.id }}"
+            aria-controls="portrait-gallery-{{ group.id }}"
+            aria-selected="{% if loop.first %}true{% else %}false{% endif %}"
+            title="{{ group.label }}"
+            aria-label="{{ group.label }}"
+          >{{ px_icon(group.icon) }}</button>
+        {% endfor %}
+      </div>
+      {% for group in portrait_catalog %}
+        <div
+          class="portrait-gallery js-portrait-gallery"
+          id="portrait-gallery-{{ group.id }}"
+          role="tabpanel"
+          data-cat="{{ group.id }}"
+          aria-labelledby="portrait-tab-{{ group.id }}"
+          {% if not loop.first %}hidden{% endif %}
+        >
+          <div class="portrait-thumbs" role="radiogroup" aria-label="{{ group.label }}">
+            {% for option in group.options %}
+              <label class="portrait-thumb" title="{{ option.label }}">
+                <input
+                  type="radio"
+                  name="{{ group.id }}"
+                  value="{{ option.id }}"
+                  data-layer="{{ group.id }}"
+                  data-preview="{{ option.url }}"
+                  aria-label="{{ option.label }}"
+                  {% if portrait_config[group.id] == option.id %}checked{% endif %}
+                >
+                <img src="{{ option.thumb }}" alt="{{ option.label }}" width="64" height="64">
+              </label>
+            {% endfor %}
+          </div>
+        </div>
       {% endfor %}
-      <div class="leave-dialog-actions">
+      <div class="leave-dialog-actions portrait-actions">
         <button type="button" class="btn btn-ghost" id="cancel-avatar">Cancelar</button>
-        <button class="btn btn-primary" type="submit">Salvar</button>
+        <button class="btn btn-primary" type="submit">Salvar personagem</button>
       </div>
     </form>
   </div>
@@ -337,17 +367,47 @@
   const openAvatar = document.getElementById("open-avatar");
   const closeAvatar = document.getElementById("close-avatar");
   const cancelAvatar = document.getElementById("cancel-avatar");
-  const preview = document.querySelector(".js-avatar-preview");
+  const portraitCats = [...document.querySelectorAll(".js-portrait-cat")];
+  const portraitGalleries = [...document.querySelectorAll(".js-portrait-gallery")];
   function closeAvatarModal() { avatarModal.close(); }
-  openAvatar.addEventListener("click", () => avatarModal.showModal());
+  function showPortraitCat(id) {
+    portraitCats.forEach((btn) => {
+      const on = btn.dataset.cat === id;
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+      btn.tabIndex = on ? 0 : -1;
+    });
+    portraitGalleries.forEach((panel) => {
+      panel.hidden = panel.dataset.cat !== id;
+    });
+  }
+  openAvatar.addEventListener("click", () => {
+    showPortraitCat(portraitCats[0]?.dataset.cat || "base");
+    avatarModal.showModal();
+  });
   closeAvatar.addEventListener("click", closeAvatarModal);
   cancelAvatar.addEventListener("click", closeAvatarModal);
   avatarModal.addEventListener("click", (event) => {
     if (event.target === avatarModal) closeAvatarModal();
   });
-  document.querySelectorAll('#avatar-modal input[name="choice"]').forEach((input) => {
+  portraitCats.forEach((btn, index) => {
+    btn.tabIndex = index === 0 ? 0 : -1;
+    btn.addEventListener("click", () => showPortraitCat(btn.dataset.cat));
+  });
+  document.querySelector(".portrait-cats")?.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+    const current = portraitCats.findIndex((btn) => btn.getAttribute("aria-selected") === "true");
+    if (current < 0) return;
+    event.preventDefault();
+    const step = event.key === "ArrowRight" ? 1 : -1;
+    const next = portraitCats[(current + step + portraitCats.length) % portraitCats.length];
+    showPortraitCat(next.dataset.cat);
+    next.focus();
+  });
+  document.querySelectorAll("#avatar-modal .portrait-thumb input").forEach((input) => {
     input.addEventListener("change", () => {
-      if (input.checked && input.dataset.preview && preview) preview.src = input.dataset.preview;
+      if (!input.checked) return;
+      const layer = document.querySelector('.js-portrait-layer[data-layer="' + input.dataset.layer + '"]');
+      if (layer && input.dataset.preview) layer.src = input.dataset.preview;
     });
   });
   (function () {

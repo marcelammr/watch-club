@@ -84,8 +84,10 @@ AVATAR_IDS = {item["id"] for item in AVATARS}
 DEFAULT_AVATAR = "popcorn"
 TYPE_ILLUSTRATED = "illustrated"
 TYPE_UPLOAD = "upload"
+TYPE_PIXEL = "pixel"
 PROVIDER_WATCHCLUB = "watchclub"
 PROVIDER_TYGER = "tyger"
+PROVIDER_PORTRAIT = "portrait"
 STATIC_AVATARS = BASE_DIR / "app" / "static" / "avatars"
 FALLBACK_URL = f"/static/avatars/{DEFAULT_AVATAR}.svg"
 
@@ -188,16 +190,27 @@ def upload_url(filename: str | None) -> str | None:
     return f"/static/uploads/avatars/{path.name}"
 
 
+def avatar_kind(person) -> str:
+    kind = (getattr(person, "avatar_type", None) or TYPE_ILLUSTRATED).strip().lower()
+    if kind in {TYPE_UPLOAD, TYPE_PIXEL, TYPE_ILLUSTRATED}:
+        return kind
+    return TYPE_ILLUSTRATED
+
+
 def avatar_url(person) -> str:
     from app.pixel_art import is_styled, normalize_style
 
+    kind = avatar_kind(person)
+    if kind == TYPE_PIXEL:
+        url = upload_url(getattr(person, "avatar_value", None))
+        if url:
+            return url
     style = normalize_style(getattr(person, "avatar_style", None))
     status = (getattr(person, "avatar_pixel_status", None) or "none").strip().lower()
-    if is_styled(style) and status == "ready":
+    if kind == TYPE_UPLOAD and is_styled(style) and status == "ready":
         pixel = upload_url(getattr(person, "avatar_pixel", None))
         if pixel:
             return pixel
-    kind = (getattr(person, "avatar_type", None) or TYPE_ILLUSTRATED).strip().lower()
     if kind == TYPE_UPLOAD:
         url = upload_url(getattr(person, "avatar_value", None))
         if url:
@@ -258,9 +271,19 @@ def parse_illustrated_choice(choice: str | None, provider: str | None = None, va
     return None
 
 
+def _release_avatar_file(user, keep: str | None = None) -> None:
+    from app.avatar_uploads import delete_upload
+
+    kind = (getattr(user, "avatar_type", None) or "").strip().lower()
+    current = getattr(user, "avatar_value", None)
+    if kind in {TYPE_UPLOAD, TYPE_PIXEL} and current and current != keep:
+        delete_upload(current)
+
+
 def set_illustrated_avatar(user, provider: str, value: str) -> bool:
     if not illustrated_url(provider, value):
         return False
+    _release_avatar_file(user)
     clear_pixel_avatar(user)
     user.avatar_type = TYPE_ILLUSTRATED
     user.avatar_provider = provider
@@ -271,7 +294,20 @@ def set_illustrated_avatar(user, provider: str, value: str) -> bool:
 
 
 def set_upload_avatar(user, filename: str) -> None:
+    _release_avatar_file(user, keep=filename)
     clear_pixel_avatar(user)
     user.avatar_type = TYPE_UPLOAD
     user.avatar_provider = ""
     user.avatar_value = filename
+
+
+def set_pixel_avatar(user, filename: str, config: dict) -> None:
+    import json
+
+    _release_avatar_file(user, keep=filename)
+    clear_pixel_avatar(user)
+    user.avatar_type = TYPE_PIXEL
+    user.avatar_provider = PROVIDER_PORTRAIT
+    user.avatar_value = filename
+    user.avatar_portrait = json.dumps(config, separators=(",", ":"), sort_keys=True)
+    user.avatar_style = "original"

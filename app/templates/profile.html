@@ -64,7 +64,7 @@
         {% endif %}
         <p class="bio-label">Bio</p>
         {% if person.bio %}
-          <p class="bio-box">{{ person.bio }}</p>
+          <p class="bio-box">{{ person.bio|pixel_emoji }}</p>
         {% else %}
           <p class="bio-box muted">Sem bio ainda.</p>
         {% endif %}

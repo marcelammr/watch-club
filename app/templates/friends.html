@@ -10,6 +10,53 @@
 {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
 
 <section class="friends-section">
+  <h2 class="friends-heading"><span class="wc-kawaii-mark" aria-hidden="true">{{ px_icon('search') }}</span>Encontrar pessoas</h2>
+  <form class="friends-search" action="/amigos" method="get">
+    <label>Nome ou @username
+      <input name="q" value="{{ search_q or '' }}" maxlength="80" placeholder="sofi ou @sofi" autocomplete="off">
+    </label>
+    <button class="btn btn-secondary" type="submit">Buscar</button>
+  </form>
+  {% if search_error %}<p class="error">{{ search_error }}</p>{% endif %}
+  {% if search_q and not search_error %}
+    <ul class="people">
+      {% for row in search_results %}
+        {% set person = row.person %}
+        <li class="person-row">
+          <a class="person-row" href="/u/{{ person.username }}">
+            {{ user_avatar(person, 'md') }}
+            <span>{{ person.name }}</span>
+            <span class="muted">@{{ person.username }}</span>
+          </a>
+          <span class="friends-search-actions">
+            <a class="btn btn-ghost" href="/u/{{ person.username }}">Ver perfil</a>
+            {% if row.relation == 'self' %}
+              <span class="muted">Você</span>
+            {% elif row.relation == 'friends' %}
+              <span class="muted">Amigos</span>
+            {% elif row.relation == 'outgoing' %}
+              <span class="muted">Solicitação enviada</span>
+            {% elif row.relation == 'incoming' %}
+              <form action="/amigos/{{ person.username }}/aceitar" method="post">
+                <input type="hidden" name="next" value="/amigos?q={{ search_q|urlencode }}">
+                <button class="btn btn-primary" type="submit">Aceitar</button>
+              </form>
+            {% else %}
+              <form action="/amigos/{{ person.username }}/convidar" method="post">
+                <input type="hidden" name="next" value="/amigos?q={{ search_q|urlencode }}">
+                <button class="btn btn-primary" type="submit">Adicionar</button>
+              </form>
+            {% endif %}
+          </span>
+        </li>
+      {% else %}
+        <li class="muted">Ninguém encontrado.</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</section>
+
+<section class="friends-section">
   <h2 class="friends-heading"><span class="wc-kawaii-mark" aria-hidden="true">{{ px_icon('sparkle') }}</span>Solicitações de amizade</h2>
   <ul class="people">
     {% for person in incoming %}
