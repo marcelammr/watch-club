@@ -11,39 +11,126 @@
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
 
-<section class="card account-avatar-card">
-  <h2>Avatar</h2>
-  <div class="current-avatar">
-    <div class="player-avatar-frame is-compact account-avatar-frame">
-      {{ user_avatar(user, 'lg', 'portrait') }}
+{% set tag_visible = tag_choices[:4] %}
+{% set tag_rest = tag_choices[4:] %}
+<section class="card account-look">
+  <div class="account-look-grid">
+    <div class="account-look-identity">
+      <div class="account-identity current-avatar">
+        <div class="account-avatar-frame">
+          <button
+            type="button"
+            class="account-avatar-hit avatar-trigger js-account-float-open"
+            aria-haspopup="dialog"
+            aria-controls="avatar-menu"
+            aria-expanded="false"
+            aria-label="Editar avatar"
+          >
+            {{ user_avatar(user, 'lg', show_presence=False) }}
+            <span class="avatar-edit-hint">Editar</span>
+          </button>
+          <div class="wc-float js-account-float" id="avatar-menu" hidden role="dialog" aria-labelledby="avatar-menu-title">
+            <header class="wc-titlebar">
+              <span class="wc-titlebar-label" id="avatar-menu-title">Avatar</span>
+              <button type="button" class="wc-win-close js-account-float-close" aria-label="Fechar"><span>×</span></button>
+            </header>
+            <div class="wc-float-body">
+              <div class="avatar-actions">
+                <button type="button" id="open-avatar" class="btn btn-secondary" aria-haspopup="dialog" aria-controls="avatar-modal">
+                  {% if user.avatar_type == 'pixel' %}Editar personagem{% else %}Criar meu personagem{% endif %}
+                </button>
+                <form class="js-photo-form" action="/conta/avatar/foto" method="post" enctype="multipart/form-data">
+                  <input class="js-photo-input" type="file" name="photo" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+                  <input type="hidden" name="preset" class="js-image-preset" value="original">
+                  <button type="button" class="btn btn-secondary js-photo-open">Enviar uma imagem</button>
+                </form>
+              </div>
+              {% if user.avatar_type == 'upload' %}
+              <form class="avatar-style-form" action="/conta/avatar/estilo" method="post" data-preview=".current-avatar [data-user-avatar] img" data-original-url="{{ avatar_original_url(user) or '' }}">
+                <p class="avatar-style-label">Estilo da foto atual</p>
+                {{ style_choices('style', user.avatar_style or 'original') }}
+                <p class="avatar-style-actions">
+                  <button class="btn btn-secondary avatar-style-apply" type="submit">Aplicar estilo</button>
+                </p>
+              </form>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="account-identity-copy">
+          <div class="account-look-name">
+            <span class="account-look-name-text">{{ user.name }}</span>
+            {% if user.display_tag %}
+              <a class="account-tag-hit" href="#account-displayed-tag" aria-label="Ir para tag exibida">
+                {{ club_tag_chip(user.display_tag) }}
+              </a>
+            {% endif %}
+          </div>
+          <p class="account-look-link-wrap">
+            <a class="btn btn-secondary account-look-link" href="/u/{{ user.username }}">Ver perfil público</a>
+          </p>
+        </div>
+      </div>
     </div>
-    <div>
-      <strong>{{ user.name }}</strong>
-      {{ club_tag_chip(user.display_tag) }}
-      <p class="status {{ presence_of(user) }}">{{ presence_label(user) }}</p>
-      <p class="mt-4"><a class="btn btn-ghost" href="/u/{{ user.username }}">Ver perfil público</a></p>
+    <div class="account-look-bio">
+      <div class="bio-field account-bio-field">
+        <label class="bio-label" for="bio">Bio</label>
+        <div class="account-bio-shell">
+          <textarea id="bio" class="bio-box" name="bio" form="account-profile-form" maxlength="{{ BIO_MAX }}" rows="4" placeholder="Conte um pouco sobre você">{{ user.bio or '' }}</textarea>
+          <div class="account-bio-tools">
+            {{ emoji_picker('Adicionar emoji', 'emoji-toggle') }}
+            <p class="muted bio-count"><span id="bio-count">0</span>/{{ BIO_MAX }}</p>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="avatar-actions">
-    <button type="button" id="open-avatar" class="btn btn-secondary" aria-haspopup="dialog" aria-controls="avatar-modal">
-      {% if user.avatar_type == 'pixel' %}Editar personagem{% else %}Criar meu personagem{% endif %}
-    </button>
-    <form class="js-photo-form" action="/conta/avatar/foto" method="post" enctype="multipart/form-data">
-      <input class="js-photo-input" type="file" name="photo" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
-      <input type="hidden" name="preset" class="js-image-preset" value="original">
-      <button type="button" class="btn btn-secondary js-photo-open">Enviar uma imagem</button>
+  <div class="account-displayed-tag" id="account-displayed-tag">
+    <h2>Tag exibida</h2>
+    <p class="muted">Escolha uma tag para aparecer no seu perfil.</p>
+    <form class="account-tag-form js-account-tag-form" action="/conta/tag" method="post">
+      <div class="account-tag-row" role="radiogroup" aria-label="Tag exibida" data-tag-more="{{ tag_rest|length }}">
+        <label class="account-tag-opt">
+          <input type="radio" name="displayed_club_id" value="0" {% if not user.displayed_club_id %}checked{% endif %}>
+          <span class="account-tag-none">Nenhuma</span>
+        </label>
+        {% for item in tag_visible %}
+          <label class="account-tag-opt">
+            <input type="radio" name="displayed_club_id" value="{{ item.club_id }}" {% if user.displayed_club_id == item.club_id %}checked{% endif %}>
+            {{ club_tag_chip(item) }}
+          </label>
+        {% endfor %}
+        {% if tag_rest %}
+          <div class="account-tag-more-wrap">
+            <button
+              type="button"
+              class="account-tag-more js-account-float-open"
+              aria-haspopup="dialog"
+              aria-controls="tag-more-menu"
+              aria-expanded="false"
+              aria-label="Mais {{ tag_rest|length }} tags"
+            >+{{ tag_rest|length }}</button>
+            <div class="wc-float js-account-float" id="tag-more-menu" hidden role="dialog" aria-labelledby="tag-more-title">
+              <header class="wc-titlebar">
+                <span class="wc-titlebar-label" id="tag-more-title">Mais tags</span>
+                <button type="button" class="wc-win-close js-account-float-close" aria-label="Fechar"><span>×</span></button>
+              </header>
+              <div class="wc-float-body account-tag-more-list">
+                {% for item in tag_rest %}
+                  <label class="account-tag-opt is-stack">
+                    <input type="radio" name="displayed_club_id" value="{{ item.club_id }}" {% if user.displayed_club_id == item.club_id %}checked{% endif %}>
+                    {{ club_tag_chip(item) }}
+                    <span class="muted">{{ item.club_name }}</span>
+                  </label>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+      <noscript><button class="btn btn-secondary" type="submit">Salvar tag exibida</button></noscript>
     </form>
   </div>
-  <p class="muted">Monte um personagem pixel ou envie uma imagem. Você pode trocar depois. O estilo da foto continua valendo só para imagens enviadas.</p>
-  {% if user.avatar_type == 'upload' %}
-  <form class="avatar-style-form" action="/conta/avatar/estilo" method="post" data-preview=".current-avatar [data-user-avatar] img" data-original-url="{{ avatar_original_url(user) or '' }}">
-    <p class="avatar-style-label">Estilo da foto atual</p>
-    {{ style_choices('style', user.avatar_style or 'original') }}
-    <p class="avatar-style-actions">
-      <button class="btn btn-secondary avatar-style-apply" type="submit">Aplicar estilo</button>
-    </p>
-  </form>
-  {% endif %}
 </section>
 
 <dialog id="avatar-modal" class="avatar-modal" aria-labelledby="avatar-modal-title">
@@ -152,7 +239,7 @@
         {% endfor %}
       </div>
     {% endif %}
-    <form action="/conta/perfil" method="post">
+    <form id="account-profile-form" action="/conta/perfil" method="post">
       <label>Nome
         <input name="name" value="{{ user.name }}" required maxlength="80" placeholder="Como você quer aparecer">
       </label>
@@ -169,14 +256,6 @@
       {% if user.pending_email %}
         <p class="muted">Novo e-mail aguardando confirmação: {{ user.pending_email }}</p>
       {% endif %}
-      <div class="bio-field">
-        <div class="bio-head">
-          <p class="bio-label">Bio</p>
-          {{ emoji_picker('Adicionar emoji', 'emoji-toggle') }}
-        </div>
-        <textarea id="bio" class="bio-box" name="bio" maxlength="{{ BIO_MAX }}" rows="4" placeholder="Conte um pouco sobre você">{{ user.bio or '' }}</textarea>
-        <p class="muted bio-count"><span id="bio-count">0</span>/{{ BIO_MAX }}</p>
-      </div>
       <button class="btn btn-secondary" type="submit">Salvar perfil</button>
     </form>
   </div>
@@ -239,29 +318,6 @@
     <span class="muted">Quando ativado, Enter envia a mensagem e Shift + Enter cria uma nova linha.</span>
   </label>
   <p class="muted js-enter-sends-status" hidden></p>
-</section>
-
-<section class="card">
-  <h2>Tag exibida</h2>
-  <p class="muted">Escolha no máximo uma tag entre os clubes de que você participa. Ela pode aparecer no perfil, nos amigos e nas mensagens. Não é clicável e não concede permissão.</p>
-  <form action="/conta/tag" method="post">
-    <label class="check">
-      <input type="radio" name="displayed_club_id" value="0" {% if not user.displayed_club_id %}checked{% endif %}>
-      Nenhuma
-    </label>
-    {% for item in tag_choices %}
-      <label class="check tag-choice">
-        <input type="radio" name="displayed_club_id" value="{{ item.club_id }}" {% if user.displayed_club_id == item.club_id %}checked{% endif %}>
-        {{ club_tag_chip(item) }}
-        <span class="muted">{{ item.club_name }}</span>
-      </label>
-    {% else %}
-      <p class="muted">Nenhum dos seus clubes tem tag ainda.</p>
-    {% endfor %}
-    {% if tag_choices %}
-      <button class="btn btn-secondary" type="submit">Salvar tag exibida</button>
-    {% endif %}
-  </form>
 </section>
 
 <section class="card">
@@ -362,6 +418,10 @@
   document.querySelector(".bio-field .js-emoji-picker")?.addEventListener("emoji-select", (event) => {
     insertEmoji(event.detail.emoji || "");
   });
+  document.querySelector(".js-account-tag-form")?.addEventListener("change", (event) => {
+    const form = event.currentTarget;
+    if (event.target && event.target.name === "displayed_club_id") form.submit();
+  });
   let timer;
   const avatarModal = document.getElementById("avatar-modal");
   const openAvatar = document.getElementById("open-avatar");
@@ -369,6 +429,49 @@
   const cancelAvatar = document.getElementById("cancel-avatar");
   const portraitCats = [...document.querySelectorAll(".js-portrait-cat")];
   const portraitGalleries = [...document.querySelectorAll(".js-portrait-gallery")];
+  function closeAccountFloats() {
+    document.querySelectorAll(".js-account-float").forEach((panel) => {
+      panel.hidden = true;
+    });
+    document.querySelectorAll(".js-account-float-open").forEach((btn) => {
+      btn.setAttribute("aria-expanded", "false");
+    });
+  }
+  (function () {
+    const opens = Array.from(document.querySelectorAll(".js-account-float-open"));
+    function panelFor(btn) {
+      return document.getElementById(btn.getAttribute("aria-controls") || "");
+    }
+    function setOpen(btn, open) {
+      const panel = panelFor(btn);
+      if (!panel) return;
+      panel.hidden = !open;
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+    opens.forEach((btn) => {
+      btn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const panel = panelFor(btn);
+        if (!panel) return;
+        const willOpen = panel.hidden;
+        closeAccountFloats();
+        setOpen(btn, willOpen);
+      });
+    });
+    document.querySelectorAll(".js-account-float-close").forEach((btn) => {
+      btn.addEventListener("click", () => closeAccountFloats());
+    });
+    document.addEventListener("click", (event) => {
+      const floats = Array.from(document.querySelectorAll(".js-account-float"));
+      if (floats.every((panel) => panel.hidden)) return;
+      if (floats.some((panel) => panel.contains(event.target))) return;
+      if (opens.some((btn) => btn.contains(event.target))) return;
+      closeAccountFloats();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeAccountFloats();
+    });
+  })();
   function closeAvatarModal() { avatarModal.close(); }
   function showPortraitCat(id) {
     portraitCats.forEach((btn) => {
@@ -381,6 +484,7 @@
     });
   }
   openAvatar.addEventListener("click", () => {
+    closeAccountFloats();
     showPortraitCat(portraitCats[0]?.dataset.cat || "base");
     avatarModal.showModal();
   });

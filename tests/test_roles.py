@@ -856,3 +856,81 @@ def test_club_chat_profile_context_and_grouped_members():
     assert "profile-club-context" not in bogus.text
     missing = owner.get("/u/id_sup?clube=999999")
     assert "profile-club-context" not in missing.text
+
+
+def _set_club_tag(http: TestClient, club_id: int, slug: str) -> None:
+    saved = http.post(
+        f"/clubs/{club_id}/tag",
+        data={"tag_slug": slug, "tag_emoji": EMOJI, "tag_color_mode": "solid", "tag_color_1": "#B892FF"},
+        follow_redirects=False,
+    )
+    assert saved.status_code == 303
+
+
+def test_account_displayed_tag_row_caps_and_overflow():
+    empty = TestClient(app)
+    register_active(empty, "tagrow0", "tagrow0@example.com")
+    none_page = empty.get("/conta")
+    assert none_page.status_code == 200
+    assert "<h2>Tag exibida</h2>" in none_page.text
+    assert 'data-tag-more="0"' in none_page.text
+    assert "tag-more-menu" not in none_page.text
+    assert "btn btn-secondary account-look-link" in none_page.text
+    assert "<h2>Avatar</h2>" not in none_page.text.split("account-look", 1)[1].split("<h2>Usuário</h2>", 1)[0]
+
+    one = TestClient(app)
+    register_active(one, "tagrow1", "tagrow1@example.com")
+    club_a, _ = _create_club(one, "Uma Tag")
+    _set_club_tag(one, club_a, "UMA")
+    one_page = one.get("/conta")
+    assert 'data-tag-more="0"' in one_page.text
+    assert "tag-more-menu" not in one_page.text
+    assert 'aria-label="Tag UMA"' in one_page.text
+
+    four = TestClient(app)
+    register_active(four, "tagrow4", "tagrow4@example.com")
+    for n in range(4):
+        club_id, _ = _create_club(four, f"Quatro Tag {n}")
+        _set_club_tag(four, club_id, f"Q{n}")
+    four_page = four.get("/conta")
+    assert 'data-tag-more="0"' in four_page.text
+    assert "tag-more-menu" not in four_page.text
+    for slug in ("Q0", "Q1", "Q2", "Q3"):
+        assert f'aria-label="Tag {slug}"' in four_page.text
+
+    five = TestClient(app)
+    register_active(five, "tagrow5", "tagrow5@example.com")
+    for n in range(5):
+        club_id, _ = _create_club(five, f"Cinco Tag {n}")
+        _set_club_tag(five, club_id, f"C{n}")
+    five_page = five.get("/conta")
+    assert 'data-tag-more="1"' in five_page.text
+    assert 'aria-label="Mais 1 tags"' in five_page.text
+
+    many = TestClient(app)
+    register_active(many, "tagrow6", "tagrow6@example.com")
+    ids = []
+    for n in range(6):
+        club_id, _ = _create_club(many, f"Linha Tag {n}")
+        _set_club_tag(many, club_id, f"T{n}")
+        ids.append(club_id)
+    page = many.get("/conta")
+    assert 'data-tag-more="2"' in page.text
+    assert 'aria-label="Mais 2 tags"' in page.text
+    visible, overflow = page.text.split('id="tag-more-menu"', 1)
+    row = visible.split("account-tag-row", 1)[1]
+    for slug in ("T0", "T1", "T2", "T3"):
+        assert f'aria-label="Tag {slug}"' in row
+        assert f'aria-label="Tag {slug}"' not in overflow
+    for slug in ("T4", "T5"):
+        assert f'aria-label="Tag {slug}"' not in row
+        assert f'aria-label="Tag {slug}"' in overflow
+
+    picked = many.post("/conta/tag", data={"displayed_club_id": str(ids[5])}, follow_redirects=True)
+    assert picked.status_code == 200
+    assert f'href="#account-displayed-tag"' in picked.text
+    assert 'aria-label="Tag T5"' in picked.text.split("account-look-name", 1)[1].split("</div>", 1)[0]
+    menu = picked.text.split('id="tag-more-menu"', 1)[1]
+    idx = menu.find(f'value="{ids[5]}"')
+    assert idx != -1
+    assert "checked" in menu[idx : idx + 90]

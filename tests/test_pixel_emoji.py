@@ -84,7 +84,7 @@ def test_picker_catalog_and_club_presets_on_settings():
     assert "js-emoji-toggle" in chat.text
     assert ":joi3-" in (catalog()["items"][0]["token"] if catalog()["items"] else ":joi3-1:")
     profile = owner.get("/u/joi3_own")
-    assert 'data-shape="portrait"' in profile.text
+    assert 'data-shape="circle"' in profile.text
     header = owner.get("/")
     assert header.text.count('data-shape="circle"') >= 1
 

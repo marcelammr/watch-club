@@ -49,6 +49,7 @@ type UserAvatarProps = {
   fallback: string;
   presence?: string;
   presenceLabel?: string;
+  showPresence?: boolean;
   size?: AvatarSize;
   shape?: "circle" | "portrait";
   className?: string;
@@ -60,11 +61,12 @@ export function UserAvatar({
   fallback,
   presence,
   presenceLabel,
+  showPresence = true,
   size = "md",
   shape = "circle",
   className,
 }: UserAvatarProps) {
-  const status = presence && presence in presenceVariant ? presence : undefined;
+  const status = showPresence && presence && presence in presenceVariant ? presence : undefined;
   const portrait = shape === "portrait";
   return (
     <Avatar className={cn(portrait ? portraitSizes[size] : sizes[size], portrait ? "rounded-[4px]" : "rounded-full", className)}>
@@ -108,6 +110,7 @@ export function mountUserAvatars(root: ParentNode = document) {
         fallback={node.dataset.fallback || "?"}
         presence={node.dataset.presence}
         presenceLabel={node.dataset.presenceLabel}
+        showPresence={node.dataset.showPresence !== "false"}
         size={(node.dataset.size as AvatarSize) || "md"}
         shape={node.dataset.shape === "portrait" ? "portrait" : "circle"}
       />

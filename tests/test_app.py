@@ -512,39 +512,19 @@ def test_account_popover_status_label_keeps_option_marks():
     assert "Offline" in submenu
 
 
-def test_account_header_status_is_label_only():
+def test_account_look_omits_presence():
     person = TestClient(app)
     register_active(person, "acct_status", "acct.status@example.com", name="Conta Status")
-
-    def header_parts(html: str) -> tuple[str, str]:
-        block = html.split('class="current-avatar"', 1)[1].split('class="avatar-actions"', 1)[0]
-        avatar, _, copy = block.partition('class="status')
-        return avatar, copy
-
-    person.post("/presenca", data={"status": "online", "prefer": "1"})
-    online = person.get("/conta")
-    avatar, copy = header_parts(online.text)
-    assert "Online" in copy
-    assert "presence-moon" not in copy
-    assert 'class="dot"' not in copy
-    assert 'data-presence="online"' in avatar
-
     person.post("/presenca", data={"status": "away", "prefer": "1"})
-    away = person.get("/conta")
-    avatar, copy = header_parts(away.text)
-    assert "Ausente" in copy
-    assert "presence-moon" not in copy
-    assert 'class="dot"' not in copy
-    assert "presence-moon" in avatar
-    assert 'data-presence="away"' in avatar
-
-    person.post("/presenca", data={"status": "offline", "prefer": "1"})
-    offline = person.get("/conta")
-    avatar, copy = header_parts(offline.text)
-    assert "Offline" in copy
-    assert "presence-moon" not in copy
-    assert 'class="dot"' not in copy
-    assert 'data-presence="offline"' in avatar
+    page = person.get("/conta")
+    block = page.text.split("account-look", 1)[1].split("<h2>Usuário</h2>", 1)[0]
+    assert 'class="status' not in block
+    assert "presence-moon" not in block
+    assert 'data-slot="avatar-badge"' not in block
+    assert 'data-presence="away"' in block
+    assert "Ver perfil público" in block
+    popover = page.text.split('id="account-popover"', 1)[1]
+    assert "Ausente" in popover
 
 
 def test_profile_and_friends_presence_presentation():
