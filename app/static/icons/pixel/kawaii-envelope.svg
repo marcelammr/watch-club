@@ -1,0 +1,6 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path fill="#000001" d="M4 8h24v18H4z"/>
+  <path fill="color-mix(in srgb, currentColor 12%, #fff)" d="M6 10h20v14H6z"/>
+  <path fill="#000001" d="M4 8h24v2H4zM6 10h3v2H6zM23 10h3v2h-3zM8 12h3v2H8zM21 12h3v2h-3zM10 14h3v2h-3zM19 14h3v2h-3zM4 24h24v2H4z"/>
+  <path fill="var(--wc-heart, var(--wc-accent, #ed789c))" d="M13 16h3v2h-3zM16 16h3v2h-3zM12 18h8v3H12zM14 21h4v2h-4z"/>
+</svg>

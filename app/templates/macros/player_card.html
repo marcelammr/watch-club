@@ -1,91 +1,74 @@
 {% from "macros/avatar.html" import user_avatar %}
 {% from "macros/club_tag.html" import club_tag_chip %}
-{% from "macros/pixel.html" import px_icon %}
-{% from "macros/presence.html" import presence_mark %}
+{% from "macros/pixel.html" import px_icon, wc_win_controls %}
 
 {% macro player_card_sheet(person, player=None) %}
-<div class="player-card-sheet">
-  {% if player %}
-  <div class="player-card-progress">
-    <p class="player-level"><span class="player-level-kicker">LV.</span> {{ '%02d'|format(player.level) }}</p>
-    <div class="player-exp-cluster">
-      <p class="player-exp-label">EXP</p>
-      <div class="player-exp" role="meter" aria-label="Progresso até o próximo nível" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ player.percent }}">
-        <span class="player-exp-fill" style="width: {{ player.percent }}%"></span>
+<div class="wc-badge">
+  <header class="wc-badge-titlebar">
+    <span class="wc-badge-mark" aria-hidden="true">{{ px_icon('pop-tv') }}</span>
+    <span class="wc-badge-brand">Watch Club</span>
+    {{ wc_win_controls() }}
+  </header>
+  <div class="wc-badge-body">
+    <div class="wc-badge-id">
+      <div class="wc-badge-portrait">
+        {{ user_avatar(person, 'lg', shape='portrait', show_presence=False) }}
       </div>
-    </div>
-  </div>
-  {% endif %}
-
-  <div class="player-identity">
-    <div class="player-avatar-orb">
-      {{ user_avatar(person, 'lg') }}
-    </div>
-    <div class="player-nameplate">
-      <div class="player-nameplate-body">
-        <strong class="player-card-name">{{ person.name }}</strong>
-        <div class="player-nameplate-meta">
-          {{ club_tag_chip(person.display_tag) }}
-        </div>
+      <div class="wc-badge-who">
+        <strong class="wc-badge-name">{{ person.name }}</strong>
+        {% if person.display_tag %}
+          <div class="wc-badge-tag">{{ club_tag_chip(person.display_tag) }}</div>
+        {% endif %}
+        <p class="wc-badge-handle muted">@{{ person.username }}</p>
       </div>
+      <span class="wc-badge-spark" aria-hidden="true">{{ px_icon('pop-sparkle') }}</span>
     </div>
-  </div>
-
-  <p class="player-handle muted">@{{ person.username }}</p>
-  <p class="status {{ presence_of(person) }} js-account-status">{{ presence_label(person) }}</p>
-
-  {% if player %}
-  <div class="player-energy-row">
-    <p class="player-energy-label">Energia</p>
-    <p class="player-energy" aria-label="Energia {{ player.energy }} de {{ player.energy_max }}">
-      {% for i in range(player.energy_max) %}
-        <span class="player-heart{% if i < player.energy %} is-on{% endif %}" aria-hidden="true">
-          {% if i < player.energy %}
-          <svg class="wc-px" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true" focusable="false"><rect x="3" y="2" width="4" height="2"/><rect x="9" y="2" width="4" height="2"/><rect x="2" y="4" width="12" height="3"/><rect x="3" y="7" width="10" height="2"/><rect x="5" y="9" width="6" height="2"/><rect x="7" y="11" width="2" height="3"/></svg>
-          {% else %}
-          {{ px_icon('heart') }}
-          {% endif %}
-        </span>
-      {% endfor %}
-    </p>
-  </div>
-  {% if player.status %}
-    <p class="player-status">{{ player.status|pixel_emoji }}</p>
-  {% endif %}
-  <dl class="player-stats-grid is-compact" aria-label="Player stats">
-    <div class="player-stat"><dt>Clubes</dt><dd>{{ '%02d'|format(player.stats.clubs) }}</dd></div>
-    <div class="player-stat"><dt>Amigos</dt><dd>{{ '%02d'|format(player.stats.friends) }}</dd></div>
-    <div class="player-stat"><dt>Favoritos</dt><dd>{{ '%02d'|format(player.stats.favorites) }}</dd></div>
-  </dl>
-  {% endif %}
-
-  <nav class="player-card-actions" aria-label="Ações da conta">
-    <a class="player-card-action account-popover-link" href="/u/{{ person.username }}">
-      {{ px_icon('user') }}
-      Ver perfil
-    </a>
-    <a class="player-card-action account-popover-link" href="/conta">
-      {{ px_icon('pencil') }}
-      Editar perfil
-    </a>
-    <button type="button" class="player-card-action account-popover-link js-status-toggle" aria-expanded="false" aria-controls="status-submenu">
-      {{ px_icon('smile') }}
-      Status
-    </button>
-    <form class="player-card-leave" action="/logout" method="post">
-      <button type="submit" class="player-card-action is-leave account-popover-link muted">Sair da sessão</button>
+    {% if player %}
+    <ul class="wc-badge-stats" aria-label="Resumo da conta">
+      <li>
+        <span aria-hidden="true">{{ px_icon('pop-clubs') }}</span>
+        <span><b>{{ player.stats.clubs }}</b> Clubes</span>
+      </li>
+      <li>
+        <span aria-hidden="true">{{ px_icon('pop-hearts') }}</span>
+        <span><b>{{ player.stats.favorites }}</b> Favoritos</span>
+      </li>
+      <li>
+        <span aria-hidden="true">{{ px_icon('pop-since') }}</span>
+        <span>Desde <b>{{ player.stats.member_since }}</b></span>
+      </li>
+    </ul>
+    {% endif %}
+    <nav class="wc-badge-dock" aria-label="Ações da conta">
+      <a class="wc-badge-app" href="/u/{{ person.username }}" aria-label="Ver perfil">
+        <span class="wc-badge-app-ico" aria-hidden="true">{{ px_icon('pop-badge') }}</span>
+        <span class="wc-badge-app-txt">Perfil</span>
+      </a>
+      <a class="wc-badge-app" href="/conta" aria-label="Editar perfil">
+        <span class="wc-badge-app-ico" aria-hidden="true">{{ px_icon('pop-edit') }}</span>
+        <span class="wc-badge-app-txt">Editar</span>
+      </a>
+      <a class="wc-badge-app" href="/u/{{ person.username }}?aba=aparencia" aria-label="Aparência">
+        <span class="wc-badge-app-ico" aria-hidden="true">{{ px_icon('pop-look') }}</span>
+        <span class="wc-badge-app-txt">Aparência</span>
+      </a>
+      <a class="wc-badge-app wc-badge-wide" href="/sugestoes" aria-label="Caixinha de sugestão">
+        <span class="wc-badge-app-ico" aria-hidden="true">{{ px_icon('pop-mail') }}</span>
+        <span class="wc-badge-app-txt">Sugestões</span>
+      </a>
+      {% if person.is_site_admin %}
+      <a class="wc-badge-app wc-badge-wide" href="/admin" aria-label="Administração">
+        <span class="wc-badge-app-ico" aria-hidden="true">{{ px_icon('pop-admin') }}</span>
+        <span class="wc-badge-app-txt">ADM</span>
+      </a>
+      {% endif %}
+    </nav>
+    <form class="wc-badge-leave" action="/logout" method="post">
+      <button type="submit" class="wc-badge-leave-btn" aria-label="Sair da sessão">
+        <span aria-hidden="true">{{ px_icon('pop-leave') }}</span>
+        Sair
+      </button>
     </form>
-  </nav>
-  <div id="status-submenu" class="status-submenu" hidden>
-    <button type="button" class="status-option js-set-status" data-status="online">
-      <span class="status online">{{ presence_mark('online') }}Online</span>
-    </button>
-    <button type="button" class="status-option js-set-status" data-status="away">
-      <span class="status away">{{ presence_mark('away') }}Ausente</span>
-    </button>
-    <button type="button" class="status-option js-set-status" data-status="offline">
-      <span class="status offline">{{ presence_mark('offline') }}Offline</span>
-    </button>
   </div>
 </div>
 {% endmacro %}

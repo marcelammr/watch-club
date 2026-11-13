@@ -1,2 +1,14 @@
 {# Pixel UI icons: Streamline pack via pixel_icon(), with drawn fallbacks. #}
 {% macro px_icon(name='window') %}{{ pixel_icon(name) }}{% endmacro %}
+
+{% macro goofy_img(name, extra='') %}
+<img class="wc-goofy{{ ' ' ~ extra if extra else '' }}" src="/static/icons/goofy/{{ name }}.png" alt="" width="32" height="32" aria-hidden="true" decoding="async">
+{% endmacro %}
+
+{% macro wc_win_controls(close=false) %}
+<span class="wc-win" aria-hidden="true">
+  <span class="wc-win-btn is-min"></span>
+  <span class="wc-win-btn is-max"></span>
+  {% if close %}<span class="wc-win-btn is-close"></span>{% endif %}
+</span>
+{% endmacro %}

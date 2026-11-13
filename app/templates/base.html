@@ -1,5 +1,5 @@
 {% from "macros/avatar.html" import user_avatar %}
-{% from "macros/sidebar.html" import app_sidebar, hamburger, app_menubar_nav %}
+{% from "macros/sidebar.html" import app_menubar_nav %}
 {% from "macros/notifications.html" import bell_popover_inner, notice_inbox_inner %}
 {% from "macros/pixel.html" import px_icon %}
 {% from "macros/player_card.html" import player_card_sheet %}
@@ -22,19 +22,16 @@
         <span class="app-brand-tv" aria-hidden="true">{{ px_icon('brand-tv') }}</span>
         <span class="app-brand-name">Watch Club</span>
       </a>
-      {% block menubar_menu %}
-      {{ hamburger('app-menubar-burger') }}
-      {% endblock %}
       {{ app_menubar_nav(request) }}
       <div class="app-menubar-end">
-        <a class="appearance-btn" href="/u/{{ user.username }}?aba=aparencia" aria-label="Aparência" title="Aparência">{{ px_icon('palette') }}</a>
-        {% set bell_label = 'Notificações, 1 não lida' if notification_unread == 1 else ('Notificações, ' ~ notification_unread ~ ' não lidas' if notification_unread else 'Notificações') %}
-        <a class="bell-btn bell-link" href="/notificacoes" aria-label="{{ bell_label }}" title="Notificações">
-          {{ px_icon('ui-bell') }}
-          {% if notification_badge %}<span class="bell-badge">{{ notification_badge }}</span>{% endif %}
+        <a class="mensagens-btn chrome-ghost" href="/mensagens" aria-label="Conversas" title="Conversas">
+          {{ px_icon('messages') }}
+          {% if dm_unread_badge %}<span class="bell-badge">{{ dm_unread_badge }}</span>{% endif %}
         </a>
+        <a class="appearance-btn chrome-ghost" href="/u/{{ user.username }}?aba=aparencia" aria-label="Aparência" title="Aparência">{{ px_icon('palette') }}</a>
+        {% set bell_label = 'Notificações, 1 não lida' if notification_unread == 1 else ('Notificações, ' ~ notification_unread ~ ' não lidas' if notification_unread else 'Notificações') %}
         <div class="bell-menu">
-          <button type="button" class="bell-btn js-bell-toggle" aria-label="{{ bell_label }}" title="Notificações" aria-expanded="false" aria-haspopup="dialog" aria-controls="notice-inbox">
+          <button type="button" class="bell-btn js-bell-toggle chrome-ghost" aria-label="{{ bell_label }}" title="Notificações" aria-expanded="false" aria-haspopup="dialog" aria-controls="notice-inbox">
             {{ px_icon('ui-bell') }}
             {% if notification_badge %}<span class="bell-badge">{{ notification_badge }}</span>{% endif %}
           </button>
@@ -52,13 +49,12 @@
             {{ user_avatar(user, 'md') }}
             <span class="account-label">Minha conta</span>
           </button>
-          <div id="account-popover" class="account-popover player-card wc-theme-{{ visitor_theme|default('watchclub') }}" hidden role="dialog" aria-label="{{ user.name }}">
+          <div id="account-popover" class="account-popover wc-badge-pop" hidden role="dialog" aria-label="{{ user.name }}">
             {{ player_card_sheet(user, viewer_player) }}
           </div>
         </div>
       </div>
     </header>
-    {{ app_sidebar(request, user) }}
     <div class="app-main">
       <div class="app-stage">
       <header class="top">
@@ -156,36 +152,13 @@
     })();
 
     (function () {
-      const root = document.documentElement;
-      const sidebar = document.getElementById("app-sidebar");
-      const toggles = document.querySelectorAll(".js-sidebar-toggle");
-      const dim = document.querySelector(".js-sidebar-close");
       const accountToggle = document.querySelector(".js-account-toggle");
       const popover = document.getElementById("account-popover");
       const bellToggle = document.querySelector(".js-bell-toggle");
       const bellPopover = document.getElementById("bell-popover");
       const noticeInbox = document.getElementById("notice-inbox");
       const noticeInboxInner = document.querySelector(".js-notice-inbox-inner");
-      const statusToggle = document.querySelector(".js-status-toggle");
-      const submenu = document.getElementById("status-submenu");
-      const statusLine = document.querySelector(".js-account-status");
       let noticeInboxOpener = null;
-
-      function isOpen() {
-        return root.classList.contains("sidebar-open");
-      }
-
-      function sync() {
-        const expanded = isOpen();
-        toggles.forEach((btn) => btn.setAttribute("aria-expanded", expanded ? "true" : "false"));
-        if (sidebar) sidebar.setAttribute("aria-hidden", expanded ? "false" : "true");
-        if (dim) dim.hidden = !expanded;
-      }
-
-      function setOpen(open) {
-        root.classList.toggle("sidebar-open", open);
-        sync();
-      }
 
       function accountOpen() {
         return Boolean(popover && !popover.hidden);
@@ -312,38 +285,12 @@
         }).catch(() => {});
       }
 
-      function setSubmenu(open) {
-        if (!submenu || !statusToggle) return;
-        submenu.hidden = !open;
-        statusToggle.setAttribute("aria-expanded", open ? "true" : "false");
-      }
-
       function setAccount(open) {
         if (!popover || !accountToggle) return;
         popover.hidden = !open;
         accountToggle.setAttribute("aria-expanded", open ? "true" : "false");
-        if (!open) setSubmenu(false);
       }
 
-      function applyStatus(status, label) {
-        document.querySelectorAll("[data-user-avatar]").forEach((node) => {
-          const inAccount = node.closest(".account-menu");
-          if (!inAccount) return;
-          node.dataset.presence = status;
-          node.dataset.presenceLabel = label;
-          node.dataset.mounted = "false";
-        });
-        if (statusLine) {
-          statusLine.className = "status " + status + " js-account-status";
-          statusLine.textContent = label;
-        }
-        if (window.WatchClub && typeof window.WatchClub.remountUserAvatars === "function") {
-          window.WatchClub.remountUserAvatars(document.querySelector(".account-menu"));
-        }
-      }
-
-      toggles.forEach((btn) => btn.addEventListener("click", () => setOpen(!isOpen())));
-      if (dim) dim.addEventListener("click", () => setOpen(false));
       if (accountToggle) {
         accountToggle.addEventListener("click", (event) => {
           event.stopPropagation();
@@ -371,26 +318,6 @@
           }
         });
       }
-      if (statusToggle) {
-        statusToggle.addEventListener("click", (event) => {
-          event.stopPropagation();
-          setSubmenu(submenu && submenu.hidden);
-        });
-      }
-      document.querySelectorAll(".js-set-status").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const status = btn.getAttribute("data-status");
-          fetch("/presenca", {
-            method: "POST",
-            headers: {"Content-Type": "application/x-www-form-urlencoded"},
-            body: "status=" + encodeURIComponent(status) + "&prefer=1"
-          }).then((response) => response.json()).then((data) => {
-            if (!data.ok) return;
-            applyStatus(data.status, data.status_label);
-            setAccount(false);
-          }).catch(() => {});
-        });
-      });
       document.addEventListener("click", (event) => {
         if (accountOpen() && popover && !popover.contains(event.target) && !accountToggle.contains(event.target)) {
           setAccount(false);
@@ -419,9 +346,7 @@
         if (accountOpen()) {
           setAccount(false);
           event.preventDefault();
-          return;
         }
-        setOpen(false);
       });
       if (bellPopover) {
         bellPopover.addEventListener("click", (event) => {
@@ -442,7 +367,6 @@
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") pollBell();
       });
-      sync();
     })();
   </script>
   <dialog class="leave-dialog" id="js-confirm-dialog" aria-labelledby="js-confirm-title">

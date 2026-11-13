@@ -51,7 +51,8 @@ def test_logged_in_shell_and_clubes_page():
     assert created.status_code == 303
     home = member.get("/")
     assert home.status_code == 200
-    assert "app-sidebar" in home.text
+    assert "app-sidebar" not in home.text
+    assert "js-sidebar-toggle" not in home.text
     assert "Watch Club" in home.text
     assert ">WC<" not in home.text
     assert 'aria-label="Início"' in home.text
@@ -61,20 +62,11 @@ def test_logged_in_shell_and_clubes_page():
     assert 'aria-label="Amigos"' in home.text
     assert 'aria-label="Conversas"' in home.text
     assert 'href="/mensagens"' in home.text
-    assert 'aria-label="Configurações"' in home.text
     assert 'aria-label="Administração"' not in home.text
     assert 'aria-label="Caixinha de sugestão"' in home.text
-    assert 'aria-label="Segurança e denúncias"' in home.text
-    assert 'aria-label="Regras da comunidade"' in home.text
     assert 'aria-label="Sobre"' not in home.text
     assert 'href="/conta"' in home.text
     assert 'href="/sugestoes"' in home.text
-    assert 'href="/seguranca"' in home.text
-    assert 'href="/regras"' in home.text
-    foot = home.text.split('aria-label="Preferências"', 1)[1].split("</nav>", 1)[0]
-    assert 'href="/sobre"' not in foot
-    assert foot.find('href="/conta"') < foot.find('href="/sugestoes"') < foot.find('href="/seguranca"') < foot.find('href="/regras"')
-    assert "Caixinha<br>de sugestão" in foot or "Caixinha<br/>de sugestão" in foot
     assert 'aria-label="Notificações"' in home.text
     assert 'href="/amigos"' in home.text
     assert "Assistir juntos" in home.text
@@ -86,9 +78,12 @@ def test_logged_in_shell_and_clubes_page():
     assert "Criar um clube" not in home.text
     assert "Entrar com código" not in home.text
     assert 'id="account-popover"' in home.text
-    assert "Editar perfil" in home.text
-    assert 'action="/logout"' in home.text
-    assert "Sair da sessão" in home.text.split('id="account-popover"', 1)[-1]
+    popover = home.text.split('id="account-popover"', 1)[1]
+    assert "Editar perfil" in popover
+    assert 'action="/logout"' in popover
+    assert "Sair da sessão" in popover
+    assert "LV." not in popover
+    assert "Energia" not in popover
     clubs = member.get("/clubes")
     assert clubs.status_code == 200
     assert "Clube Nav" in clubs.text
@@ -105,6 +100,10 @@ def test_logged_in_shell_and_clubes_page():
     assert "club-cover-card" not in miss.text
     account = member.get("/conta")
     assert "Sair da sessão" in account.text
+    assert "Segurança e denúncias" in account.text
+    assert "Regras da comunidade" in account.text
+    assert 'href="/seguranca"' in account.text
+    assert 'href="/regras"' in account.text
     assert "Sobre o Watch Club" in account.text
     assert "not endorsed or certified by TMDB" in account.text
     about = member.get("/sobre", follow_redirects=False)
@@ -499,17 +498,11 @@ def test_account_popover_status_label_keeps_option_marks():
     register_active(person, "pop_status", "pop.status@example.com")
     person.post("/presenca", data={"status": "away", "prefer": "1"})
     page = person.get("/")
-    popover = page.text.split('id="account-popover"', 1)[1]
-    current = popover.split('js-account-status', 1)[1].split("</p>", 1)[0]
-    submenu = popover.split('id="status-submenu"', 1)[1]
-    assert "Ausente" in current
-    assert "presence-moon" not in current
-    assert 'class="dot"' not in current
-    assert "presence-moon" in submenu
-    assert 'class="dot"' in submenu
-    assert "Online" in submenu
-    assert "Ausente" in submenu
-    assert "Offline" in submenu
+    popover = page.text.split('id="account-popover"', 1)[1].split("<main>", 1)[0]
+    assert "js-account-status" not in popover
+    assert "status-submenu" not in popover
+    assert "js-status-toggle" not in popover
+    assert "wc-badge" in popover
 
 
 def test_account_look_omits_presence():
@@ -523,8 +516,8 @@ def test_account_look_omits_presence():
     assert 'data-slot="avatar-badge"' not in block
     assert 'data-presence="away"' in block
     assert "Ver perfil público" in block
-    popover = page.text.split('id="account-popover"', 1)[1]
-    assert "Ausente" in popover
+    popover = page.text.split('id="account-popover"', 1)[1].split("<main>", 1)[0]
+    assert "js-account-status" not in popover
 
 
 def test_profile_and_friends_presence_presentation():
@@ -1412,7 +1405,7 @@ def test_back_button_only_when_logged_in():
     home = member.get("/")
     assert 'aria-label="Voltar"' not in home.text
     assert 'class="back-btn js-back"' not in home.text
-    assert "js-sidebar-toggle" in home.text
+    assert "js-sidebar-toggle" not in home.text
     assert "Início" in home.text
     conta = member.get("/conta")
     assert 'aria-label="Voltar"' not in conta.text

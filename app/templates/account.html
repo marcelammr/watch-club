@@ -3,7 +3,7 @@
 {% from "macros/emoji.html" import emoji_picker %}
 {% from "macros/club_tag.html" import club_tag_chip %}
 {% from "macros/image_style.html" import style_choices %}
-{% from "macros/pixel.html" import px_icon %}
+{% from "macros/pixel.html" import px_icon, goofy_img, wc_win_controls %}
 {% block title %}Configurações · Watch Club{% endblock %}
 {% block page_heading %}Configurações · Conta{% endblock %}
 {% block body_class %}account-page{% endblock %}
@@ -18,11 +18,7 @@
 <p class="page-heading">Configurações · Conta</p>
 {% endblock %}
 {% block top_end_extra %}
-<span class="wc-win-deco" aria-hidden="true">
-  <span class="wc-win-deco-btn">−</span>
-  <span class="wc-win-deco-btn">□</span>
-  <span class="wc-win-deco-btn is-close">×</span>
-</span>
+{{ wc_win_controls(close=true) }}
 {% endblock %}
 {% block content %}
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
@@ -30,12 +26,13 @@
 
 {% set tag_visible = tag_choices[:4] %}
 {% set tag_rest = tag_choices[4:] %}
+<div class="account-window">
 <div class="account-desk">
-<section class="card account-look account-panel">
+<section class="account-look account-panel">
   <header class="account-panel-head">
-    <span class="wc-titlebar-mark" aria-hidden="true">{{ px_icon('calendar') }}</span>
+    <span class="wc-titlebar-mark" aria-hidden="true">{{ px_icon('ui-user') }}</span>
     <h2 class="account-panel-title">Perfil</h2>
-    <span class="wc-titlebar-mark account-panel-ornament" aria-hidden="true">{{ px_icon('decor-clapper') }}</span>
+    <span class="account-overlap" aria-hidden="true">{{ px_icon('decor-clapper') }}</span>
   </header>
   <div class="account-panel-body">
   <div class="account-look-grid">
@@ -158,11 +155,11 @@
   </div>
   </div>
 </section>
-<section class="card account-user-panel account-panel">
+<section class="account-user-panel account-panel">
   <header class="account-panel-head">
     <span class="wc-titlebar-mark" aria-hidden="true">{{ px_icon('ui-user') }}</span>
     <h2 class="account-panel-title">Usuário</h2>
-    <span class="wc-titlebar-mark account-panel-ornament" aria-hidden="true">{{ px_icon('decor-computer') }}</span>
+    <span class="account-panel-ornament" aria-hidden="true">{{ goofy_img('tv') }}</span>
   </header>
   <div class="account-panel-body">
     {% if suggestions %}
@@ -190,7 +187,7 @@
       {% if user.pending_email %}
         <p class="muted">Novo e-mail aguardando confirmação: {{ user.pending_email }}</p>
       {% endif %}
-      <button class="btn btn-primary account-save-btn" type="submit">{{ px_icon('ui-save') }} Salvar perfil</button>
+      <button class="btn btn-primary account-save-btn" type="submit">{{ goofy_img('floppy') }} Salvar perfil</button>
     </form>
   </div>
 </section>
@@ -296,101 +293,127 @@
   </div>
 </dialog>
 
-<section class="card">
-  <h2>Senha</h2>
-  <form action="/conta/senha" method="post">
-    {% if user.password_hash %}
-      <label>Senha atual <input type="password" name="current_password" required></label>
-    {% endif %}
-    <label>Nova senha <input type="password" name="new_password" required minlength="4"></label>
-    <label>Confirmar nova senha <input type="password" name="confirm_password" required minlength="4"></label>
-    <button class="btn btn-secondary" type="submit">Alterar senha</button>
-  </form>
+<section class="account-group" aria-labelledby="account-security-title">
+  <h2 id="account-security-title" class="account-group-title">Conta e segurança</h2>
+  <div class="account-stack">
+    <div class="account-stack-block">
+      <h3 class="account-subhead">Senha</h3>
+      <form class="account-compact-form" action="/conta/senha" method="post">
+        {% if user.password_hash %}
+          <label>Senha atual <input type="password" name="current_password" required></label>
+        {% endif %}
+        <label>Nova senha <input type="password" name="new_password" required minlength="4"></label>
+        <label>Confirmar nova senha <input type="password" name="confirm_password" required minlength="4"></label>
+        <button class="btn btn-secondary" type="submit">Alterar senha</button>
+      </form>
+    </div>
+    <div class="account-stack-block{% if not blocked_users %} is-compact{% endif %}">
+      <h3 class="account-subhead">Usuários bloqueados</h3>
+      <p class="muted account-inline-help">Desbloquear não restaura a amizade automaticamente.</p>
+      {% if blocked_users %}
+        <ul class="suggestion-list">
+          {% for person in blocked_users %}
+            <li class="suggestion-item">
+              <div class="suggestion-summary">
+                <span class="suggestion-summary-copy">
+                  <a href="/u/{{ person.username }}">{{ person.name }}</a>
+                  <span class="muted">@{{ person.username }}</span>
+                </span>
+                <form action="/conta/bloqueios/{{ person.username }}/remover" method="post">
+                  <button class="btn btn-ghost" type="submit">Desbloquear</button>
+                </form>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">Ninguém bloqueado.</p>
+      {% endif %}
+    </div>
+  </div>
 </section>
 
-<section class="card">
-  <h2>Usuários bloqueados</h2>
-  <p class="muted">Desbloquear não restaura a amizade automaticamente.</p>
-  {% if blocked_users %}
-    <ul class="suggestion-list">
-      {% for person in blocked_users %}
-        <li class="suggestion-item">
-          <div class="suggestion-summary">
-            <span class="suggestion-summary-copy">
-              <a href="/u/{{ person.username }}">{{ person.name }}</a>
-              <span class="muted">@{{ person.username }}</span>
-            </span>
-            <form action="/conta/bloqueios/{{ person.username }}/remover" method="post">
-              <button class="btn btn-ghost" type="submit">Desbloquear</button>
-            </form>
-          </div>
-        </li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="muted">Ninguém bloqueado.</p>
-  {% endif %}
+<section class="account-group" aria-labelledby="account-prefs-title">
+  <h2 id="account-prefs-title" class="account-group-title">Preferências</h2>
+  <div class="account-stack">
+    <div class="account-stack-block is-compact">
+      <h2 class="account-subhead">Conversas</h2>
+      <p class="muted account-inline-help">Vale para o chat dos clubes e para as conversas privadas.</p>
+      <label class="pref-switch">
+        <span class="pref-switch-row">
+          <span class="pref-switch-title">Enviar mensagens com Enter</span>
+          <span class="pref-switch-control">
+            <input
+              class="js-enter-sends"
+              type="checkbox"
+              role="switch"
+              name="enter_sends"
+              value="1"
+              aria-checked="{% if user.enter_sends %}true{% else %}false{% endif %}"
+              {% if user.enter_sends %}checked{% endif %}
+            >
+            <span class="pref-switch-ui" aria-hidden="true"></span>
+          </span>
+        </span>
+        <span class="muted">Quando ativado, Enter envia a mensagem e Shift + Enter cria uma nova linha.</span>
+      </label>
+      <p class="muted js-enter-sends-status" hidden></p>
+    </div>
+  </div>
 </section>
 
-<section class="card">
-  <h2>Conversas</h2>
-  <p class="muted">Vale para o chat dos clubes e para as conversas privadas.</p>
-  <label class="pref-switch">
-    <span class="pref-switch-row">
-      <span class="pref-switch-title">Enviar mensagens com Enter</span>
-      <span class="pref-switch-control">
-        <input
-          class="js-enter-sends"
-          type="checkbox"
-          role="switch"
-          name="enter_sends"
-          value="1"
-          aria-checked="{% if user.enter_sends %}true{% else %}false{% endif %}"
-          {% if user.enter_sends %}checked{% endif %}
-        >
-        <span class="pref-switch-ui" aria-hidden="true"></span>
-      </span>
-    </span>
-    <span class="muted">Quando ativado, Enter envia a mensagem e Shift + Enter cria uma nova linha.</span>
-  </label>
-  <p class="muted js-enter-sends-status" hidden></p>
+<section class="account-group" aria-labelledby="account-clubs-title">
+  <h2 id="account-clubs-title" class="account-group-title">Clubes</h2>
+  <div class="account-stack">
+    <div class="account-stack-block is-compact">
+      <h2 class="account-subhead">Entrar em um clube</h2>
+      <form class="account-join-form" action="/clubs/join" method="post">
+        <input type="hidden" name="next" value="/conta">
+        <label>Código do clube <input name="join_code" required maxlength="8" placeholder="A1B2C3D4"></label>
+        <button class="btn btn-secondary" type="submit">Entrar</button>
+      </form>
+    </div>
+    <div class="account-stack-block">
+      <h3 class="account-subhead">Seus clubes</h3>
+      {% if clubs %}
+        <ul class="club-list account-club-list">
+          {% for club in clubs %}
+            <li class="club-row">
+              <div>
+                <a href="/clubs/{{ club.id }}">{{ club.name }}</a>
+                {% if club.is_closed %}<span class="lock" title="Clube fechado">🔒</span>{% endif %}
+                <span class="muted"><a class="member-count" href="/clubs/{{ club.id }}/membros">{{ club.members|length }} participantes</a> · código {{ club.join_code }}</span>
+              </div>
+              <button
+                type="button"
+                class="btn btn-danger js-leave-open"
+                data-leave-action="/clubs/{{ club.id }}/leave"
+                data-leave-name="{{ club.name }}"
+              >Sair do clube</button>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">Você ainda não está em nenhum clube.</p>
+      {% endif %}
+    </div>
+  </div>
 </section>
-
-<section class="card">
-  <h2>Entrar em um clube</h2>
-  <form action="/clubs/join" method="post">
-    <input type="hidden" name="next" value="/conta">
-    <label>Código do clube <input name="join_code" required maxlength="8" placeholder="A1B2C3D4"></label>
-    <button class="btn btn-secondary" type="submit">Entrar</button>
-  </form>
+<section class="account-group account-community" aria-labelledby="account-community-title">
+  <h2 id="account-community-title" class="account-group-title">Segurança e comunidade</h2>
+  <nav class="account-community-nav" aria-label="Segurança e comunidade">
+    <a class="account-community-link" href="/seguranca">
+      <span aria-hidden="true">{{ px_icon('shield') }}</span>
+      Segurança e denúncias
+    </a>
+    <a class="account-community-link" href="/regras">
+      <span aria-hidden="true">{{ px_icon('info') }}</span>
+      Regras da comunidade
+    </a>
+  </nav>
 </section>
-
-<section>
-  <h2>Seus clubes</h2>
-  {% if clubs %}
-    <ul class="club-list">
-      {% for club in clubs %}
-        <li class="club-row">
-          <div>
-            <a href="/clubs/{{ club.id }}">{{ club.name }}</a>
-            {% if club.is_closed %}<span class="lock" title="Clube fechado">🔒</span>{% endif %}
-            <span class="muted"><a class="member-count" href="/clubs/{{ club.id }}/membros">{{ club.members|length }} participantes</a> · código {{ club.join_code }}</span>
-          </div>
-          <button
-            type="button"
-            class="btn btn-danger js-leave-open"
-            data-leave-action="/clubs/{{ club.id }}/leave"
-            data-leave-name="{{ club.name }}"
-          >Sair do clube</button>
-        </li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="muted">Você ainda não está em nenhum clube.</p>
-  {% endif %}
-</section>
-<section class="card" id="sobre">
-  <h2>Sobre o Watch Club</h2>
+<section class="account-about" id="sobre">
+  <h2 class="account-group-title">Sobre o Watch Club</h2>
   <p class="muted">O Watch Club organiza o que o clube está assistindo. Séries e programas vêm da TVMaze. Filmes usam o TMDB.</p>
   <p class="muted">Antes de publicar, vale ler as <a href="/regras">regras da comunidade</a>.</p>
   <section class="about-credit" aria-labelledby="tmdb-credit-title">
@@ -411,8 +434,9 @@
 </section>
 
 <form class="logout-form account-logout" action="/logout" method="post">
-  <button class="btn btn-ghost" type="submit">Sair da sessão</button>
+  <button class="btn btn-danger" type="submit">Sair da sessão</button>
 </form>
+</div>
 <dialog class="leave-dialog" id="leave-dialog" aria-labelledby="leave-dialog-title">
   <h2 id="leave-dialog-title">Sair do clube</h2>
   <p>Tem certeza de que deseja sair de <strong class="js-leave-name"></strong>?</p>

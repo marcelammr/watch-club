@@ -1,0 +1,5 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path fill="#000001" d="M5 5h22v16H5zM11 21h10v2H11zM7 23h18v4H7z"/>
+  <path fill="color-mix(in srgb, currentColor 18%, #000)" d="M7 7h18v12H7z"/>
+  <path fill="var(--wc-kawaii-accent, #9dffb0)" d="M9 9h2v2H9zM12 9h10v2H12zM9 13h14v2H9zM9 17h8v2H9z"/>
+</svg>

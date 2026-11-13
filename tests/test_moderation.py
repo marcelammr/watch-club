@@ -521,6 +521,8 @@ def test_safety_hub_club_shortcuts_and_privacy():
     regras = member.get("/regras")
     assert regras.status_code == 200
     home = member.get("/")
-    assert 'aria-label="Segurança e denúncias"' in home.text
-    assert 'href="/regras"' in home.text
+    assert 'id="account-popover"' in home.text
     assert 'aria-label="Sobre"' not in home.text
+    conta = member.get("/conta")
+    assert "Segurança e denúncias" in conta.text
+    assert 'href="/regras"' in conta.text

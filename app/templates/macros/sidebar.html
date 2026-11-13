@@ -1,9 +1,4 @@
 {% from "macros/pixel.html" import px_icon %}
-{% macro hamburger(extra_class='') %}
-<button type="button" class="sidebar-toggle js-sidebar-toggle {{ extra_class }}" aria-label="Abrir ou fechar menu" aria-expanded="false" aria-controls="app-sidebar">
-  <span class="chrome-icon nav-icon-px">{{ px_icon('menu') }}</span>
-</button>
-{% endmacro %}
 
 {% macro club_menu_toggle() %}
 <button type="button" class="sidebar-toggle club-nav-toggle js-club-nav-toggle" aria-label="Abrir ou fechar menu do clube" aria-expanded="false" aria-controls="club-nav">
@@ -17,20 +12,6 @@
 {% else %}
   <span class="nav-icon nav-icon-px">{{ px_icon(name) }}</span>
 {% endif %}
-{% endmacro %}
-
-{% macro nav_link(href, label, icon, active, badge='', label_lines=None) %}
-<a class="app-nav-link{% if active %} is-on{% endif %}" href="{{ href }}" title="{{ label }}" aria-label="{{ label }}">
-  <span class="app-nav-icon-wrap">
-    {{ nav_icon(icon) }}
-    {% if badge %}<span class="app-nav-badge">{{ badge }}</span>{% endif %}
-  </span>
-  {% if label_lines %}
-  <span class="app-nav-label is-multiline">{% for line in label_lines %}{% if not loop.first %}<br>{% endif %}{{ line }}{% endfor %}</span>
-  {% else %}
-  <span class="app-nav-label">{{ label }}</span>
-  {% endif %}
-</a>
 {% endmacro %}
 
 {% macro menubar_link(href, label, icon, active, aria=None) %}
@@ -50,34 +31,4 @@
   {{ menubar_link('/noticias', 'Notícias', 'nav-news', path == '/noticias' or path.startswith('/noticias')) }}
   {{ menubar_link('/amigos', 'Amigos', 'nav-friends', path == '/amigos') }}
 </nav>
-{% endmacro %}
-
-{% macro app_sidebar(request, user=None) %}
-{% set path = request.url.path %}
-<aside class="app-sidebar" id="app-sidebar" aria-hidden="true">
-  <div class="sidebar-head">
-    <a class="sidebar-brand" href="/" title="Watch Club" aria-label="Watch Club">
-      <span class="sidebar-brand-mark" aria-hidden="true">{{ px_icon('brand-tv') }}</span>
-      <span class="sidebar-brand-full">Watch Club</span>
-    </a>
-  </div>
-  <nav class="app-nav" aria-label="Principal">
-    {{ nav_link('/', 'Início', 'home', path == '/') }}
-    {{ nav_link('/agenda', 'Agenda', 'agenda', path == '/agenda' or path.startswith('/agenda')) }}
-    {{ nav_link('/noticias', 'Notícias', 'news', path == '/noticias' or path.startswith('/noticias')) }}
-    {{ nav_link('/clubes', 'Meus Clubes', 'clubs', path == '/clubes' or path.startswith('/clubs/novo')) }}
-    {{ nav_link('/amigos', 'Amigos', 'friends', path == '/amigos') }}
-    {{ nav_link('/mensagens', 'Conversas', 'messages', path == '/mensagens' or path.startswith('/mensagens/'), dm_unread_badge|default('')) }}
-  </nav>
-  <nav class="app-nav app-nav-foot" aria-label="Preferências">
-    {% if user and user.is_site_admin %}
-    {{ nav_link('/admin', 'Administração', 'admin', path == '/admin' or path.startswith('/admin/')) }}
-    {% endif %}
-    {{ nav_link('/conta', 'Configurações', 'settings', path == '/conta' or path.startswith('/conta/')) }}
-    {{ nav_link('/sugestoes', 'Caixinha de sugestão', 'mailbox', path == '/sugestoes' or path.startswith('/sugestoes/'), label_lines=('Caixinha', 'de sugestão')) }}
-    {{ nav_link('/seguranca', 'Segurança e denúncias', 'shield', path == '/seguranca' or path.startswith('/seguranca/'), label_lines=('Segurança', 'e denúncias')) }}
-    {{ nav_link('/regras', 'Regras da comunidade', 'info', path == '/regras') }}
-  </nav>
-</aside>
-<div class="sidebar-dim js-sidebar-close" hidden></div>
 {% endmacro %}

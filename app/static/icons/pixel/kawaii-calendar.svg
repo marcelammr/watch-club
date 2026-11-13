@@ -1,0 +1,6 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path fill="#000001" d="M8 4h4v4H8zM20 4h4v4h-4zM4 8h24v20H4z"/>
+  <path fill="var(--wc-accent, #ed789c)" d="M6 10h20v4H6z"/>
+  <path fill="color-mix(in srgb, currentColor 14%, #fff)" d="M6 14h20v12H6z"/>
+  <path fill="#000001" d="M10 16h4v4h-4zM18 16h4v4h-4zM10 22h4v4h-4zM18 22h4v4h-4z"/>
+</svg>

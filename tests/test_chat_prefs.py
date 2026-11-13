@@ -37,7 +37,7 @@ def test_enter_sends_defaults_on_and_persists_per_user():
     assert "Enviar mensagens com Enter" in settings.text
     assert 'role="switch"' in settings.text
     assert "js-enter-sends" in settings.text
-    assert ">Salvar<" not in settings.text.split("<h2>Conversas</h2>", 1)[1].split("<h2>Entrar em um clube</h2>", 1)[0]
+    assert ">Salvar<" not in settings.text.split(">Conversas</h2>", 1)[1].split(">Entrar em um clube</h2>", 1)[0]
     assert 'data-enter-sends="1"' in settings.text
     assert 'class="btn btn-secondary"' in settings.text
     assert "Salvar perfil" in settings.text

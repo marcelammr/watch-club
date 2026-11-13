@@ -313,9 +313,8 @@ def test_bell_badge_and_popover_are_scoped_to_the_viewer():
     register_active(owner, "ui_host", "ui.host@example.com")
     empty = owner.get("/")
     assert empty.status_code == 200
-    assert 'class="bell-btn bell-link"' in empty.text
+    assert "bell-btn js-bell-toggle" in empty.text
     assert 'href="/notificacoes"' in empty.text
-    assert 'class="bell-btn js-bell-toggle"' in empty.text
     assert 'id="bell-popover"' in empty.text
     assert 'id="notice-inbox"' in empty.text
     assert 'aria-labelledby="notice-inbox-title"' in empty.text

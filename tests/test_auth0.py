@@ -299,7 +299,7 @@ def test_auth0_verified_email_links_existing_user_same_id(monkeypatch):
     assert callback.status_code == 303
     assert callback.headers["location"] == "/"
     home = http.get("/")
-    assert 'aria-label="Configurações"' in home.text
+    assert 'id="account-popover"' in home.text
     db = SessionLocal()
     try:
         users = list(db.scalars(select(User).where(User.email == "auth0.mail@example.com")))
@@ -331,7 +331,7 @@ def test_auth0_unverified_email_does_not_link(monkeypatch):
     profile = http.get("/auth/completar-perfil", follow_redirects=False)
     assert profile.headers["location"] == "/auth/verificar-email"
     home = http.get("/")
-    assert 'aria-label="Configurações"' not in home.text
+    assert 'id="account-popover"' not in home.text
     db = SessionLocal()
     try:
         user = db.scalar(select(User).where(User.email == "auth0.unv@example.com"))
@@ -379,7 +379,7 @@ def test_auth0_email_already_bound_to_other_sub_is_not_overwritten(monkeypatch):
     assert callback.status_code == 303
     assert callback.headers["location"] == "/auth/completar-perfil"
     home = http.get("/")
-    assert 'aria-label="Configurações"' not in home.text
+    assert 'id="account-popover"' not in home.text
     db = SessionLocal()
     try:
         user = db.scalar(select(User).where(User.email == "auth0.taken@example.com"))
@@ -499,7 +499,7 @@ def test_auth0_callback_linked_sub_logs_in_without_email_match(monkeypatch):
     assert callback.headers["location"] == "/"
     home = http.get("/")
     assert home.status_code == 200
-    assert 'aria-label="Configurações"' in home.text
+    assert 'id="account-popover"' in home.text
     db = SessionLocal()
     try:
         linked = db.get(User, linked_id)
@@ -539,7 +539,7 @@ def test_auth0_logout_redirects_to_tenant(monkeypatch):
     left = http.get("/auth/logout", follow_redirects=False)
     _assert_auth0_tenant_logout(left)
     home = http.get("/")
-    assert 'aria-label="Configurações"' not in home.text
+    assert 'id="account-popover"' not in home.text
 
 
 def test_auth0_login_marks_session_and_sair_uses_auth0_logout(monkeypatch):
@@ -554,7 +554,7 @@ def test_auth0_login_marks_session_and_sair_uses_auth0_logout(monkeypatch):
     assert callback.status_code == 303
     assert callback.headers["location"] == "/"
     home = http.get("/")
-    assert 'aria-label="Configurações"' in home.text
+    assert 'id="account-popover"' in home.text
     assert 'action="/logout"' in home.text
     left = http.post("/logout", follow_redirects=False)
     _assert_auth0_tenant_logout(left)
@@ -567,7 +567,7 @@ def test_auth0_login_marks_session_and_sair_uses_auth0_logout(monkeypatch):
     finally:
         db.close()
     home = http.get("/")
-    assert 'aria-label="Configurações"' not in home.text
+    assert 'id="account-popover"' not in home.text
     pending = http.get("/auth/pendente", follow_redirects=False)
     assert pending.status_code == 303
     assert "/login" in pending.headers["location"]
@@ -588,7 +588,7 @@ def test_legacy_logout_stays_local_even_with_auth0_sub(monkeypatch):
     assert left.status_code == 303
     assert left.headers["location"] == "/"
     home = http.get("/")
-    assert 'aria-label="Configurações"' not in home.text
+    assert 'id="account-popover"' not in home.text
     login = http.post(
         "/login",
         data={"email": "auth0.legacy@example.com", "password": "segredo"},
@@ -596,7 +596,7 @@ def test_legacy_logout_stays_local_even_with_auth0_sub(monkeypatch):
     )
     _assert_auth0_authorize(login)
     home = http.get("/")
-    assert 'aria-label="Configurações"' not in home.text
+    assert 'id="account-popover"' not in home.text
 
 
 def test_dual_credential_user_logout_follows_current_session(monkeypatch):
@@ -638,7 +638,7 @@ def test_auth0_pending_can_abandon_identity_via_auth0_logout(monkeypatch):
     assert gone.status_code == 303
     assert "/login" in gone.headers["location"]
     home = http.get("/")
-    assert 'aria-label="Configurações"' not in home.text
+    assert 'id="account-popover"' not in home.text
     db = SessionLocal()
     try:
         assert db.scalar(select(User).where(User.auth0_sub == "auth0|pending-out")) is None
@@ -683,7 +683,7 @@ def test_auth0_verified_new_identity_opens_complete_profile(monkeypatch):
     assert 'href="/auth/logout"' in page.text
     assert "Criar conta" not in page.text.split("<h1>", 1)[-1].split("</form>", 1)[0]
     home = http.get("/")
-    assert 'aria-label="Configurações"' not in home.text
+    assert 'id="account-popover"' not in home.text
     db = SessionLocal()
     try:
         assert db.scalar(select(User).where(User.auth0_sub == "auth0|new-1")) is None
@@ -801,7 +801,7 @@ def test_auth0_complete_profile_creates_one_active_user(monkeypatch):
     assert forged.status_code == 303
     assert forged.headers["location"] == "/"
     home = http.get("/")
-    assert "Ana Auth" in home.text or 'aria-label="Configurações"' in home.text
+    assert "Ana Auth" in home.text or 'id="account-popover"' in home.text
     conta = http.get("/conta", follow_redirects=False)
     assert conta.status_code == 200
     clubes = http.get("/clubes", follow_redirects=False)
@@ -861,7 +861,7 @@ def test_auth0_relogin_same_sub_goes_home(monkeypatch):
     assert callback.headers["location"] == "/"
     home = http.get("/")
     assert home.status_code == 200
-    assert 'aria-label="Configurações"' in home.text
+    assert 'id="account-popover"' in home.text
     db = SessionLocal()
     try:
         users = list(db.scalars(select(User).where(User.auth0_sub == "auth0|relogin-1")))
@@ -925,7 +925,7 @@ def test_auth0_onboard_does_not_duplicate_existing_email(monkeypatch):
     assert created.status_code == 303
     assert created.headers["location"] == "/"
     home = http.get("/")
-    assert 'aria-label="Configurações"' in home.text
+    assert 'id="account-popover"' in home.text
     db = SessionLocal()
     try:
         users = list(db.scalars(select(User).where(User.email == "auth0.keep.mail@example.com")))
@@ -1394,7 +1394,7 @@ def test_historical_pending_request_auto_activates_without_admin(monkeypatch):
     assert callback.headers["location"] == "/"
     landed = http.get("/")
     assert landed.status_code == 200
-    assert 'aria-label="Configurações"' in landed.text
+    assert 'id="account-popover"' in landed.text
     db = SessionLocal()
     try:
         user = db.get(User, user_id)

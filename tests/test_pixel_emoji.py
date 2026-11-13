@@ -64,7 +64,7 @@ def test_picker_catalog_and_club_presets_on_settings():
     home = owner.get("/")
     assert home.status_code == 200
     assert 'id="joi3-emoji-catalog"' in home.text
-    assert 'class="appearance-btn"' in home.text
+    assert "appearance-btn" in home.text
     created = owner.post(
         "/clubs",
         data={"name": "Emoji Clube", "description": "", "rules": "", "cover_color": "#3A2348"},
@@ -210,7 +210,7 @@ def test_emoji_picker_is_reused_and_sits_above_page():
     assert dm.status_code == 200
     assert "js-emoji-picker" in dm.text
     home = owner.get("/")
-    assert "nav-icon-px" in home.text
+    assert "app-menubar" in home.text
     assert "wc-px" in home.text
     assert 'viewBox="0 0 32 32"' in home.text
 
@@ -375,7 +375,7 @@ def test_tag_plus_valid_pack_emoji_stays_separate_from_slug():
     home = owner.get("/")
     assert "SO+1" in home.text
     assert "club-tag-slug" in home.text
-    assert "/static/emojis/joi3/" in home.text.split("player-nameplate", 1)[-1][:2500]
+    assert "/static/emojis/joi3/" in home.text.split("wc-badge", 1)[-1][:4000]
     swapped = owner.post(
         f"/clubs/{club_id}/tag",
         data={"tag_slug": "EP01", "tag_emoji": catalog_for("joi3")["items"][1]["token"], "tag_color_mode": "solid", "tag_color_1": "#B892FF"},

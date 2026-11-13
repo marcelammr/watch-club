@@ -25,6 +25,18 @@ ICON_ALIASES = {
     "decor-computer": "decor-computer",
     "decor-sparkle": "decor-sparkle",
     "clapper": "decor-clapper",
+    "pop-tv": "kawaii-tv",
+    "pop-badge": "kawaii-badge",
+    "pop-edit": "kawaii-pencil",
+    "pop-look": "kawaii-palette",
+    "pop-mail": "kawaii-envelope",
+    "pop-admin": "kawaii-admin",
+    "pop-clubs": "group",
+    "pop-hearts": "heart",
+    "pop-since": "calendar",
+    "pop-leave": "ui-leave",
+    "pop-sparkle": "kawaii-sparkle",
+    "ui-leave": "ui-leave",
 }
 # Semantic name → local SVG. Missing files fall back to the drawn 16×16 family.
 ICON_FILES = {
@@ -85,9 +97,21 @@ ICON_FILES = {
     "ui-edit": "ui-edit.svg",
     "ui-save": "ui-save.svg",
     "ui-info": "ui-info.svg",
+    "ui-leave": "ui-leave.svg",
     "decor-clapper": "decor-clapper.svg",
     "decor-computer": "decor-computer.svg",
     "decor-sparkle": "decor-sparkle.svg",
+    "kawaii-tv": "kawaii-tv.svg",
+    "kawaii-badge": "kawaii-badge.svg",
+    "kawaii-pencil": "kawaii-pencil.svg",
+    "kawaii-palette": "kawaii-palette.svg",
+    "kawaii-envelope": "kawaii-envelope.svg",
+    "kawaii-admin": "kawaii-admin.svg",
+    "kawaii-people": "kawaii-people.svg",
+    "kawaii-heart": "kawaii-heart.svg",
+    "kawaii-calendar": "kawaii-calendar.svg",
+    "kawaii-leave": "kawaii-leave.svg",
+    "kawaii-sparkle": "kawaii-sparkle.svg",
 }
 
 _FILL_RE = re.compile(r'fill="#(?:[0-9a-fA-F]{3,8})"', re.I)

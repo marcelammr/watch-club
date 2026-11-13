@@ -266,12 +266,8 @@ def test_player_card_popover_keeps_account_actions():
     home = person.get("/")
     popover = home.text.split('id="account-popover"', 1)[1].split("<main>", 1)[0]
     assert "Player Card" not in popover
-    assert "player-card-name" in popover
-    assert "player-nameplate" in popover
-    assert "player-avatar-orb" in popover
-    assert "wc-titlebar" not in popover
+    assert "wc-badge-name" in popover
     assert "js-account-close" not in popover
-    assert "wc-win-min" not in popover
     assert "Classe" not in popover
     assert "Mago" not in popover
     assert "@pcard_menu" in popover
@@ -279,17 +275,20 @@ def test_player_card_popover_keeps_account_actions():
     assert "Ver perfil" in popover
     assert "Editar perfil" in popover
     assert 'href="/conta"' in popover
+    assert 'href="/sugestoes"' in popover
+    assert 'href="/u/pcard_menu?aba=aparencia"' in popover
     assert "Sair da sessão" in popover
-    assert "js-status-toggle" in popover
-    assert "Energia" in popover
-    assert "LV." in popover
-    assert "EXP" in popover
+    assert "js-status-toggle" not in popover
+    assert "Energia" not in popover
+    assert "LV." not in popover
+    assert "EXP" not in popover
     assert "Clubes" in popover
-    assert "Amigos" in popover
     assert "Favoritos" in popover
-    assert 'data-shape="circle"' in popover
+    assert "Desde " in popover
+    assert 'data-shape="portrait"' in popover
+    assert 'aria-label="Administração"' not in popover
     assert "html" in home.text and "wc-theme-watchclub" in home.text
-    assert "account-popover player-card wc-theme-" in home.text
+    assert "account-popover wc-badge-pop" in home.text
 
 
 def test_friendship_from_profile_still_works():
@@ -384,7 +383,7 @@ def test_chrome_stage_crumbs_and_wallpaper_registry():
     register_active(person, "chrome_a", "chrome.a@example.com", name="Chrome User")
     home = person.get("/")
     assert 'class="app-stage"' in home.text
-    assert "player-card-name" in home.text
+    assert "wc-badge-name" in home.text
     assert ">Player Card<" not in home.text
     assert 'aria-label="Voltar"' not in home.text or 'class="back-btn"' in home.text
     conta = person.get("/conta")

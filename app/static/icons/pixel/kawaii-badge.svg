@@ -1,0 +1,6 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path fill="#000001" d="M13 2h6v3h-6zM11 4h2v2h-2zM19 4h2v2h-2zM7 5h18v24H7z"/>
+  <path fill="color-mix(in srgb, currentColor 14%, #fff)" d="M9 7h14v20H9z"/>
+  <path fill="#000001" d="M13 9h6v2h-6zM12 11h8v5h-8zM11 16h10v2H11zM10 18h12v3H10zM18 22h4v2h-4zM18 25h4v2h-4z"/>
+  <path fill="color-mix(in srgb, currentColor 35%, #fff)" d="M10 22h6v2h-6zM10 25h6v2h-6z"/>
+</svg>
