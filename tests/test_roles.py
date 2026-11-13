@@ -876,7 +876,7 @@ def test_account_displayed_tag_row_caps_and_overflow():
     assert 'data-tag-more="0"' in none_page.text
     assert "tag-more-menu" not in none_page.text
     assert "btn btn-secondary account-look-link" in none_page.text
-    assert "<h2>Avatar</h2>" not in none_page.text.split("account-look", 1)[1].split("<h2>Usuário</h2>", 1)[0]
+    assert "<h2>Avatar</h2>" not in none_page.text.split("account-look", 1)[1].split(">Usuário</h2>", 1)[0]
 
     one = TestClient(app)
     register_active(one, "tagrow1", "tagrow1@example.com")

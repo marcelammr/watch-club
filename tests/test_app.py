@@ -517,7 +517,7 @@ def test_account_look_omits_presence():
     register_active(person, "acct_status", "acct.status@example.com", name="Conta Status")
     person.post("/presenca", data={"status": "away", "prefer": "1"})
     page = person.get("/conta")
-    block = page.text.split("account-look", 1)[1].split("<h2>Usuário</h2>", 1)[0]
+    block = page.text.split("account-look", 1)[1].split(">Usuário</h2>", 1)[0]
     assert 'class="status' not in block
     assert "presence-moon" not in block
     assert 'data-slot="avatar-badge"' not in block

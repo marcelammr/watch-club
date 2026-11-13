@@ -5,15 +5,39 @@
 {% from "macros/image_style.html" import style_choices %}
 {% from "macros/pixel.html" import px_icon %}
 {% block title %}Configurações · Watch Club{% endblock %}
-{% block page_heading %}Configurações{% endblock %}
+{% block page_heading %}Configurações · Conta{% endblock %}
 {% block body_class %}account-page{% endblock %}
+{% block top_start %}
+{% set back_to = back_href_for(request) %}
+{% if back_to %}
+<a class="back-btn" href="{{ back_to }}" aria-label="Voltar" title="Voltar">
+  <span class="chrome-icon nav-icon-px">{{ px_icon('back') }}</span>
+</a>
+{% endif %}
+<span class="wc-titlebar-mark account-title-mark" aria-hidden="true">{{ px_icon('ui-settings') }}</span>
+<p class="page-heading">Configurações · Conta</p>
+{% endblock %}
+{% block top_end_extra %}
+<span class="wc-win-deco" aria-hidden="true">
+  <span class="wc-win-deco-btn">−</span>
+  <span class="wc-win-deco-btn">□</span>
+  <span class="wc-win-deco-btn is-close">×</span>
+</span>
+{% endblock %}
 {% block content %}
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
 
 {% set tag_visible = tag_choices[:4] %}
 {% set tag_rest = tag_choices[4:] %}
-<section class="card account-look">
+<div class="account-desk">
+<section class="card account-look account-panel">
+  <header class="account-panel-head">
+    <span class="wc-titlebar-mark" aria-hidden="true">{{ px_icon('calendar') }}</span>
+    <h2 class="account-panel-title">Perfil</h2>
+    <span class="wc-titlebar-mark account-panel-ornament" aria-hidden="true">{{ px_icon('decor-clapper') }}</span>
+  </header>
+  <div class="account-panel-body">
   <div class="account-look-grid">
     <div class="account-look-identity">
       <div class="account-identity current-avatar">
@@ -27,7 +51,7 @@
             aria-label="Editar avatar"
           >
             {{ user_avatar(user, 'lg', show_presence=False) }}
-            <span class="avatar-edit-hint">Editar</span>
+            <span class="account-avatar-edit" aria-hidden="true">{{ px_icon('ui-edit') }}</span>
           </button>
           <div class="wc-float js-account-float" id="avatar-menu" hidden role="dialog" aria-labelledby="avatar-menu-title">
             <header class="wc-titlebar">
@@ -66,6 +90,7 @@
               </a>
             {% endif %}
           </div>
+          <p class="account-look-nick">@{{ user.username }}</p>
           <p class="account-look-link-wrap">
             <a class="btn btn-secondary account-look-link" href="/u/{{ user.username }}">Ver perfil público</a>
           </p>
@@ -92,7 +117,7 @@
       <div class="account-tag-row" role="radiogroup" aria-label="Tag exibida" data-tag-more="{{ tag_rest|length }}">
         <label class="account-tag-opt">
           <input type="radio" name="displayed_club_id" value="0" {% if not user.displayed_club_id %}checked{% endif %}>
-          <span class="account-tag-none">Nenhuma</span>
+          <span class="club-tag account-tag-none"><span class="club-tag-slug">Nenhuma</span></span>
         </label>
         {% for item in tag_visible %}
           <label class="account-tag-opt">
@@ -131,7 +156,50 @@
       <noscript><button class="btn btn-secondary" type="submit">Salvar tag exibida</button></noscript>
     </form>
   </div>
+  </div>
 </section>
+<section class="card account-user-panel account-panel">
+  <header class="account-panel-head">
+    <span class="wc-titlebar-mark" aria-hidden="true">{{ px_icon('ui-user') }}</span>
+    <h2 class="account-panel-title">Usuário</h2>
+    <span class="wc-titlebar-mark account-panel-ornament" aria-hidden="true">{{ px_icon('decor-computer') }}</span>
+  </header>
+  <div class="account-panel-body">
+    {% if suggestions %}
+      <p class="muted">Variações disponíveis:</p>
+      <div class="suggestions">
+        {% for item in suggestions %}
+          <button type="button" class="chip" data-username="{{ item }}">{{ item }}</button>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <form id="account-profile-form" class="account-user-form" action="/conta/perfil" method="post">
+      <label>Nome
+        <input name="name" value="{{ user.name }}" required maxlength="80" placeholder="Como você quer aparecer">
+      </label>
+      <label>Nickname
+        <input id="username" name="username" value="{{ user.username }}" required minlength="3" maxlength="30" {% if nickname_locked %}readonly{% endif %}>
+      </label>
+      {% if nickname_locked %}
+        <p class="muted account-nick-hint">O nickname só pode ser alterado a cada {{ nickname_days }} dias. Próxima troca em {{ nickname_unlock }}.</p>
+      {% else %}
+        <p class="muted account-nick-hint">Único no site. Letras, números e _. Pode mudar a cada {{ nickname_days }} dias.</p>
+      {% endif %}
+      <ul id="live-suggestions" class="suggestions"></ul>
+      <label>E-mail <input type="email" name="email" value="{{ user.email }}" required></label>
+      {% if user.pending_email %}
+        <p class="muted">Novo e-mail aguardando confirmação: {{ user.pending_email }}</p>
+      {% endif %}
+      <button class="btn btn-primary account-save-btn" type="submit">{{ px_icon('ui-save') }} Salvar perfil</button>
+    </form>
+  </div>
+</section>
+</div>
+<p class="account-status-bar">
+  <span class="account-status-icon" aria-hidden="true">{{ px_icon('ui-info') }}</span>
+  <span class="account-status-copy">Altere suas informações, personalize sua identidade e defina como deseja aparecer no Watch Club.</span>
+  <span class="account-status-hatch" aria-hidden="true"></span>
+</p>
 
 <dialog id="avatar-modal" class="avatar-modal" aria-labelledby="avatar-modal-title">
   <div class="avatar-modal-card portrait-creator">
@@ -228,48 +296,16 @@
   </div>
 </dialog>
 
-<section class="grid-2">
-  <div class="card">
-    <h2>Usuário</h2>
-    {% if suggestions %}
-      <p class="muted">Variações disponíveis:</p>
-      <div class="suggestions">
-        {% for item in suggestions %}
-          <button type="button" class="chip" data-username="{{ item }}">{{ item }}</button>
-        {% endfor %}
-      </div>
+<section class="card">
+  <h2>Senha</h2>
+  <form action="/conta/senha" method="post">
+    {% if user.password_hash %}
+      <label>Senha atual <input type="password" name="current_password" required></label>
     {% endif %}
-    <form id="account-profile-form" action="/conta/perfil" method="post">
-      <label>Nome
-        <input name="name" value="{{ user.name }}" required maxlength="80" placeholder="Como você quer aparecer">
-      </label>
-      <label>Nickname
-        <input id="username" name="username" value="{{ user.username }}" required minlength="3" maxlength="30" {% if nickname_locked %}readonly{% endif %}>
-      </label>
-      {% if nickname_locked %}
-        <p class="muted">O nickname só pode ser alterado a cada {{ nickname_days }} dias. Próxima troca em {{ nickname_unlock }}.</p>
-      {% else %}
-        <p class="muted">Único no site. Letras, números e _. Pode mudar a cada {{ nickname_days }} dias.</p>
-      {% endif %}
-      <ul id="live-suggestions" class="suggestions"></ul>
-      <label>E-mail <input type="email" name="email" value="{{ user.email }}" required></label>
-      {% if user.pending_email %}
-        <p class="muted">Novo e-mail aguardando confirmação: {{ user.pending_email }}</p>
-      {% endif %}
-      <button class="btn btn-secondary" type="submit">Salvar perfil</button>
-    </form>
-  </div>
-  <div class="card">
-    <h2>Senha</h2>
-    <form action="/conta/senha" method="post">
-      {% if user.password_hash %}
-        <label>Senha atual <input type="password" name="current_password" required></label>
-      {% endif %}
-      <label>Nova senha <input type="password" name="new_password" required minlength="4"></label>
-      <label>Confirmar nova senha <input type="password" name="confirm_password" required minlength="4"></label>
-      <button class="btn btn-secondary" type="submit">Alterar senha</button>
-    </form>
-  </div>
+    <label>Nova senha <input type="password" name="new_password" required minlength="4"></label>
+    <label>Confirmar nova senha <input type="password" name="confirm_password" required minlength="4"></label>
+    <button class="btn btn-secondary" type="submit">Alterar senha</button>
+  </form>
 </section>
 
 <section class="card">

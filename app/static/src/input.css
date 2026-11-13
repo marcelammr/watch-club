@@ -460,7 +460,187 @@
     font-size: 0.88rem;
   }
   .app-shell {
-    @apply flex min-h-dvh;
+    @apply flex min-h-dvh flex-col;
+  }
+  .app-menubar {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-shrink: 0;
+    z-index: 36;
+    margin: 0.55rem clamp(0.7rem, 2.2vw, 2.1rem) 0;
+    padding: 0.28rem 0.55rem 0.28rem 0.45rem;
+    color: var(--wc-on-titlebar, var(--wc-titlebar-fg, #0b4f87));
+    background: var(--wc-titlebar, var(--chrome));
+    border: 3px solid var(--wc-border-dark, #0b4f87);
+    box-shadow: var(--wc-shadow-hard, 4px 4px 0 #0b4f87);
+    border-radius: 10px;
+  }
+  .app-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.42rem;
+    min-width: 0;
+    flex-shrink: 0;
+    color: inherit;
+    text-decoration: none;
+  }
+  .app-brand:hover,
+  .app-brand:focus-visible {
+    color: inherit;
+  }
+  .app-brand-tv {
+    display: grid;
+    place-items: center;
+    width: 2.05rem;
+    height: 2.05rem;
+    border: 2px solid color-mix(in srgb, var(--wc-border-dark, #0b4f87) 70%, #fff);
+    border-radius: 6px;
+    background: color-mix(in srgb, #fff 32%, transparent);
+    box-shadow:
+      inset 1px 1px 0 color-mix(in srgb, #fff 45%, transparent),
+      1px 1px 0 color-mix(in srgb, #000 18%, transparent);
+  }
+  .app-brand-tv .wc-px {
+    width: 1.35rem;
+    height: 1.35rem;
+  }
+  .app-brand-name {
+    font-family: "Jersey 15", Hero, "Work Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 1.42rem;
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    line-height: 1;
+    white-space: nowrap;
+    text-transform: uppercase;
+  }
+  .app-menubar-nav {
+    display: none;
+    align-items: center;
+    gap: 0.12rem;
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: auto;
+    scrollbar-width: none;
+  }
+  .app-menubar-nav::-webkit-scrollbar {
+    display: none;
+  }
+  .app-menubar-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.32rem;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0.28rem 0.58rem;
+    color: inherit;
+    text-decoration: none;
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: transparent;
+    box-shadow: none;
+  }
+  .app-menubar-link:hover,
+  .app-menubar-link:focus-visible {
+    color: inherit;
+    background: color-mix(in srgb, #fff 22%, transparent);
+  }
+  .app-menubar-link:focus-visible {
+    outline: 2px solid var(--wc-focus, var(--btn-focus));
+    outline-offset: 2px;
+  }
+  .app-menubar-link.is-on {
+    background: color-mix(in srgb, var(--wc-highlight, #f8d4ea) 62%, #fff);
+    color: var(--wc-text-dark, #14284a);
+    border-color: var(--wc-border-dark, #0b4f87);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, #fff 55%, transparent),
+      2px 2px 0 var(--wc-border-dark, #0b4f87);
+  }
+  .app-menubar-ico,
+  .app-menubar-spark {
+    display: inline-flex;
+    flex-shrink: 0;
+  }
+  .app-menubar-ico .wc-px {
+    width: 1.05rem;
+    height: 1.05rem;
+  }
+  .app-menubar-spark .wc-px {
+    width: 0.72rem;
+    height: 0.72rem;
+  }
+  .app-menubar-txt {
+    font-family: "Jersey 15", Hero, "Work Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 1.05rem;
+    font-weight: 400;
+    letter-spacing: 0.03em;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .app-menubar-end {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+  .app-menubar-end .account-trigger [data-user-avatar] > span {
+    width: var(--ui-control);
+    height: var(--ui-control);
+  }
+  .app-menubar .app-menubar-burger {
+    order: 0;
+  }
+  @media (min-width: 901px) {
+    .app-menubar-nav {
+      display: flex;
+    }
+    .app-menubar .app-menubar-burger {
+      order: 2;
+    }
+    .app-menubar-nav {
+      order: 1;
+    }
+    .app-menubar-end {
+      order: 3;
+    }
+  }
+  @media (max-width: 720px) {
+    .app-menubar {
+      margin: 0.4rem 0.45rem 0;
+      padding: 0.22rem 0.4rem;
+      border-radius: 8px;
+    }
+    .app-brand-name {
+      font-size: 1.18rem;
+    }
+    .app-brand-tv {
+      width: 1.8rem;
+      height: 1.8rem;
+    }
+  }
+  @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    .app-brand-tv {
+      transition: transform 140ms ease;
+    }
+    .app-brand:hover .app-brand-tv,
+    .app-brand:focus-visible .app-brand-tv {
+      transform: translateY(-1px);
+    }
+    .app-menubar-link {
+      transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+    }
+    .app-menubar-link:hover {
+      transform: translateY(-1px);
+    }
+    .app-menubar-link.is-on:hover {
+      transform: translateY(-1px);
+      box-shadow:
+        inset 0 1px 0 color-mix(in srgb, #fff 55%, transparent),
+        2px 3px 0 var(--wc-border-dark, #0b4f87);
+    }
   }
   .app-sidebar {
     @apply pointer-events-none fixed inset-y-0 left-0 z-40 flex w-64 flex-col overflow-hidden border-r-2 text-sidebar-foreground;
@@ -498,6 +678,11 @@
   }
   .sidebar-brand-mark {
     color: inherit;
+    display: inline-flex;
+  }
+  .sidebar-brand-mark .wc-px {
+    width: 1.35rem;
+    height: 1.35rem;
   }
   .sidebar-brand-full {
     @apply truncate font-pixel text-[1.2rem] font-normal tracking-[0.04em];
@@ -542,14 +727,14 @@
     line-height: 1.2;
   }
   .sidebar-dim {
-    @apply pointer-events-none fixed inset-0 z-30 hidden bg-black/50;
+    @apply pointer-events-none fixed inset-0 z-[38] hidden bg-black/50;
   }
   html.sidebar-open .sidebar-dim {
     @apply pointer-events-auto block;
   }
   .app-main {
     @apply flex min-w-0 flex-1 flex-col;
-    padding: 0.8rem clamp(0.7rem, 2.2vw, 2.1rem) 1.05rem;
+    padding: 0.45rem clamp(0.7rem, 2.2vw, 2.1rem) 1.05rem;
   }
   .app-stage {
     display: flex;
@@ -3346,6 +3531,11 @@
   }
   body.club-room .app-shell {
     @apply h-dvh min-h-0;
+  }
+  body.club-room .app-menubar,
+  body.dm-page .app-menubar {
+    margin-top: 0.4rem;
+    margin-bottom: 0;
   }
   body.club-room .app-main,
   body.dm-page .app-main {
@@ -6500,20 +6690,96 @@
   .account-look {
     overflow: visible;
   }
+  .account-page .top .account-title-mark {
+    display: inline-flex;
+    margin-right: -0.15rem;
+  }
+  .account-page .top .account-title-mark .wc-px,
+  .account-panel-head .wc-titlebar-mark .wc-px {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+  .wc-win-deco {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    margin-left: 0.35rem;
+    pointer-events: none;
+    user-select: none;
+  }
+  .wc-win-deco-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.35rem;
+    height: 1.35rem;
+    border: 2px solid var(--wc-border-dark, #0b4f87);
+    background: color-mix(in srgb, #fff 70%, var(--wc-window-light, #fff8fc));
+    color: var(--wc-titlebar-fg, #0b4f87);
+    box-shadow: 1px 1px 0 color-mix(in srgb, #000 22%, transparent);
+    border-radius: 2px;
+    font-family: "Jersey 15", "Work Sans", sans-serif;
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+  .wc-win-deco-btn.is-close {
+    background: color-mix(in srgb, var(--wc-accent, #ed789c) 55%, #fff);
+  }
+  .account-desk {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(16.5rem, 0.85fr);
+    gap: 0.85rem;
+    align-items: stretch;
+    margin: 0.85rem 0 0.7rem;
+  }
+  .account-page .card.account-panel {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 8px;
+  }
+  .account-panel-head {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.38rem 0.7rem;
+    background: var(--wc-titlebar);
+    color: var(--wc-titlebar-fg);
+    border-bottom: 2px solid var(--wc-border-dark, #0b4f87);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent);
+  }
+  .account-panel-title {
+    margin: 0;
+    flex: 1;
+    font-family: "Jersey 15", Hero, "Work Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 1.2rem;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: inherit;
+  }
+  .account-page .card .account-panel-title {
+    color: inherit;
+  }
+  .account-panel-ornament {
+    margin-left: auto;
+  }
+  .account-panel-body {
+    padding: 0.95rem 1rem 1.05rem;
+    flex: 1;
+  }
   .account-look-grid {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 1.1rem 2rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.95rem;
   }
-  .account-look-identity {
-    flex: 0 1 auto;
-    min-width: 0;
-  }
+  .account-look-identity,
   .account-look-bio {
-    flex: 1 1 16.5rem;
-    max-width: 22rem;
+    flex: none;
+    max-width: none;
     min-width: 0;
   }
   .account-identity {
@@ -6552,9 +6818,36 @@
   .account-avatar-frame img,
   .account-avatar-hit,
   .account-page .account-avatar-hit.avatar-trigger {
-    width: 6rem;
-    height: 6rem;
+    width: 7.15rem;
+    height: 7.15rem;
     border-radius: 50%;
+  }
+  .account-avatar-edit {
+    position: absolute;
+    right: 0.08rem;
+    bottom: 0.08rem;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    pointer-events: none;
+    border: 2px solid var(--wc-border-dark, #0b4f87);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--wc-lilac, #b78ad9) 70%, #fff);
+    color: var(--wc-text-dark, #14284a);
+    box-shadow: 1px 1px 0 var(--wc-border-dark, #0b4f87);
+  }
+  .account-avatar-edit .wc-px {
+    width: 13px;
+    height: 13px;
+  }
+  .account-avatar-hit:hover .account-avatar-edit,
+  .account-avatar-hit:focus-visible .account-avatar-edit {
+    background: color-mix(in srgb, var(--wc-highlight, #f8d4ea) 70%, #fff);
+  }
+  .account-page .account-avatar-hit .avatar-edit-hint {
+    display: none;
   }
   .account-identity-copy {
     min-width: 0;
@@ -6575,6 +6868,12 @@
   .account-look-name-text {
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+  .account-look-nick {
+    margin: 0.18rem 0 0;
+    color: var(--wc-muted-dark, #7a4a88);
+    font-size: 0.92rem;
+    line-height: 1.2;
   }
   .account-tag-wrap {
     position: relative;
@@ -6640,10 +6939,64 @@
     position: relative;
   }
   .account-look-bio .bio-box {
-    min-height: 6.4rem;
+    min-height: 5.6rem;
     padding: 0.85rem 0.95rem 2.35rem;
-    border-radius: 1rem;
+    border-radius: 0.7rem;
     background: color-mix(in srgb, var(--wc-window-light, #fff8fc) 70%, var(--wc-lilac, #b78ad9) 8%);
+  }
+  .account-user-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+  .account-user-form label {
+    margin: 0;
+  }
+  .account-save-btn {
+    align-self: flex-start;
+    margin-top: 0.45rem;
+    gap: 0.4rem;
+  }
+  .account-save-btn .wc-px {
+    width: 1.05rem;
+    height: 1.05rem;
+  }
+  .account-nick-hint {
+    margin: -0.35rem 0 0.15rem;
+    font-size: 0.8rem;
+    line-height: 1.35;
+  }
+  .account-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0 0 1rem;
+    padding: 0.45rem 0.7rem;
+    border: 2px solid var(--wc-border-dark, #0b4f87);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--wc-window-light, #fff8fc) 82%, var(--wc-lilac, #b78ad9));
+    color: var(--wc-on-window, var(--wc-text-dark, #3a1850));
+    box-shadow: 2px 2px 0 var(--wc-border-dark, #0b4f87);
+    font-size: 0.88rem;
+    line-height: 1.3;
+  }
+  .account-status-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+  }
+  .account-status-copy {
+    min-width: 0;
+    flex: 1;
+  }
+  .account-status-hatch {
+    flex: 0 0 3.2rem;
+    align-self: stretch;
+    min-height: 1rem;
+    background: repeating-linear-gradient(
+      -45deg,
+      color-mix(in srgb, var(--wc-border-dark, #0b4f87) 35%, transparent) 0 2px,
+      transparent 2px 6px
+    );
   }
   .account-bio-tools {
     position: absolute;
@@ -6710,18 +7063,9 @@
     pointer-events: none;
   }
   .account-tag-none {
-    display: inline-flex;
-    align-items: center;
-    min-height: 1.2rem;
-    padding: 0.06rem 0.42rem;
-    border: 2px solid var(--wc-border-dark, #0b4f87);
-    border-radius: 999px;
     background: var(--wc-window-light, #fff8fc);
     color: var(--wc-on-window, var(--wc-text-dark, #3a1850));
-    font-family: "Jersey 15", "Work Sans", sans-serif;
-    font-size: 0.7rem;
-    line-height: 1;
-    box-shadow: 1px 1px 0 var(--wc-border-dark, #0b4f87);
+    border-color: var(--wc-border-dark, #0b4f87);
   }
   .account-tag-opt .club-tag {
     box-shadow: 1px 1px 0 color-mix(in srgb, var(--wc-border-dark, #0b4f87) 35%, transparent);
@@ -6817,11 +7161,15 @@
     font-size: 0.95rem;
   }
   @media (max-width: 720px) {
+    .account-desk {
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+    }
     .account-look-grid {
       display: flex;
       flex-direction: column;
       align-items: stretch;
-      gap: 1.1rem;
+      gap: 0.95rem;
     }
     .account-look-bio {
       max-width: none;
@@ -6833,14 +7181,20 @@
     .account-avatar-frame img,
     .account-avatar-hit,
     .account-page .account-avatar-hit.avatar-trigger {
-      width: 5.25rem;
-      height: 5.25rem;
+      width: 6rem;
+      height: 6rem;
     }
     .account-look-name {
       font-size: 1.18rem;
     }
     .account-look-bio .bio-box {
-      min-height: 6.1rem;
+      min-height: 5.4rem;
+    }
+    .account-page .wc-win-deco {
+      display: none;
+    }
+    .account-status-hatch {
+      flex-basis: 1.6rem;
     }
     .wc-float,
     #tag-more-menu {

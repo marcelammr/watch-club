@@ -33,12 +33,31 @@
 </a>
 {% endmacro %}
 
+{% macro menubar_link(href, label, icon, active, aria=None) %}
+<a class="app-menubar-link{% if active %} is-on{% endif %}" href="{{ href }}" title="{{ label }}" aria-label="{{ aria or label }}"{% if active %} aria-current="page"{% endif %}>
+  <span class="app-menubar-ico" aria-hidden="true">{{ px_icon(icon) }}</span>
+  <span class="app-menubar-txt">{{ label }}</span>
+  {% if active %}<span class="app-menubar-spark" aria-hidden="true">{{ px_icon('decor-sparkle') }}</span>{% endif %}
+</a>
+{% endmacro %}
+
+{% macro app_menubar_nav(request) %}
+{% set path = request.url.path %}
+<nav class="app-menubar-nav" aria-label="Destinos">
+  {{ menubar_link('/', 'Início', 'nav-home', path == '/') }}
+  {{ menubar_link('/clubes', 'Clubes', 'nav-clubs', path == '/clubes' or path.startswith('/clubs/novo'), 'Meus Clubes') }}
+  {{ menubar_link('/agenda', 'Agenda', 'nav-calendar', path == '/agenda' or path.startswith('/agenda')) }}
+  {{ menubar_link('/noticias', 'Notícias', 'nav-news', path == '/noticias' or path.startswith('/noticias')) }}
+  {{ menubar_link('/amigos', 'Amigos', 'nav-friends', path == '/amigos') }}
+</nav>
+{% endmacro %}
+
 {% macro app_sidebar(request, user=None) %}
 {% set path = request.url.path %}
 <aside class="app-sidebar" id="app-sidebar" aria-hidden="true">
   <div class="sidebar-head">
     <a class="sidebar-brand" href="/" title="Watch Club" aria-label="Watch Club">
-      <span class="sidebar-brand-mark" aria-hidden="true">{{ px_icon('window') }}</span>
+      <span class="sidebar-brand-mark" aria-hidden="true">{{ px_icon('brand-tv') }}</span>
       <span class="sidebar-brand-full">Watch Club</span>
     </a>
   </div>

@@ -191,7 +191,7 @@ def test_emoji_picker_catalog_is_local_and_restores_pixelmojis():
     assert ":pixelmojis-" in home.text
     conta = person.get("/conta")
     assert "<h2>Tag exibida</h2>" in conta.text
-    assert "<h2>Usuário</h2>" in conta.text
+    assert ">Usuário</h2>" in conta.text
     assert "Imagem de perfil" not in conta.text
     assert "account-page" in conta.text
     assert "account-avatar-frame" in conta.text

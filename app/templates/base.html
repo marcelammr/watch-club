@@ -1,5 +1,5 @@
 {% from "macros/avatar.html" import user_avatar %}
-{% from "macros/sidebar.html" import app_sidebar, hamburger %}
+{% from "macros/sidebar.html" import app_sidebar, hamburger, app_menubar_nav %}
 {% from "macros/notifications.html" import bell_popover_inner, notice_inbox_inner %}
 {% from "macros/pixel.html" import px_icon %}
 {% from "macros/player_card.html" import player_card_sheet %}
@@ -17,6 +17,47 @@
 <body class="min-h-screen font-sans text-foreground {% block body_class %}{% endblock %}">
   {% if user %}
   <div class="app-shell">
+    <header class="app-menubar">
+      <a class="app-brand" href="/" title="Watch Club" aria-label="Watch Club">
+        <span class="app-brand-tv" aria-hidden="true">{{ px_icon('brand-tv') }}</span>
+        <span class="app-brand-name">Watch Club</span>
+      </a>
+      {% block menubar_menu %}
+      {{ hamburger('app-menubar-burger') }}
+      {% endblock %}
+      {{ app_menubar_nav(request) }}
+      <div class="app-menubar-end">
+        <a class="appearance-btn" href="/u/{{ user.username }}?aba=aparencia" aria-label="Aparência" title="Aparência">{{ px_icon('palette') }}</a>
+        {% set bell_label = 'Notificações, 1 não lida' if notification_unread == 1 else ('Notificações, ' ~ notification_unread ~ ' não lidas' if notification_unread else 'Notificações') %}
+        <a class="bell-btn bell-link" href="/notificacoes" aria-label="{{ bell_label }}" title="Notificações">
+          {{ px_icon('ui-bell') }}
+          {% if notification_badge %}<span class="bell-badge">{{ notification_badge }}</span>{% endif %}
+        </a>
+        <div class="bell-menu">
+          <button type="button" class="bell-btn js-bell-toggle" aria-label="{{ bell_label }}" title="Notificações" aria-expanded="false" aria-haspopup="dialog" aria-controls="notice-inbox">
+            {{ px_icon('ui-bell') }}
+            {% if notification_badge %}<span class="bell-badge">{{ notification_badge }}</span>{% endif %}
+          </button>
+          <div id="bell-popover" class="bell-popover" hidden role="dialog" aria-label="Notificações">
+            {{ bell_popover_inner(notification_unread, header_notifications, request.url.path) }}
+          </div>
+          <div id="notice-inbox" class="notice-inbox-panel" hidden role="dialog" aria-labelledby="notice-inbox-title">
+            <div class="js-notice-inbox-inner">
+              {{ notice_inbox_inner(notification_unread, [], request.url.path) }}
+            </div>
+          </div>
+        </div>
+        <div class="account-menu">
+          <button type="button" class="account-trigger js-account-toggle" aria-expanded="false" aria-haspopup="dialog" aria-controls="account-popover" aria-label="Minha conta" title="{{ user.name }}">
+            {{ user_avatar(user, 'md') }}
+            <span class="account-label">Minha conta</span>
+          </button>
+          <div id="account-popover" class="account-popover player-card wc-theme-{{ visitor_theme|default('watchclub') }}" hidden role="dialog" aria-label="{{ user.name }}">
+            {{ player_card_sheet(user, viewer_player) }}
+          </div>
+        </div>
+      </div>
+    </header>
     {{ app_sidebar(request, user) }}
     <div class="app-main">
       <div class="app-stage">
@@ -29,40 +70,11 @@
             <span class="chrome-icon nav-icon-px">{{ px_icon('back') }}</span>
           </a>
           {% endif %}
-          {{ hamburger() }}
           <p class="page-heading">{% block page_heading %}Watch Club{% endblock %}</p>
           {% endblock %}
         </div>
-        <nav class="top-end" aria-label="Conta">
-          <a class="appearance-btn" href="/u/{{ user.username }}?aba=aparencia" aria-label="Aparência" title="Aparência">{{ px_icon('palette') }}</a>
-          {% set bell_label = 'Notificações, 1 não lida' if notification_unread == 1 else ('Notificações, ' ~ notification_unread ~ ' não lidas' if notification_unread else 'Notificações') %}
-          <a class="bell-btn bell-link" href="/notificacoes" aria-label="{{ bell_label }}" title="Notificações">
-            {{ px_icon('bell') }}
-            {% if notification_badge %}<span class="bell-badge">{{ notification_badge }}</span>{% endif %}
-          </a>
-          <div class="bell-menu">
-            <button type="button" class="bell-btn js-bell-toggle" aria-label="{{ bell_label }}" title="Notificações" aria-expanded="false" aria-haspopup="dialog" aria-controls="notice-inbox">
-              {{ px_icon('bell') }}
-              {% if notification_badge %}<span class="bell-badge">{{ notification_badge }}</span>{% endif %}
-            </button>
-            <div id="bell-popover" class="bell-popover" hidden role="dialog" aria-label="Notificações">
-              {{ bell_popover_inner(notification_unread, header_notifications, request.url.path) }}
-            </div>
-            <div id="notice-inbox" class="notice-inbox-panel" hidden role="dialog" aria-labelledby="notice-inbox-title">
-              <div class="js-notice-inbox-inner">
-                {{ notice_inbox_inner(notification_unread, [], request.url.path) }}
-              </div>
-            </div>
-          </div>
-          <div class="account-menu">
-            <button type="button" class="account-trigger js-account-toggle" aria-expanded="false" aria-haspopup="dialog" aria-controls="account-popover" aria-label="Minha conta" title="{{ user.name }}">
-              {{ user_avatar(user, 'md') }}
-              <span class="account-label">Minha conta</span>
-            </button>
-            <div id="account-popover" class="account-popover player-card wc-theme-{{ visitor_theme|default('watchclub') }}" hidden role="dialog" aria-label="{{ user.name }}">
-              {{ player_card_sheet(user, viewer_player) }}
-            </div>
-          </div>
+        <nav class="top-end" aria-label="Janela">
+          {% block top_end_extra %}{% endblock %}
         </nav>
       </header>
   {% else %}
