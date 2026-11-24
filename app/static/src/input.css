@@ -1901,6 +1901,14 @@
     width: 1.95rem;
     height: 1.95rem;
   }
+  #account-popover .wc-badge-app:not(.wc-badge-wide) {
+    padding-block: 0.24rem;
+  }
+  #account-popover .wc-badge-app:not(.wc-badge-wide) .wc-px {
+    width: 2.5rem;
+    height: 2.5rem;
+    filter: drop-shadow(1px 2px 0 color-mix(in srgb, var(--wc-border-dark, var(--wc-border)) 22%, transparent));
+  }
   .wc-badge-app-txt {
     font-family: "Jersey 15", "Work Sans", sans-serif;
     font-size: 0.88rem;
@@ -7125,13 +7133,13 @@
   .account-page .card .account-panel-title {
     color: inherit;
   }
-  .account-panel-ornament {
-    margin-left: auto;
+  .account-user-panel .account-panel-head {
+    padding-right: 3.5rem;
   }
   .account-overlap {
     position: absolute;
-    right: 0.55rem;
-    top: -0.7rem;
+    inset-inline-end: 0.65rem;
+    top: -0.65rem;
     z-index: 3;
     color: var(--wc-titlebar-fg, inherit);
     transform: rotate(-12deg);
@@ -7139,8 +7147,8 @@
     pointer-events: none;
   }
   .account-overlap .wc-px {
-    width: 1.55rem;
-    height: 1.55rem;
+    width: 2.3rem;
+    height: 2.3rem;
   }
   .wc-goofy {
     display: block;
@@ -7149,6 +7157,13 @@
     image-rendering: pixelated;
     image-rendering: crisp-edges;
     object-fit: contain;
+  }
+  .account-user-panel .account-overlap {
+    transform: rotate(7deg);
+  }
+  .account-user-panel .account-overlap .wc-goofy {
+    width: 2.75rem;
+    height: 2.75rem;
   }
   .account-save-btn .wc-goofy {
     width: 1.2rem;
