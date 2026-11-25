@@ -99,6 +99,8 @@ def test_logged_in_shell_and_clubes_page():
     assert "Nenhum dos seus clubes corresponde" in miss.text
     assert "club-cover-card" not in miss.text
     account = member.get("/conta")
+    assert 'id="account-clubs-title"' not in account.text
+    assert 'action="/clubs/join"' not in account.text
     assert "Sair da sessão" in account.text
     assert "Segurança e denúncias" in account.text
     assert "Regras da comunidade" in account.text
@@ -382,12 +384,12 @@ def test_join_and_leave_club():
     joined = guest.post("/clubs/join", data={"join_code": code, "next": "/conta"}, follow_redirects=False)
     assert joined.status_code == 303
     assert "/conta" in joined.headers["location"]
-    account = guest.get("/conta")
-    assert "Clube Extra" in account.text
+    clubs = guest.get("/clubes")
+    assert "Clube Extra" in clubs.text
 
     left = guest.post(f"/clubs/{club_id}/leave", data={"next": "/conta"}, follow_redirects=False)
     assert left.status_code == 303
-    after = guest.get("/conta")
+    after = guest.get("/clubes")
     assert "Clube Extra" not in after.text
     still = owner.get(f"/clubs/{club_id}")
     assert still.status_code == 200
@@ -1585,9 +1587,9 @@ def test_leave_confirmation_ui_does_not_block_post():
     assert 'id="leave-dialog"' in room.text
     assert 'action="/clubs/%s/leave"' % club_id in room.text
     account = owner.get("/conta")
-    assert "js-leave-open" in account.text
-    assert 'id="leave-dialog"' in account.text
-    assert f'data-leave-action="/clubs/{club_id}/leave"' in account.text
+    assert "js-leave-open" not in account.text
+    assert 'id="leave-dialog"' not in account.text
+    assert "Sair do clube" not in account.text
     assert 'type="submit">Sair do clube</button>' not in room.text.split("leave-dialog")[0]
 
 

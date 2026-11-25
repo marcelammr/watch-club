@@ -2,10 +2,14 @@
 {% from "macros/club_tag.html" import club_tag_chip %}
 {% from "macros/pixel.html" import px_icon, wc_win_controls %}
 
+{% macro desktop_icon(name, extra='') %}
+<img class="wc-badge-pixel{{ ' ' ~ extra if extra else '' }}" src="/static/icons/magical-designer-girl/{{ name }}.png" width="32" height="32" alt="" aria-hidden="true">
+{% endmacro %}
+
 {% macro player_card_sheet(person, player=None) %}
 <div class="wc-badge">
   <header class="wc-badge-titlebar">
-    <span class="wc-badge-mark" aria-hidden="true">{{ px_icon('pop-tv') }}</span>
+    {{ desktop_icon('flower', 'wc-badge-sticker') }}
     <span class="wc-badge-brand">Watch Club</span>
     {{ wc_win_controls() }}
   </header>
@@ -21,44 +25,45 @@
         {% endif %}
         <p class="wc-badge-handle muted">@{{ person.username }}</p>
       </div>
-      <span class="wc-badge-spark" aria-hidden="true">{{ px_icon('pop-sparkle') }}</span>
     </div>
     {% if player %}
     <ul class="wc-badge-stats" aria-label="Resumo da conta">
       <li>
         <span aria-hidden="true">{{ px_icon('pop-clubs') }}</span>
-        <span><b>{{ player.stats.clubs }}</b> Clubes</span>
+        <b>{{ player.stats.clubs }}</b>
+        <span class="wc-badge-stat-label">Clubes</span>
       </li>
       <li>
         <span aria-hidden="true">{{ px_icon('pop-hearts') }}</span>
-        <span><b>{{ player.stats.favorites }}</b> Favoritos</span>
+        <b>{{ player.stats.favorites }}</b>
+        <span class="wc-badge-stat-label">Favoritos</span>
       </li>
       <li>
         <span aria-hidden="true">{{ px_icon('pop-since') }}</span>
-        <span>Desde <b>{{ player.stats.member_since }}</b></span>
+        <span class="wc-badge-stat-label">Desde </span><b>{{ player.stats.member_since }}</b>
       </li>
     </ul>
     {% endif %}
     <nav class="wc-badge-dock" aria-label="Ações da conta">
       <a class="wc-badge-app" href="/u/{{ person.username }}" aria-label="Ver perfil">
-        <span class="wc-badge-app-ico" aria-hidden="true">{{ px_icon('pop-badge') }}</span>
+        {{ desktop_icon('document-03') }}
         <span class="wc-badge-app-txt">Perfil</span>
       </a>
       <a class="wc-badge-app" href="/conta" aria-label="Editar perfil">
-        <span class="wc-badge-app-ico" aria-hidden="true">{{ px_icon('pop-edit') }}</span>
+        {{ desktop_icon('notepad-01') }}
         <span class="wc-badge-app-txt">Editar</span>
       </a>
       <a class="wc-badge-app" href="/u/{{ person.username }}?aba=aparencia" aria-label="Aparência">
-        <span class="wc-badge-app-ico" aria-hidden="true">{{ px_icon('pop-look') }}</span>
+        {{ desktop_icon('eyedrop') }}
         <span class="wc-badge-app-txt">Aparência</span>
       </a>
       <a class="wc-badge-app wc-badge-wide" href="/sugestoes" aria-label="Caixinha de sugestão">
-        <span class="wc-badge-app-ico" aria-hidden="true">{{ px_icon('pop-mail') }}</span>
+        {{ desktop_icon('mail-04') }}
         <span class="wc-badge-app-txt">Sugestões</span>
       </a>
       {% if person.is_site_admin %}
       <a class="wc-badge-app wc-badge-wide" href="/admin" aria-label="Administração">
-        <span class="wc-badge-app-ico" aria-hidden="true">{{ px_icon('pop-admin') }}</span>
+        {{ desktop_icon('my-puter') }}
         <span class="wc-badge-app-txt">ADM</span>
       </a>
       {% endif %}

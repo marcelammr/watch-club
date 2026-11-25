@@ -3,7 +3,7 @@
 {% from "macros/emoji.html" import emoji_picker %}
 {% from "macros/club_tag.html" import club_tag_chip %}
 {% from "macros/image_style.html" import style_choices %}
-{% from "macros/pixel.html" import px_icon, goofy_img, wc_win_controls %}
+{% from "macros/pixel.html" import px_icon, wc_win_controls %}
 {% block title %}Configurações · Watch Club{% endblock %}
 {% block page_heading %}Configurações · Conta{% endblock %}
 {% block body_class %}account-page{% endblock %}
@@ -32,7 +32,7 @@
   <header class="account-panel-head">
     <span class="wc-titlebar-mark" aria-hidden="true">{{ px_icon('ui-user') }}</span>
     <h2 class="account-panel-title">Perfil</h2>
-    <span class="account-overlap" aria-hidden="true">{{ px_icon('decor-clapper') }}</span>
+    <img class="account-overlap" src="/static/icons/magical-designer-girl/photo-software.png" width="32" height="32" alt="">
   </header>
   <div class="account-panel-body">
   <div class="account-look-grid">
@@ -159,7 +159,7 @@
   <header class="account-panel-head">
     <span class="wc-titlebar-mark" aria-hidden="true">{{ px_icon('ui-user') }}</span>
     <h2 class="account-panel-title">Usuário</h2>
-    <span class="account-overlap" aria-hidden="true">{{ goofy_img('tv') }}</span>
+    <img class="account-overlap" src="/static/icons/magical-designer-girl/document-02.png" width="32" height="32" alt="">
   </header>
   <div class="account-panel-body">
     {% if suggestions %}
@@ -187,7 +187,10 @@
       {% if user.pending_email %}
         <p class="muted">Novo e-mail aguardando confirmação: {{ user.pending_email }}</p>
       {% endif %}
-      <button class="btn btn-primary account-save-btn" type="submit">{{ goofy_img('floppy') }} Salvar perfil</button>
+      <button class="btn btn-primary account-save-btn" type="submit">
+        <img src="/static/icons/retro-desktop/Icon_Floppy.png" width="16" height="16" alt="">
+        Salvar perfil
+      </button>
     </form>
   </div>
 </section>
@@ -294,8 +297,8 @@
 </dialog>
 
 <section class="account-group" aria-labelledby="account-security-title">
-  <h2 id="account-security-title" class="account-group-title">Conta e segurança</h2>
-  <div class="account-stack">
+  <h2 id="account-security-title" class="account-group-title account-icon-heading">{{ px_icon('shield') }} Conta e segurança</h2>
+  <div class="account-stack account-security-groups">
     <div class="account-stack-block">
       <h3 class="account-subhead">Senha</h3>
       <form class="account-compact-form" action="/conta/senha" method="post">
@@ -308,7 +311,7 @@
       </form>
     </div>
     <div class="account-stack-block{% if not blocked_users %} is-compact{% endif %}">
-      <h3 class="account-subhead">Usuários bloqueados</h3>
+      <h3 class="account-subhead account-icon-heading">{{ px_icon('ui-user') }} Usuários bloqueados</h3>
       <p class="muted account-inline-help">Desbloquear não restaura a amizade automaticamente.</p>
       {% if blocked_users %}
         <ul class="suggestion-list">
@@ -329,125 +332,82 @@
       {% else %}
         <p class="muted">Ninguém bloqueado.</p>
       {% endif %}
-    </div>
-  </div>
-</section>
-
-<section class="account-group" aria-labelledby="account-prefs-title">
-  <h2 id="account-prefs-title" class="account-group-title">Preferências</h2>
-  <div class="account-stack">
-    <div class="account-stack-block is-compact">
-      <h2 class="account-subhead">Conversas</h2>
-      <p class="muted account-inline-help">Vale para o chat dos clubes e para as conversas privadas.</p>
-      <label class="pref-switch">
-        <span class="pref-switch-row">
-          <span class="pref-switch-title">Enviar mensagens com Enter</span>
-          <span class="pref-switch-control">
-            <input
-              class="js-enter-sends"
-              type="checkbox"
-              role="switch"
-              name="enter_sends"
-              value="1"
-              aria-checked="{% if user.enter_sends %}true{% else %}false{% endif %}"
-              {% if user.enter_sends %}checked{% endif %}
-            >
-            <span class="pref-switch-ui" aria-hidden="true"></span>
+      <section class="account-preferences" aria-labelledby="account-conversations-title">
+        <h3 id="account-conversations-title" class="account-group-title">Conversas</h3>
+        <p class="muted account-inline-help">Vale para o chat dos clubes e para as conversas privadas.</p>
+        <label class="pref-switch">
+          <span class="pref-switch-row">
+            {{ px_icon('messages') }}
+            <span class="pref-switch-title">Enviar mensagens com Enter</span>
+            <span class="pref-switch-control">
+              <input
+                class="js-enter-sends"
+                type="checkbox"
+                role="switch"
+                name="enter_sends"
+                value="1"
+                aria-checked="{% if user.enter_sends %}true{% else %}false{% endif %}"
+                {% if user.enter_sends %}checked{% endif %}
+              >
+              <span class="pref-switch-ui" aria-hidden="true"></span>
+            </span>
           </span>
-        </span>
-        <span class="muted">Quando ativado, Enter envia a mensagem e Shift + Enter cria uma nova linha.</span>
-      </label>
-      <p class="muted js-enter-sends-status" hidden></p>
+          <span class="muted">Quando ativado, Enter envia a mensagem e Shift + Enter cria uma nova linha.</span>
+        </label>
+        <p class="muted js-enter-sends-status" hidden></p>
+      </section>
     </div>
   </div>
 </section>
 
-<section class="account-group" aria-labelledby="account-clubs-title">
-  <h2 id="account-clubs-title" class="account-group-title">Clubes</h2>
-  <div class="account-stack">
-    <div class="account-stack-block is-compact">
-      <h2 class="account-subhead">Entrar em um clube</h2>
-      <form class="account-join-form" action="/clubs/join" method="post">
-        <input type="hidden" name="next" value="/conta">
-        <label>Código do clube <input name="join_code" required maxlength="8" placeholder="A1B2C3D4"></label>
-        <button class="btn btn-secondary" type="submit">Entrar</button>
-      </form>
-    </div>
-    <div class="account-stack-block">
-      <h3 class="account-subhead">Seus clubes</h3>
-      {% if clubs %}
-        <ul class="club-list account-club-list">
-          {% for club in clubs %}
-            <li class="club-row">
-              <div>
-                <a href="/clubs/{{ club.id }}">{{ club.name }}</a>
-                {% if club.is_closed %}<span class="lock" title="Clube fechado">🔒</span>{% endif %}
-                <span class="muted"><a class="member-count" href="/clubs/{{ club.id }}/membros">{{ club.members|length }} participantes</a> · código {{ club.join_code }}</span>
-              </div>
-              <button
-                type="button"
-                class="btn btn-danger js-leave-open"
-                data-leave-action="/clubs/{{ club.id }}/leave"
-                data-leave-name="{{ club.name }}"
-              >Sair do clube</button>
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p class="muted">Você ainda não está em nenhum clube.</p>
-      {% endif %}
-    </div>
-  </div>
-</section>
 <section class="account-group account-community" aria-labelledby="account-community-title">
-  <h2 id="account-community-title" class="account-group-title">Segurança e comunidade</h2>
+  <header class="account-community-head">
+    <h2 id="account-community-title" class="account-group-title">Segurança e comunidade</h2>
+    <img class="account-community-art" src="/static/icons/magical-designer-girl/book-01.png" width="32" height="32" alt="">
+  </header>
   <nav class="account-community-nav" aria-label="Segurança e comunidade">
     <a class="account-community-link" href="/seguranca">
       <span aria-hidden="true">{{ px_icon('shield') }}</span>
-      Segurança e denúncias
+      <span class="account-community-label">Segurança e denúncias</span>
+      {{ px_icon('arrow-right') }}
     </a>
     <a class="account-community-link" href="/regras">
       <span aria-hidden="true">{{ px_icon('info') }}</span>
-      Regras da comunidade
+      <span class="account-community-label">Regras da comunidade</span>
+      {{ px_icon('arrow-right') }}
     </a>
   </nav>
 </section>
 <section class="account-about" id="sobre">
-  <h2 class="account-group-title">Sobre o Watch Club</h2>
-  <p class="muted">O Watch Club organiza o que o clube está assistindo. Séries e programas vêm da TVMaze. Filmes usam o TMDB.</p>
-  <p class="muted">Antes de publicar, vale ler as <a href="/regras">regras da comunidade</a>.</p>
+  <div class="account-about-story">
+    <div class="account-about-copy">
+      <h2 class="account-group-title">Sobre o Watch Club</h2>
+      <p class="muted">O Watch Club organiza o que o clube está assistindo. Séries e programas vêm da TVMaze. Filmes usam o TMDB.</p>
+      <p class="muted">Antes de publicar, vale ler as <a href="/regras">regras da comunidade</a>.</p>
+    </div>
+    <img class="account-about-art" src="/static/icons/magical-designer-girl/my-puter.png" width="32" height="32" alt="">
+  </div>
   <section class="about-credit" aria-labelledby="tmdb-credit-title">
-    <h2 id="tmdb-credit-title" class="text-lg font-semibold">TMDB</h2>
-    <p>This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
-    <p>
-      <a class="tmdb-logo-link" href="https://www.themoviedb.org" rel="noopener" target="_blank">
-        <img
-          class="tmdb-logo"
-          src="https://www.themoviedb.org/assets/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg"
-          alt="The Movie Database (TMDB)"
-          width="160"
-          height="72"
-        >
-      </a>
-    </p>
+    <a class="tmdb-logo-link" href="https://www.themoviedb.org" rel="noopener" target="_blank">
+      <img
+        class="tmdb-logo"
+        src="https://www.themoviedb.org/assets/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg"
+        alt="The Movie Database (TMDB)"
+        width="160"
+        height="72"
+      >
+    </a>
+    <div>
+      <h3 id="tmdb-credit-title" class="account-subhead">TMDB</h3>
+      <p class="muted">This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
+    </div>
   </section>
 </section>
 
 <form class="logout-form account-logout" action="/logout" method="post">
-  <button class="btn btn-danger" type="submit">Sair da sessão</button>
+  <button class="btn btn-danger" type="submit">{{ px_icon('ui-leave') }} Sair da sessão</button>
 </form>
 </div>
-<dialog class="leave-dialog" id="leave-dialog" aria-labelledby="leave-dialog-title">
-  <h2 id="leave-dialog-title">Sair do clube</h2>
-  <p>Tem certeza de que deseja sair de <strong class="js-leave-name"></strong>?</p>
-  <div class="leave-dialog-actions">
-    <button type="button" class="btn btn-ghost js-leave-cancel">Cancelar</button>
-    <form class="js-leave-form" action="/clubs/0/leave" method="post">
-      <input type="hidden" name="next" value="/conta">
-      <button class="btn btn-danger" type="submit">Sair do clube</button>
-    </form>
-  </div>
-</dialog>
 <script>
   const input = document.getElementById("username");
   const live = document.getElementById("live-suggestions");
@@ -574,25 +534,6 @@
       if (layer && input.dataset.preview) layer.src = input.dataset.preview;
     });
   });
-  (function () {
-    const dialog = document.getElementById("leave-dialog");
-    const form = dialog && dialog.querySelector(".js-leave-form");
-    const nameEl = dialog && dialog.querySelector(".js-leave-name");
-    if (!dialog || !form) return;
-    document.querySelectorAll(".js-leave-open").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        form.setAttribute("action", btn.getAttribute("data-leave-action") || form.getAttribute("action"));
-        if (nameEl) nameEl.textContent = btn.getAttribute("data-leave-name") || "";
-        dialog.showModal();
-      });
-    });
-    dialog.querySelectorAll(".js-leave-cancel").forEach((btn) => {
-      btn.addEventListener("click", () => dialog.close());
-    });
-    dialog.addEventListener("click", (event) => {
-      if (event.target === dialog) dialog.close();
-    });
-  })();
   input.addEventListener("input", () => {
     if (input.readOnly) return;
     clearTimeout(timer);
