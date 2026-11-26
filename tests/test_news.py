@@ -144,6 +144,11 @@ def test_news_page_requires_login_and_uses_general_feed():
     home = owner.get("/")
     assert "Últimas notícias" in home.text
     assert "Nova temporada ganha trailer" in home.text
+    assert 'class="home-clubs wc-retro-window"' in home.text
+    assert 'class="home-news wc-retro-window"' in home.text
+    assert home.text.count('class="wc-retro-window__body"') == 2
+    assert 'class="home-clubs-head wc-retro-titlebar"' in home.text
+    assert 'class="home-clubs-link wc-retro-btn" href="/noticias"' in home.text
     assert 'class="home-news-card"' in home.text
     assert "home-news-media" in home.text
     assert 'src="https://example.com/a.jpg"' in home.text

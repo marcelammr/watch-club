@@ -6,7 +6,7 @@
 {% if not user %}
   <section class="home-hero">
     <div class="home-hero-copy">
-      <p class="home-kicker">{{ wc_pixel_star() }} Watch Club</p>
+      <p class="home-kicker">{{ px_icon('lucide-star') }} Watch Club</p>
       <h1>Assistir juntos <span class="home-hero-break">é só o começo.</span></h1>
       <p>Crie um clube, chame os amigos e acompanhe pôsteres, temporadas e notícias num só lugar.</p>
       <a class="btn btn-primary" href="/auth/signup">Começar</a>
@@ -24,7 +24,7 @@
   <section class="home-hero">
     <div class="home-hero-copy">
       <p class="home-hello-line">Olá, {{ user.name }}!</p>
-      <p class="home-kicker">{{ wc_pixel_star() }} Watch Club</p>
+      <p class="home-kicker">{{ px_icon('lucide-star') }} Watch Club</p>
       <h1>Assistir juntos <span class="home-hero-break">é só o começo.</span></h1>
       <p>Crie um clube, chame os amigos e acompanhe pôsteres, temporadas e notícias num só lugar.</p>
     </div>
@@ -35,15 +35,16 @@
     </div>
   </section>
 
-  <section class="home-clubs" aria-labelledby="home-clubs-title">
-    <div class="home-clubs-head">
+  <section class="home-clubs wc-retro-window" aria-labelledby="home-clubs-title">
+    <header class="home-clubs-head wc-retro-titlebar">
       <h2 id="home-clubs-title" class="home-clubs-title">
         <span class="home-section-icon" aria-hidden="true">{{ wc_club_banner() }}</span>
-        Meus Clubes <span class="home-section-spark" aria-hidden="true">{{ wc_pixel_star() }}</span>
+        Meus Clubes <span class="home-section-spark" aria-hidden="true">{{ px_icon('lucide-star') }}</span>
       </h2>
-      <a class="home-clubs-link" href="/clubes">Ver todos <span class="home-clubs-arrow" aria-hidden="true">→</span></a>
-    </div>
+      <a class="home-clubs-link wc-retro-btn" href="/clubes">Ver todos <span class="home-clubs-arrow" aria-hidden="true">→</span></a>
+    </header>
 
+    <div class="wc-retro-window__body">
     {% if clubs %}
       <div class="home-clubs-frame">
         <div class="home-clubs-rail" id="home-clubs-rail" tabindex="0" role="list">
@@ -72,17 +73,19 @@
         <p class="muted"><span class="wc-kawaii-mark" aria-hidden="true">{{ px_icon('heart') }}</span> Você ainda não participa de nenhum clube. Abra Meus Clubes para criar um ou entrar com código.</p>
       </div>
     {% endif %}
+    </div>
   </section>
 
   {% if home_news %}
-  <section class="home-news" aria-labelledby="home-news-title">
-    <div class="home-clubs-head">
+  <section class="home-news wc-retro-window" aria-labelledby="home-news-title">
+    <header class="home-clubs-head wc-retro-titlebar">
       <h2 id="home-news-title" class="home-clubs-title">
         <span class="home-section-icon" aria-hidden="true">{{ px_icon('nav-news') }}</span>
-        Últimas notícias <span class="home-section-spark" aria-hidden="true">{{ wc_pixel_star() }}</span>
+        Últimas notícias <span class="home-section-spark" aria-hidden="true">{{ px_icon('lucide-star') }}</span>
       </h2>
-      <a class="home-clubs-link" href="/noticias">Ver todas <span class="home-clubs-arrow" aria-hidden="true">→</span></a>
-    </div>
+      <a class="home-clubs-link wc-retro-btn" href="/noticias">Ver todas <span class="home-clubs-arrow" aria-hidden="true">→</span></a>
+    </header>
+    <div class="wc-retro-window__body">
     <ul class="home-news-list">
       {% for item in home_news[:6] %}
         {% set when = item.published_at|news_when_short %}
@@ -141,6 +144,7 @@
         }, true);
       }
     </script>
+    </div>
   </section>
   {% endif %}
 

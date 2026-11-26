@@ -59,6 +59,7 @@ ICON_FILES = {
     "envelope": "envelope.svg",
     "heart": "heart.svg",
     "star": "star.svg",
+    "lucide-star": "lucide-star.svg",
     "pencil": "pencil.svg",
     "trash": "trash.svg",
     "menu": "menu.svg",

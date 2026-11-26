@@ -638,7 +638,7 @@
     width: var(--ui-control);
     height: var(--ui-control);
   }
-    .app-menubar .chrome-ghost {
+  .app-menubar .chrome-ghost {
     display: inline-flex;
     position: relative;
     align-items: center;
@@ -647,39 +647,39 @@
     height: 2.25rem;
     margin: 0;
     padding: 0;
-    border: 0;
-    border-radius: 999px;
-    background: transparent;
-    box-shadow: none;
+    border: 1px solid color-mix(in srgb, var(--wc-border, var(--border)) 62%, var(--wc-menubar, var(--wc-surface, var(--card))));
+    border-radius: 0.65rem;
+    background: color-mix(in srgb, var(--wc-surface, var(--card)) 68%, var(--wc-menubar, var(--background)));
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--wc-tab-active, var(--card)) 72%, transparent), 0 2px 0 color-mix(in srgb, var(--wc-border-dark, var(--border)) 22%, transparent);
     color: inherit;
     text-decoration: none;
     cursor: pointer;
   }
   .app-menubar .chrome-ghost:hover,
   .app-menubar .chrome-ghost:focus-visible {
-    background: color-mix(in srgb, var(--wc-highlight, var(--accent)) 48%, var(--wc-menubar, var(--wc-surface, var(--card))));
+    border-color: color-mix(in srgb, var(--wc-border-mid, var(--border)) 76%, var(--wc-highlight, var(--accent)));
+    background: color-mix(in srgb, var(--wc-highlight, var(--accent)) 42%, var(--wc-surface, var(--card)));
   }
   .app-menubar .chrome-ghost:focus-visible {
     outline: 2px solid var(--wc-focus, var(--btn-focus));
     outline-offset: 2px;
   }
-  .app-menubar .chrome-ghost:active {
-    transform: translateY(1px);
-  }
-  .app-menubar .chrome-ghost.appearance-btn,
-  .app-menubar .chrome-ghost.bell-btn,
-  .app-menubar .chrome-ghost.mensagens-btn {
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-  .app-menubar .chrome-ghost.appearance-btn:hover,
-  .app-menubar .chrome-ghost.bell-btn:hover,
-  .app-menubar .chrome-ghost.mensagens-btn:hover,
+  .app-menubar .chrome-ghost:active,
   .app-menubar .chrome-ghost.bell-btn[aria-expanded="true"] {
-    background: color-mix(in srgb, var(--wc-highlight, var(--accent)) 48%, var(--wc-menubar, var(--wc-surface, var(--card))));
-    transform: none;
-    box-shadow: none;
+    transform: translateY(1px);
+    border-color: color-mix(in srgb, var(--wc-border-mid, var(--border)) 82%, var(--wc-highlight, var(--accent)));
+    background: color-mix(in srgb, var(--wc-highlight, var(--accent)) 52%, var(--wc-surface, var(--card)));
+    box-shadow: inset 0 1px 2px color-mix(in srgb, var(--wc-border-dark, var(--border)) 18%, transparent);
+  }
+  .app-menubar-end .account-trigger [data-user-avatar] > span {
+    border-radius: 999px;
+    outline: 1px solid color-mix(in srgb, var(--wc-border, var(--border)) 68%, var(--wc-menubar, var(--background)));
+    outline-offset: 1px;
+    box-shadow: 0 2px 0 color-mix(in srgb, var(--wc-border-dark, var(--border)) 22%, transparent);
+  }
+  .app-menubar-end .account-trigger:hover [data-user-avatar] > span,
+  .app-menubar-end .account-trigger:focus-visible [data-user-avatar] > span {
+    outline-color: var(--wc-focus, var(--ring));
   }
   @media (max-width: 900px) {
     .app-menubar-txt,
@@ -716,6 +716,12 @@
     }
   }
   @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    .app-menubar .chrome-ghost {
+      transition: transform 110ms ease, border-color 110ms ease, background-color 110ms ease, box-shadow 110ms ease;
+    }
+    .app-menubar-end .account-trigger [data-user-avatar] > span {
+      transition: outline-color 110ms ease, box-shadow 110ms ease;
+    }
     .app-brand-tv {
       transition: transform 140ms ease;
     }
@@ -862,6 +868,7 @@
     image-rendering: crisp-edges;
     flex-shrink: 0;
   }
+  .wc-px.wc-lucide-star { image-rendering: auto; }
   .nav-icon-px .wc-px,
   .chrome-icon.nav-icon-px .wc-px {
     width: var(--ui-icon-nav);
@@ -1956,7 +1963,8 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .wc-badge-app:active,
-    .app-menubar .chrome-ghost:active {
+    .app-menubar .chrome-ghost:active,
+    .app-menubar .chrome-ghost.bell-btn[aria-expanded="true"] {
       transform: none;
     }
   }
@@ -2789,8 +2797,7 @@
   .home-section-icon .wc-px,
   .home-section-spark .wc-px { display: block; }
   .home-section-icon .wc-club-banner-svg { width: 1.25rem; height: 1.25rem; display: block; }
-  .home-section-spark .wc-pixel-star-svg { width: 1rem; height: 1rem; display: block; }
-  .home-kicker .wc-pixel-star-svg { width: 1.05rem; height: 1.05rem; margin-right: 0.3rem; flex: none; }
+  .home-kicker .wc-lucide-star { width: 1.05rem; height: 1.05rem; margin-right: 0.3rem; flex: none; }
   .home-clubs-link {
     @apply inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1 text-[0.82rem] font-medium no-underline;
     color: var(--wc-text-dark, var(--foreground));
@@ -7141,6 +7148,148 @@
   .wc-win-close:active {
     transform: translate(1px, 1px);
     box-shadow: none;
+  }
+  /* Adapted from uiCookies' Synthwave 80s UI kit: its window/button structure
+     and four-edge bevel, recolored entirely from the active Watch Club theme. */
+  .wc-retro-window {
+    --wc-retro-hilite: color-mix(in srgb, var(--wc-tab-active, var(--card)) 78%, var(--wc-surface, var(--background)));
+    --wc-retro-light: color-mix(in srgb, var(--wc-surface, var(--card)) 72%, var(--wc-highlight, var(--accent)));
+    --wc-retro-shadow: color-mix(in srgb, var(--wc-border, var(--border)) 58%, var(--wc-border-dark, var(--foreground)));
+    --wc-retro-dark: var(--wc-border-dark, var(--border));
+    --wc-retro-out: inset -1px -1px var(--wc-retro-dark), inset 1px 1px var(--wc-retro-hilite), inset -2px -2px var(--wc-retro-shadow), inset 2px 2px var(--wc-retro-light);
+    --wc-retro-in: inset -1px -1px var(--wc-retro-hilite), inset 1px 1px var(--wc-retro-dark), inset -2px -2px var(--wc-retro-light), inset 2px 2px var(--wc-retro-shadow);
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    padding: 4px;
+    border-radius: var(--wc-radius-panel, 0.85rem);
+    background: var(--wc-surface, var(--card));
+    color: var(--wc-text-dark, var(--foreground));
+    box-shadow: var(--wc-retro-out), 2px 3px 0 color-mix(in srgb, var(--wc-border-dark, var(--border)) 24%, transparent);
+  }
+  .wc-retro-titlebar {
+    display: flex;
+    min-width: 0;
+    min-height: 2.65rem;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.5rem 0.35rem 0.7rem;
+    border-bottom: 2px solid color-mix(in srgb, var(--wc-border-dark, var(--border)) 64%, var(--wc-titlebar, var(--primary)));
+    border-radius: calc(var(--wc-radius-panel, 0.85rem) - 0.25rem) calc(var(--wc-radius-panel, 0.85rem) - 0.25rem) 0 0;
+    background: var(--wc-titlebar, var(--primary));
+    color: var(--wc-titlebar-fg, var(--primary-foreground));
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--wc-tab-active, var(--card)) 58%, transparent);
+  }
+  .wc-retro-window__body {
+    min-width: 0;
+    padding: 0.9rem 0.75rem 0.75rem;
+    color: var(--wc-text-dark, var(--foreground));
+  }
+  .wc-retro-window .home-clubs-head { margin-bottom: 0; }
+  .wc-retro-titlebar .home-clubs-title,
+  .wc-retro-titlebar .home-section-icon,
+  .wc-retro-titlebar .home-section-spark {
+    color: inherit;
+  }
+  .wc-retro-btn {
+    display: inline-flex;
+    min-width: 0;
+    min-height: 1.9rem;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0.3rem 0.55rem;
+    border: 0;
+    border-radius: 2px;
+    background: var(--wc-surface, var(--card));
+    color: var(--wc-text-dark, var(--foreground));
+    box-shadow: var(--wc-retro-out);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .wc-retro-window .wc-retro-btn:hover {
+    color: var(--wc-text-dark, var(--foreground));
+    background: color-mix(in srgb, var(--wc-highlight, var(--accent)) 42%, var(--wc-surface, var(--card)));
+  }
+  .wc-retro-btn:active:not(:disabled) {
+    transform: translate(1px, 1px);
+    box-shadow: var(--wc-retro-in);
+  }
+  .wc-retro-window .wc-retro-btn:focus-visible,
+  .wc-retro-ctl:focus-visible {
+    outline: 2px dotted var(--wc-focus, var(--ring));
+    outline-offset: -4px;
+  }
+  .wc-retro-btn:disabled {
+    color: var(--wc-muted-dark, var(--muted-foreground));
+    cursor: default;
+  }
+  .wc-retro-titlebar__controls {
+    display: flex;
+    flex: none;
+    gap: 0.25rem;
+  }
+  .wc-retro-ctl {
+    position: relative;
+    display: grid;
+    width: 1.5rem;
+    height: 1.4rem;
+    flex: none;
+    place-items: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 2px;
+    background: var(--wc-surface, var(--card));
+    color: var(--wc-text-dark, var(--foreground));
+    box-shadow: var(--wc-retro-out);
+    cursor: pointer;
+  }
+  .wc-retro-ctl:active {
+    box-shadow: var(--wc-retro-in);
+  }
+  .wc-retro-ctl--min::after {
+    width: 0.55rem;
+    height: 2px;
+    align-self: end;
+    margin-bottom: 0.25rem;
+    background: currentColor;
+    content: "";
+  }
+  .wc-retro-ctl--max::after {
+    width: 0.55rem;
+    height: 0.55rem;
+    border: 1.5px solid currentColor;
+    content: "";
+  }
+  .wc-retro-ctl--close::before,
+  .wc-retro-ctl--close::after {
+    position: absolute;
+    width: 0.65rem;
+    height: 2px;
+    background: currentColor;
+    content: "";
+  }
+  .wc-retro-ctl--close::before { transform: rotate(45deg); }
+  .wc-retro-ctl--close::after { transform: rotate(-45deg); }
+  .home-clubs.wc-retro-window,
+  .home-news.wc-retro-window { padding-inline-start: var(--home-inset); }
+  @media (prefers-contrast: more) {
+    .wc-retro-window {
+      --wc-retro-shadow: var(--wc-border-dark, var(--border));
+      box-shadow: var(--wc-retro-out), 2px 3px 0 var(--wc-border-dark, var(--border));
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wc-retro-btn,
+    .wc-retro-ctl { transition: none; }
   }
   .wc-window {
     @apply mb-5 overflow-hidden;
