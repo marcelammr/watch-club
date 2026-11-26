@@ -15,20 +15,27 @@
   {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
 
   <section class="home-hero">
-    <p class="home-hello-line">Olá, {{ user.name }}!</p>
-    <p class="home-kicker">{{ px_icon('sparkle') }} Watch Club</p>
-    <h1>Assistir juntos <span class="home-hero-break">é só o começo.</span></h1>
-    <p>Crie um clube, chame os amigos e acompanhe pôsteres, temporadas e notícias num só lugar.</p>
+    <div class="home-hero-copy">
+      <p class="home-hello-line">Olá, {{ user.name }}!</p>
+      <p class="home-kicker">{{ px_icon('sparkle') }} Watch Club</p>
+      <h1>Assistir juntos <span class="home-hero-break">é só o começo.</span></h1>
+      <p>Crie um clube, chame os amigos e acompanhe pôsteres, temporadas e notícias num só lugar.</p>
+    </div>
+    <div class="home-hero-art" aria-hidden="true">
+      <span class="home-hero-art-glow"></span>
+      <span class="home-hero-art-tv">{{ px_icon('brand-tv') }}</span>
+      <span class="home-hero-art-spark home-hero-art-spark-a">{{ px_icon('decor-sparkle') }}</span>
+      <span class="home-hero-art-spark home-hero-art-spark-b">{{ px_icon('sparkle') }}</span>
+    </div>
   </section>
 
   <section class="home-clubs" aria-labelledby="home-clubs-title">
     <div class="home-clubs-head">
       <h2 id="home-clubs-title" class="home-clubs-title">
-        <a class="home-clubs-link" href="/clubes">
-          Meus Clubes
-          <span class="home-clubs-arrow" aria-hidden="true">→</span>
-        </a>
+        <span class="home-section-icon" aria-hidden="true">{{ px_icon('decor-clapper') }}</span>
+        Meus Clubes <span class="home-section-spark" aria-hidden="true">{{ px_icon('decor-sparkle') }}</span>
       </h2>
+      <a class="home-clubs-link" href="/clubes">Ver todos <span class="home-clubs-arrow" aria-hidden="true">→</span></a>
     </div>
 
     {% if clubs %}
@@ -65,11 +72,10 @@
   <section class="home-news" aria-labelledby="home-news-title">
     <div class="home-clubs-head">
       <h2 id="home-news-title" class="home-clubs-title">
-        <a class="home-clubs-link" href="/noticias">
-          Últimas notícias
-          <span class="home-clubs-arrow" aria-hidden="true">→</span>
-        </a>
+        <span class="home-section-icon" aria-hidden="true">{{ px_icon('nav-news') }}</span>
+        Últimas notícias <span class="home-section-spark" aria-hidden="true">{{ px_icon('decor-sparkle') }}</span>
       </h2>
+      <a class="home-clubs-link" href="/noticias">Ver todas <span class="home-clubs-arrow" aria-hidden="true">→</span></a>
     </div>
     <ul class="home-news-list">
       {% for item in home_news %}
@@ -80,10 +86,11 @@
             {% if thumb %}
             <span class="home-news-media">
               <img src="{{ thumb }}" alt="" onerror="this.closest('a').classList.add('is-text'); this.parentNode.remove();">
+              <span class="home-news-overlay"><strong>{{ item.title }}</strong></span>
             </span>
             {% endif %}
             <span class="home-news-copy">
-              <strong>{{ item.title }}</strong>
+              {% if not thumb %}<strong>{{ item.title }}</strong>{% endif %}
               <span class="home-news-meta">
                 {% if item.source %}{{ item.source }}{% endif %}
                 {% if when %}{% if item.source %} · {% endif %}{{ when }}{% endif %}
