@@ -153,6 +153,8 @@ def test_news_page_requires_login_and_uses_general_feed():
     assert "26 out" in home.text
     assert 'href="/noticias"' in home.text
     assert "Notícia só do clube" not in home.text
+    assert "Filme chega ao streaming" not in home.text
+    assert "Anime anuncia filme" not in home.text
 
 
 def test_news_search_and_kind_filters():
@@ -361,6 +363,20 @@ def test_home_news_prefers_images_without_dropping_variety():
     assert featured["url"] == "https://example.com/2"
     assert [item["url"] for item in secondary] == ["https://example.com/1", "https://example.com/3", "https://example.com/4"]
     assert rest == []
+    image_only = pick_home_news(items, 3, require_image=True)
+    assert [item["url"] for item in image_only] == [
+        "https://example.com/2",
+        "https://example.com/3",
+    ]
+    invalid_images = [
+        {"title": "URL sem host", "url": "https://example.com/bad", "image_url": "https://"},
+        {"title": "URL malformada", "url": "https://example.com/bad-ipv6", "image_url": "https://["},
+        {"title": "Não é URL de imagem", "url": "https://example.com/nope", "image_url": "not-an-image"},
+        {"title": "Imagem utilizável", "url": "https://example.com/good", "image_url": "https://cdn.example/good.jpg"},
+    ]
+    assert [item["url"] for item in pick_home_news(invalid_images, 3, require_image=True)] == [
+        "https://example.com/good"
+    ]
 
 
 def _urls_from_cells(cells: list[dict]) -> list[str]:
@@ -490,11 +506,10 @@ def test_news_text_variant_and_image_priority_in_pages():
     home_text = home.text.find("Texto recente sem foto da série")
     assert home_photo != -1
     assert home_anime != -1
-    assert home_text != -1
-    assert home_photo < home_text
-    assert home_anime < home_text
+    assert home_text == -1
+    assert "home-news-card is-text" not in home.text
+    assert home_photo < home_anime
     assert 'src="https://example.com/photo.jpg"' in home.text
-    assert "home-news-card is-text" in home.text
     fav = owner.get("/noticias?tipo=favoritos")
     assert "Meus favoritos" in fav.text
     assert "Favorite programas no seu perfil" in fav.text

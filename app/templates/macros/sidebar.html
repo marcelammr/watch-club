@@ -1,4 +1,4 @@
-{% from "macros/pixel.html" import px_icon %}
+{% from "macros/pixel.html" import px_icon, wc_club_banner %}
 
 {% macro club_menu_toggle() %}
 <button type="button" class="sidebar-toggle club-nav-toggle js-club-nav-toggle" aria-label="Abrir ou fechar menu do clube" aria-expanded="false" aria-controls="club-nav">
@@ -16,7 +16,7 @@
 
 {% macro menubar_link(href, label, icon, active, aria=None) %}
 <a class="app-menubar-link{% if active %} is-on{% endif %}" href="{{ href }}" title="{{ label }}" aria-label="{{ aria or label }}"{% if active %} aria-current="page"{% endif %}>
-  <span class="app-menubar-ico" aria-hidden="true">{{ px_icon(icon) }}</span>
+  <span class="app-menubar-ico" aria-hidden="true">{% if icon == 'nav-clubs' %}{{ wc_club_banner() }}{% else %}{{ px_icon(icon) }}{% endif %}</span>
   <span class="app-menubar-txt">{{ label }}</span>
   {% if active %}<span class="app-menubar-spark" aria-hidden="true">{{ px_icon('decor-sparkle') }}</span>{% endif %}
 </a>

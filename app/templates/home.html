@@ -1,14 +1,21 @@
 {% extends "base.html" %}
-{% from "macros/pixel.html" import px_icon %}
+{% from "macros/pixel.html" import px_icon, wc_club_banner, wc_pixel_star %}
 {% block body_class %}home{% endblock %}
 {% block page_heading %}Início{% endblock %}
 {% block content %}
 {% if not user %}
   <section class="home-hero">
-    <p class="home-kicker">{{ px_icon('sparkle') }} Watch Club</p>
-    <h1>Assistir juntos <span class="home-hero-break">é só o começo.</span></h1>
-    <p>Crie um clube, chame os amigos e acompanhe pôsteres, temporadas e notícias num só lugar.</p>
-    <a class="btn btn-primary" href="/auth/signup">Começar</a>
+    <div class="home-hero-copy">
+      <p class="home-kicker">{{ wc_pixel_star() }} Watch Club</p>
+      <h1>Assistir juntos <span class="home-hero-break">é só o começo.</span></h1>
+      <p>Crie um clube, chame os amigos e acompanhe pôsteres, temporadas e notícias num só lugar.</p>
+      <a class="btn btn-primary" href="/auth/signup">Começar</a>
+    </div>
+    <div class="home-hero-art" aria-hidden="true">
+      <img class="home-hero-art-image" src="/static/images/home-kawaii-hero.png" alt="">
+      <span class="home-hero-art-spark home-hero-art-spark-a">{{ wc_pixel_star() }}</span>
+      <span class="home-hero-art-spark home-hero-art-spark-b">{{ wc_pixel_star() }}</span>
+    </div>
   </section>
 {% else %}
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
@@ -17,23 +24,22 @@
   <section class="home-hero">
     <div class="home-hero-copy">
       <p class="home-hello-line">Olá, {{ user.name }}!</p>
-      <p class="home-kicker">{{ px_icon('sparkle') }} Watch Club</p>
+      <p class="home-kicker">{{ wc_pixel_star() }} Watch Club</p>
       <h1>Assistir juntos <span class="home-hero-break">é só o começo.</span></h1>
       <p>Crie um clube, chame os amigos e acompanhe pôsteres, temporadas e notícias num só lugar.</p>
     </div>
     <div class="home-hero-art" aria-hidden="true">
-      <span class="home-hero-art-glow"></span>
-      <span class="home-hero-art-tv">{{ px_icon('brand-tv') }}</span>
-      <span class="home-hero-art-spark home-hero-art-spark-a">{{ px_icon('decor-sparkle') }}</span>
-      <span class="home-hero-art-spark home-hero-art-spark-b">{{ px_icon('sparkle') }}</span>
+      <img class="home-hero-art-image" src="/static/images/home-kawaii-hero.png" alt="">
+      <span class="home-hero-art-spark home-hero-art-spark-a">{{ wc_pixel_star() }}</span>
+      <span class="home-hero-art-spark home-hero-art-spark-b">{{ wc_pixel_star() }}</span>
     </div>
   </section>
 
   <section class="home-clubs" aria-labelledby="home-clubs-title">
     <div class="home-clubs-head">
       <h2 id="home-clubs-title" class="home-clubs-title">
-        <span class="home-section-icon" aria-hidden="true">{{ px_icon('decor-clapper') }}</span>
-        Meus Clubes <span class="home-section-spark" aria-hidden="true">{{ px_icon('decor-sparkle') }}</span>
+        <span class="home-section-icon" aria-hidden="true">{{ wc_club_banner() }}</span>
+        Meus Clubes <span class="home-section-spark" aria-hidden="true">{{ wc_pixel_star() }}</span>
       </h2>
       <a class="home-clubs-link" href="/clubes">Ver todos <span class="home-clubs-arrow" aria-hidden="true">→</span></a>
     </div>
@@ -73,33 +79,68 @@
     <div class="home-clubs-head">
       <h2 id="home-news-title" class="home-clubs-title">
         <span class="home-section-icon" aria-hidden="true">{{ px_icon('nav-news') }}</span>
-        Últimas notícias <span class="home-section-spark" aria-hidden="true">{{ px_icon('decor-sparkle') }}</span>
+        Últimas notícias <span class="home-section-spark" aria-hidden="true">{{ wc_pixel_star() }}</span>
       </h2>
       <a class="home-clubs-link" href="/noticias">Ver todas <span class="home-clubs-arrow" aria-hidden="true">→</span></a>
     </div>
     <ul class="home-news-list">
-      {% for item in home_news %}
+      {% for item in home_news[:6] %}
         {% set when = item.published_at|news_when_short %}
         {% set thumb = item.image_url %}
         <li>
-          <a class="home-news-card{% if not thumb %} is-text{% endif %}" href="{{ item.url }}" rel="noopener" target="_blank">
-            {% if thumb %}
+          <a class="home-news-card" href="{{ item.url }}" rel="noopener" target="_blank">
             <span class="home-news-media">
-              <img src="{{ thumb }}" alt="" onerror="this.closest('a').classList.add('is-text'); this.parentNode.remove();">
-              <span class="home-news-overlay"><strong>{{ item.title }}</strong></span>
-            </span>
-            {% endif %}
-            <span class="home-news-copy">
-              {% if not thumb %}<strong>{{ item.title }}</strong>{% endif %}
-              <span class="home-news-meta">
-                {% if item.source %}{{ item.source }}{% endif %}
-                {% if when %}{% if item.source %} · {% endif %}{{ when }}{% endif %}
+              <img src="{{ thumb }}" alt="">
+              <span class="home-news-overlay">
+                <strong>{{ item.title }}</strong>
+                <span class="home-news-meta">
+                  {% if item.source %}{{ item.source }}{% endif %}
+                  {% if when %}{% if item.source %} · {% endif %}{{ when }}{% endif %}
+                </span>
               </span>
             </span>
           </a>
         </li>
       {% endfor %}
     </ul>
+    {% if home_news|length > 6 %}
+    <template id="home-news-candidates">
+      {% for item in home_news[6:] %}
+        {% set candidate_when = item.published_at|news_when_short %}
+        <li>
+          <a class="home-news-card" href="{{ item.url }}" rel="noopener" target="_blank">
+            <span class="home-news-media">
+              <img src="{{ item.image_url }}" alt="">
+              <span class="home-news-overlay">
+                <strong>{{ item.title }}</strong>
+                <span class="home-news-meta">
+                  {% if item.source %}{{ item.source }}{% endif %}
+                  {% if candidate_when %}{% if item.source %} · {% endif %}{{ candidate_when }}{% endif %}
+                </span>
+              </span>
+            </span>
+          </a>
+        </li>
+      {% endfor %}
+    </template>
+    {% endif %}
+    <script>
+      const newsList = document.querySelector(".home-news-list");
+      const newsCandidates = document.getElementById("home-news-candidates");
+      if (newsList) {
+        newsList.addEventListener("error", (event) => {
+          const image = event.target;
+          if (!(image instanceof HTMLImageElement) || !image.matches(".home-news-media img")) return;
+          image.closest("li")?.remove();
+          const next = newsCandidates?.content.firstElementChild;
+          if (next) {
+            newsList.appendChild(next);
+          } else if (!newsList.children.length) {
+            newsList.closest(".home-news")?.remove();
+          }
+        }, true);
+      }
+    </script>
   </section>
   {% endif %}
 

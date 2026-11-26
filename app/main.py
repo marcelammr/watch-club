@@ -68,7 +68,6 @@ from app.avatars import (
 from app.chat_time import chat_clock, chat_day_key, chat_day_label
 from app.catalog import (
     CONTENT_KINDS,
-    HOME_NEWS_LIMIT,
     NEWS_FAVORITES_TIPO,
     NEWS_FEED_FILTERS,
     NEWS_FEED_KIND_MAP,
@@ -860,7 +859,9 @@ def home(request: Request):
         home_news = []
         if user:
             refresh_feed_news(db)
-            home_news = pick_home_news(list_feed_news(db, limit=NEWS_PAGE_LIMIT), HOME_NEWS_LIMIT)
+            home_news = pick_home_news(
+                list_feed_news(db, limit=NEWS_PAGE_LIMIT), NEWS_PAGE_LIMIT, require_image=True
+            )
         return templates.TemplateResponse(
             request,
             "home.html",

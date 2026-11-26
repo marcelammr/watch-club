@@ -4,6 +4,7 @@ import asyncio
 import json
 import secrets
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit
 
 from fastapi import HTTPException
 from sqlalchemy import delete, func, or_, select
@@ -595,9 +596,21 @@ def news_has_image(item) -> bool:
     return bool((news_service._field(item, "image_url") or "").strip())
 
 
-def pick_home_news(items: list, limit: int = HOME_NEWS_LIMIT) -> list:
+def news_has_usable_image(item) -> bool:
+    image = news_service._usable_image_url(news_service._field(item, "image_url"))
+    if not image:
+        return False
+    try:
+        return bool(urlsplit(image).hostname)
+    except ValueError:
+        return False
+
+
+def pick_home_news(items: list, limit: int = HOME_NEWS_LIMIT, require_image: bool = False) -> list:
     if limit < 1:
         limit = HOME_NEWS_LIMIT
+    if require_image:
+        return [item for item in items if news_has_usable_image(item)][:limit]
     with_image = [item for item in items if news_has_image(item)]
     without = [item for item in items if not news_has_image(item)]
     picked = with_image[:limit]

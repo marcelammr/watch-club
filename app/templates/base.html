@@ -1,7 +1,7 @@
 {% from "macros/avatar.html" import user_avatar %}
 {% from "macros/sidebar.html" import app_menubar_nav %}
 {% from "macros/notifications.html" import bell_popover_inner, notice_inbox_inner %}
-{% from "macros/pixel.html" import px_icon %}
+{% from "macros/pixel.html" import px_icon, wc_brand_tv %}
 {% from "macros/player_card.html" import player_card_sheet %}
 <!DOCTYPE html>
 <html lang="pt-BR" class="dark wc-theme-{{ visitor_theme|default('watchclub') }} {{ wallpaper_class(visitor_wallpaper|default('grid')) }}" dir="ltr"{% set paper_style = wallpaper_style(visitor_wallpaper|default('grid')) %}{% if paper_style %} style="{{ paper_style }}"{% endif %}{% if user %} data-enter-sends="{% if user.enter_sends %}1{% else %}0{% endif %}"{% endif %}>
@@ -19,7 +19,7 @@
   <div class="app-shell">
     <header class="app-menubar">
       <a class="app-brand" href="/" title="Watch Club" aria-label="Watch Club">
-        <span class="app-brand-tv" aria-hidden="true">{{ px_icon('brand-tv') }}</span>
+        {{ wc_brand_tv('app-brand-tv') }}
         <span class="app-brand-name">Watch Club</span>
       </a>
       {{ app_menubar_nav(request) }}
