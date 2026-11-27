@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% from "macros/pixel.html" import px_icon, wc_club_banner, wc_pixel_star %}
+{% from "macros/window.html" import wc_retro_window_controls %}
 {% block body_class %}home{% endblock %}
 {% block page_heading %}Início{% endblock %}
+{% block top_end_extra %}{{ wc_retro_window_controls() }}{% endblock %}
 {% block content %}
 {% if not user %}
   <section class="home-hero">

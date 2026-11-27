@@ -521,8 +521,8 @@
     color: var(--wc-text-dark, var(--foreground));
     background: var(--wc-menubar, var(--wc-surface, var(--card)));
     border: 1px solid color-mix(in srgb, var(--wc-border-dark, var(--border)) 54%, var(--wc-border, var(--border)));
-    box-shadow: 0 4px 10px color-mix(in srgb, var(--wc-border-dark, var(--border)) 17%, transparent);
-    border-radius: 16px;
+    box-shadow: var(--wc-retro-out), 2px 3px 0 color-mix(in srgb, var(--wc-border-dark, var(--border)) 24%, transparent);
+    border-radius: var(--wc-retro-radius, 0.75rem);
   }
   .app-brand {
     display: inline-flex;
@@ -544,7 +544,12 @@
     flex-shrink: 0;
     object-fit: contain;
   }
-  .wc-brand-tv-svg { color: var(--wc-accent, var(--primary)); }
+  .wc-brand-tv-svg {
+    color: var(--wc-border-dark, var(--foreground));
+    fill: none;
+    stroke: currentColor;
+  }
+  .app-brand-tv { translate: 0 -2px; }
   .app-brand-spark {
     display: inline-flex;
     flex-shrink: 0;
@@ -582,18 +587,23 @@
     gap: 0.32rem;
     flex-shrink: 0;
     margin: 0;
+    min-height: 2.25rem;
     padding: 0.42rem 0.72rem;
     color: inherit;
     text-decoration: none;
-    border: 1px solid transparent;
-    border-radius: 999px;
-    background: transparent;
-    box-shadow: none;
+    border: 1px solid color-mix(in srgb, var(--wc-border-dark, var(--border)) 32%, var(--wc-border, var(--border)));
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--wc-tab, var(--wc-surface, var(--card))) 48%, var(--wc-menubar, var(--wc-surface, var(--card))));
+    box-shadow: var(--wc-retro-out);
   }
   .app-menubar-link:hover,
   .app-menubar-link:focus-visible {
     color: inherit;
     background: color-mix(in srgb, var(--wc-highlight, var(--accent)) 50%, var(--wc-menubar, var(--wc-surface, var(--card))));
+  }
+  .app-menubar-link:active {
+    transform: translate(1px, 1px);
+    box-shadow: var(--wc-retro-in);
   }
   .app-menubar-link:focus-visible {
     outline: 2px solid var(--wc-focus, var(--btn-focus));
@@ -603,10 +613,9 @@
     background: var(--wc-tab-active, var(--wc-surface, var(--card)));
     color: var(--wc-text-dark, var(--foreground));
     border-color: color-mix(in srgb, var(--wc-border-dark, var(--border)) 24%, var(--wc-border, var(--border)));
-    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--wc-tab-active, var(--card)) 72%, transparent), 0 1px 3px color-mix(in srgb, var(--wc-border-dark, var(--border)) 15%, transparent);
+    box-shadow: var(--wc-retro-in);
   }
-  .app-menubar-ico,
-  .app-menubar-spark {
+  .app-menubar-ico {
     display: inline-flex;
     flex-shrink: 0;
   }
@@ -615,10 +624,6 @@
     height: 1.05rem;
   }
   .app-menubar-ico .wc-club-banner-svg { width: 1.05rem; height: 1.05rem; display: block; }
-  .app-menubar-spark .wc-px {
-    width: 0.72rem;
-    height: 0.72rem;
-  }
   .app-menubar-txt {
     font-family: "Jersey 15", Hero, "Work Sans", ui-sans-serif, system-ui, sans-serif;
     font-size: 1.05rem;
@@ -683,9 +688,6 @@
   }
   @media (max-width: 900px) {
     .app-menubar-txt,
-    .app-menubar-spark {
-      display: none;
-    }
     .app-menubar-link {
       padding: 0.28rem;
     }
@@ -920,6 +922,7 @@
   .top-end {
     @apply flex items-center gap-3;
   }
+  .top-end { gap: 1rem; }
   .page-heading {
     @apply m-0 min-w-0 truncate font-pixel font-normal;
     font-size: var(--ui-heading);
@@ -2400,7 +2403,7 @@
     border: 2px solid var(--wc-border-dark, #0b4f87);
     background: var(--wc-window-light, #fff8fc);
     box-shadow: 1px 1px 0 var(--wc-border-dark, #0b4f87);
-    border-radius: 2px;
+    border-radius: 5px;
   }
   .check input[type="radio"]::before {
     border-radius: 50%;
@@ -2701,14 +2704,50 @@
   .home {
     --home-inset: 0.25rem;
   }
+  .home .app-main {
+    padding: 0.7rem clamp(1.1rem, 2.8vw, 2.55rem) 1.05rem;
+  }
+  .home .page-heading {
+    font-size: clamp(1.2rem, 1.5vw, 1.42rem);
+    font-weight: 600;
+    line-height: 1.1;
+  }
   .home .app-stage > main {
     @apply w-full min-w-0 overflow-x-clip pb-9 pt-3;
   }
   .home .app-stage {
+    position: relative;
+    isolation: isolate;
     border-width: 1px;
-    border-color: color-mix(in srgb, var(--wc-border-dark, var(--border)) 62%, var(--wc-border, var(--border)));
-    box-shadow: 0 5px 14px color-mix(in srgb, var(--wc-border-dark, var(--border)) 14%, transparent);
+    border-color: color-mix(in srgb, var(--wc-border-dark, var(--border)) 80%, var(--wc-border, var(--border)));
+    border-radius: 0.52rem;
+    box-shadow:
+      var(--wc-retro-out),
+      0 0 0 1px color-mix(in srgb, var(--wc-border-dark, var(--border)) 40%, transparent),
+      2px 3px 0 color-mix(in srgb, var(--wc-border-dark, var(--border)) 34%, transparent),
+      0 8px 18px color-mix(in srgb, var(--wc-border-dark, var(--border)) 18%, transparent);
   }
+  .home .app-stage::before {
+    position: absolute;
+    z-index: 10;
+    inset: 4px;
+    border: 1px solid color-mix(in srgb, var(--wc-retro-light) 68%, var(--wc-border, var(--border)));
+    border-radius: 0.36rem;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wc-retro-shadow) 50%, transparent);
+    content: "";
+    pointer-events: none;
+  }
+  .home .top {
+    min-height: 3rem;
+    padding-block: 0.32rem;
+    border-bottom-width: 2px;
+    border-bottom-color: color-mix(in srgb, var(--wc-border-dark, var(--border)) 72%, var(--wc-titlebar, var(--primary)));
+    border-radius: 0.42rem 0.42rem 0 0;
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--wc-tab-active, var(--card)) 62%, transparent),
+      inset 0 -1px 0 color-mix(in srgb, var(--wc-retro-shadow) 46%, transparent);
+  }
+  .home .top-end { gap: 0.3rem; }
   .home-hero {
     @apply relative grid min-h-[13rem] grid-cols-[minmax(0,1.35fr)_minmax(12rem,0.65fr)] items-center gap-5 overflow-hidden rounded-[1.15rem] border px-6 py-5 text-left;
     padding-inline: clamp(1rem, 3vw, 2rem);
@@ -2829,20 +2868,21 @@
     -webkit-overflow-scrolling: touch;
   }
   .home-club-card {
-    @apply relative z-[1] flex w-[7.75rem] shrink-0 flex-col gap-1.5 rounded-xl border p-1.5;
+    @apply relative z-[1] flex w-[7.75rem] shrink-0 flex-col gap-1.5;
     color: var(--wc-text-dark, var(--foreground));
-    border-color: color-mix(in srgb, var(--wc-accent, var(--primary)) 24%, var(--wc-border-dark, var(--border)));
-    background: color-mix(in srgb, var(--wc-surface, var(--card)) 90%, var(--wc-highlight, var(--accent)));
-    box-shadow: 0 1px 4px color-mix(in srgb, var(--wc-border-dark, var(--border)) 10%, transparent);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
     scroll-snap-align: start;
     text-decoration: none;
     transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
   }
   .home-club-cover {
     @apply block aspect-square overflow-hidden;
-    border: 2px solid color-mix(in srgb, var(--wc-accent, var(--primary)) 36%, var(--wc-surface, var(--card)));
-    border-radius: 9px;
-    box-shadow: 0 1px 3px color-mix(in srgb, var(--wc-border-dark, var(--border)) 10%, transparent);
+    border: 0;
+    border-radius: 7px;
+    box-shadow: none;
   }
   .home-club-cover img {
     @apply block h-full w-full object-cover object-center;
@@ -2852,8 +2892,8 @@
   }
   .home-club-card:focus-visible {
     outline: 2px solid var(--btn-focus);
-    outline-offset: 4px;
-    border-radius: 16px;
+    outline-offset: 3px;
+    border-radius: 7px;
   }
   .home-club-card:hover strong,
   .home-club-card:focus-visible strong {
@@ -2861,8 +2901,8 @@
   }
   .home-club-card:hover,
   .home-club-card:focus-visible {
-    background: color-mix(in srgb, var(--wc-surface, var(--card)) 78%, var(--wc-highlight, var(--accent)));
-    box-shadow: 0 3px 8px color-mix(in srgb, var(--wc-border-dark, var(--border)) 15%, transparent);
+    background: transparent;
+    box-shadow: none;
   }
   @media (hover: hover) and (prefers-reduced-motion: no-preference) {
     .home-club-card:hover { transform: translateY(-2px); }
@@ -7151,18 +7191,35 @@
   }
   /* Adapted from uiCookies' Synthwave 80s UI kit: its window/button structure
      and four-edge bevel, recolored entirely from the active Watch Club theme. */
-  .wc-retro-window {
+  .wc-retro-window,
+  .app-menubar,
+  .home .app-stage {
     --wc-retro-hilite: color-mix(in srgb, var(--wc-tab-active, var(--card)) 78%, var(--wc-surface, var(--background)));
     --wc-retro-light: color-mix(in srgb, var(--wc-surface, var(--card)) 72%, var(--wc-highlight, var(--accent)));
     --wc-retro-shadow: color-mix(in srgb, var(--wc-border, var(--border)) 58%, var(--wc-border-dark, var(--foreground)));
     --wc-retro-dark: var(--wc-border-dark, var(--border));
     --wc-retro-out: inset -1px -1px var(--wc-retro-dark), inset 1px 1px var(--wc-retro-hilite), inset -2px -2px var(--wc-retro-shadow), inset 2px 2px var(--wc-retro-light);
     --wc-retro-in: inset -1px -1px var(--wc-retro-hilite), inset 1px 1px var(--wc-retro-dark), inset -2px -2px var(--wc-retro-light), inset 2px 2px var(--wc-retro-shadow);
+    --wc-retro-radius: 0.62rem;
+  }
+  .app-menubar {
+    box-shadow: var(--wc-retro-out), 2px 3px 0 color-mix(in srgb, var(--wc-border-dark, var(--border)) 24%, transparent);
+  }
+  .home .app-stage {
+    border: 1px solid color-mix(in srgb, var(--wc-border-dark, var(--border)) 80%, var(--wc-border, var(--border)));
+    border-radius: 0.52rem;
+    box-shadow:
+      var(--wc-retro-out),
+      0 0 0 1px color-mix(in srgb, var(--wc-border-dark, var(--border)) 40%, transparent),
+      2px 3px 0 color-mix(in srgb, var(--wc-border-dark, var(--border)) 34%, transparent),
+      0 8px 18px color-mix(in srgb, var(--wc-border-dark, var(--border)) 18%, transparent);
+  }
+  .wc-retro-window {
     display: flex;
     min-width: 0;
     flex-direction: column;
     padding: 4px;
-    border-radius: var(--wc-radius-panel, 0.85rem);
+    border-radius: var(--wc-retro-radius, 0.62rem);
     background: var(--wc-surface, var(--card));
     color: var(--wc-text-dark, var(--foreground));
     box-shadow: var(--wc-retro-out), 2px 3px 0 color-mix(in srgb, var(--wc-border-dark, var(--border)) 24%, transparent);
@@ -7175,7 +7232,7 @@
     gap: 0.5rem;
     padding: 0.35rem 0.5rem 0.35rem 0.7rem;
     border-bottom: 2px solid color-mix(in srgb, var(--wc-border-dark, var(--border)) 64%, var(--wc-titlebar, var(--primary)));
-    border-radius: calc(var(--wc-radius-panel, 0.85rem) - 0.25rem) calc(var(--wc-radius-panel, 0.85rem) - 0.25rem) 0 0;
+    border-radius: calc(var(--wc-retro-radius, 0.62rem) - 0.18rem) calc(var(--wc-retro-radius, 0.62rem) - 0.18rem) 0 0;
     background: var(--wc-titlebar, var(--primary));
     color: var(--wc-titlebar-fg, var(--primary-foreground));
     box-shadow: inset 0 1px 0 color-mix(in srgb, var(--wc-tab-active, var(--card)) 58%, transparent);
@@ -7201,8 +7258,8 @@
     gap: 0.35rem;
     margin: 0;
     padding: 0.3rem 0.55rem;
-    border: 0;
-    border-radius: 2px;
+    border: 1px solid color-mix(in srgb, var(--wc-border-dark, var(--border)) 28%, var(--wc-border, var(--border)));
+    border-radius: 5px;
     background: var(--wc-surface, var(--card));
     color: var(--wc-text-dark, var(--foreground));
     box-shadow: var(--wc-retro-out);
@@ -7233,56 +7290,65 @@
   }
   .wc-retro-titlebar__controls {
     display: flex;
+    align-items: center;
     flex: none;
-    gap: 0.25rem;
+    gap: 0.3rem;
   }
   .wc-retro-ctl {
-    position: relative;
     display: grid;
-    width: 1.5rem;
-    height: 1.4rem;
+    width: 1.85rem;
+    height: 1.75rem;
     flex: none;
     place-items: center;
     margin: 0;
     padding: 0;
-    border: 0;
-    border-radius: 2px;
+    border: 1px solid color-mix(in srgb, var(--wc-border-dark, var(--border)) 30%, var(--wc-border, var(--border)));
+    border-radius: 3px;
     background: var(--wc-surface, var(--card));
     color: var(--wc-text-dark, var(--foreground));
     box-shadow: var(--wc-retro-out);
-    cursor: pointer;
+    cursor: default;
+  }
+  .wc-retro-ctl:hover {
+    background: color-mix(in srgb, var(--wc-highlight, var(--accent)) 42%, var(--wc-surface, var(--card)));
+  }
+  .wc-retro-ctl--close {
+    background: color-mix(in srgb, var(--destructive) 24%, var(--wc-surface, var(--card)));
+    color: var(--wc-text-dark, var(--foreground));
+  }
+  .wc-retro-ctl--close:hover {
+    background: color-mix(in srgb, var(--destructive) 38%, var(--wc-surface, var(--card)));
+  }
+  .wc-retro-glyph {
+    display: block;
+    max-width: 0.8rem;
+    max-height: 0.8rem;
+    flex: none;
   }
   .wc-retro-ctl:active {
+    transform: translate(1px, 1px);
     box-shadow: var(--wc-retro-in);
   }
-  .wc-retro-ctl--min::after {
-    width: 0.55rem;
-    height: 2px;
-    align-self: end;
-    margin-bottom: 0.25rem;
-    background: currentColor;
-    content: "";
+  .home .top .wc-retro-titlebar__controls { margin-left: auto; gap: 0.3rem; }
+  .home .top .wc-retro-ctl {
+    width: 2rem;
+    height: 1.85rem;
   }
-  .wc-retro-ctl--max::after {
-    width: 0.55rem;
-    height: 0.55rem;
-    border: 1.5px solid currentColor;
-    content: "";
+  @media (max-width: 720px) {
+    .home .app-main { padding: 0.55rem 0.72rem 0.7rem; }
+    .home .app-stage::before { inset: 3px; }
+    .home .top .wc-retro-titlebar__controls { gap: 0.2rem; }
+    .home .top .wc-retro-ctl { width: 1.75rem; height: 1.65rem; }
   }
-  .wc-retro-ctl--close::before,
-  .wc-retro-ctl--close::after {
-    position: absolute;
-    width: 0.65rem;
-    height: 2px;
-    background: currentColor;
-    content: "";
+  @media (prefers-reduced-motion: reduce) {
+    .wc-retro-ctl:active { transform: none; }
   }
-  .wc-retro-ctl--close::before { transform: rotate(45deg); }
-  .wc-retro-ctl--close::after { transform: rotate(-45deg); }
   .home-clubs.wc-retro-window,
   .home-news.wc-retro-window { padding-inline-start: var(--home-inset); }
   @media (prefers-contrast: more) {
-    .wc-retro-window {
+    .wc-retro-window,
+    .app-menubar,
+    .home .app-stage {
       --wc-retro-shadow: var(--wc-border-dark, var(--border));
       box-shadow: var(--wc-retro-out), 2px 3px 0 var(--wc-border-dark, var(--border));
     }
@@ -7290,6 +7356,256 @@
   @media (prefers-reduced-motion: reduce) {
     .wc-retro-btn,
     .wc-retro-ctl { transition: none; }
+  }
+  /* Shared stepped frame: integer CSS-pixel cuts keep the corners crisp. */
+  .wc-retro-window,
+  .app-menubar,
+  .home .app-stage,
+  .home .home-hero,
+  .app-menubar-link,
+  .app-menubar-end .mensagens-btn,
+  .app-menubar-end .appearance-btn,
+  .app-menubar-end .bell-btn,
+  .wc-retro-btn,
+  .wc-retro-ctl {
+    --wc-pixel-outline: var(--wc-border-dark, var(--border));
+    --wc-pixel-inner: color-mix(in srgb, var(--wc-surface, var(--card)) 88%, var(--wc-border, var(--border)) 12%);
+    --wc-pixel-highlight: color-mix(in srgb, var(--wc-tab-active, var(--card)) 84%, var(--wc-surface, var(--card)));
+    --wc-pixel-shadow: color-mix(in srgb, var(--wc-border-dark, var(--border)) 38%, var(--wc-border, var(--border)) 62%);
+    --wc-pixel-shape: polygon(
+      0 var(--wc-pixel-cut), var(--wc-pixel-step) var(--wc-pixel-cut),
+      var(--wc-pixel-step) var(--wc-pixel-inset), var(--wc-pixel-inset) var(--wc-pixel-inset),
+      var(--wc-pixel-inset) var(--wc-pixel-step), var(--wc-pixel-cut) var(--wc-pixel-step),
+      var(--wc-pixel-cut) 0, calc(100% - var(--wc-pixel-cut)) 0,
+      calc(100% - var(--wc-pixel-cut)) var(--wc-pixel-step), calc(100% - var(--wc-pixel-inset)) var(--wc-pixel-step),
+      calc(100% - var(--wc-pixel-inset)) var(--wc-pixel-inset), calc(100% - var(--wc-pixel-step)) var(--wc-pixel-inset),
+      calc(100% - var(--wc-pixel-step)) var(--wc-pixel-cut), 100% var(--wc-pixel-cut),
+      100% calc(100% - var(--wc-pixel-cut)), calc(100% - var(--wc-pixel-step)) calc(100% - var(--wc-pixel-cut)),
+      calc(100% - var(--wc-pixel-step)) calc(100% - var(--wc-pixel-inset)), calc(100% - var(--wc-pixel-inset)) calc(100% - var(--wc-pixel-inset)),
+      calc(100% - var(--wc-pixel-inset)) calc(100% - var(--wc-pixel-step)), calc(100% - var(--wc-pixel-cut)) calc(100% - var(--wc-pixel-step)),
+      calc(100% - var(--wc-pixel-cut)) 100%, var(--wc-pixel-cut) 100%,
+      var(--wc-pixel-cut) calc(100% - var(--wc-pixel-step)), var(--wc-pixel-inset) calc(100% - var(--wc-pixel-step)),
+      var(--wc-pixel-inset) calc(100% - var(--wc-pixel-inset)), var(--wc-pixel-step) calc(100% - var(--wc-pixel-inset)),
+      var(--wc-pixel-step) calc(100% - var(--wc-pixel-cut)), 0 calc(100% - var(--wc-pixel-cut))
+    );
+  }
+  .app-menubar {
+    --wc-pixel-step: 1px;
+    --wc-pixel-inset: 2px;
+    --wc-pixel-cut: 4px;
+    position: relative;
+    isolation: isolate;
+    margin-inline: clamp(0.7rem, 2.2vw, 2.1rem);
+    padding-block: 0.24rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .app-menubar::before,
+  .app-menubar::after {
+    position: absolute;
+    z-index: -1;
+    content: "";
+    pointer-events: none;
+    clip-path: var(--wc-pixel-shape);
+  }
+  .app-menubar::before {
+    inset: 0;
+    background: var(--wc-pixel-outline);
+    filter: drop-shadow(0 1px 0 color-mix(in srgb, var(--wc-pixel-outline) 68%, transparent)) drop-shadow(0 2px 2px color-mix(in srgb, var(--wc-pixel-outline) 14%, transparent));
+  }
+  .app-menubar::after {
+    inset: 2px;
+    background: var(--wc-menubar, var(--wc-surface, var(--card)));
+    box-shadow: inset 1px 1px 0 var(--wc-pixel-highlight), inset -1px -1px 0 var(--wc-pixel-shadow);
+  }
+  .app-menubar-link,
+  .app-menubar-link.is-on {
+    --wc-pixel-step: 1px;
+    --wc-pixel-inset: 2px;
+    --wc-pixel-cut: 3px;
+    border: 1px solid var(--wc-pixel-outline);
+    border-radius: 0;
+    clip-path: var(--wc-pixel-shape);
+    box-shadow: inset 1px 1px 0 var(--wc-pixel-highlight), inset -1px -1px 0 var(--wc-pixel-shadow), 0 1px 0 color-mix(in srgb, var(--wc-pixel-outline) 56%, transparent);
+    transition: background-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+  }
+  .app-menubar-link.is-on {
+    background: var(--wc-tab-active, var(--wc-surface, var(--card)));
+    box-shadow: inset -1px -1px 0 var(--wc-pixel-shadow), inset 1px 1px 0 var(--wc-pixel-highlight);
+  }
+  .app-menubar-link:active {
+    box-shadow: inset -1px -1px 0 var(--wc-pixel-highlight), inset 1px 1px 0 var(--wc-pixel-shadow);
+  }
+  .app-menubar-link:focus-visible,
+  .app-menubar-end .mensagens-btn:focus-visible,
+  .app-menubar-end .appearance-btn:focus-visible,
+  .app-menubar-end .bell-btn:focus-visible,
+  .wc-retro-btn:focus-visible {
+    outline: 2px solid var(--wc-focus, var(--ring));
+    outline-offset: -3px;
+  }
+  .app-menubar-end .mensagens-btn,
+  .app-menubar-end .appearance-btn,
+  .app-menubar-end .bell-btn {
+    --wc-pixel-step: 1px;
+    --wc-pixel-inset: 2px;
+    --wc-pixel-cut: 3px;
+    border: 1px solid var(--wc-pixel-outline);
+    border-radius: 0;
+    clip-path: var(--wc-pixel-shape);
+    background: var(--wc-surface, var(--card));
+    box-shadow: inset 1px 1px 0 var(--wc-pixel-highlight), inset -1px -1px 0 var(--wc-pixel-shadow), 0 1px 0 color-mix(in srgb, var(--wc-pixel-outline) 50%, transparent);
+  }
+  .app-menubar-end .mensagens-btn:active,
+  .app-menubar-end .appearance-btn:active,
+  .app-menubar-end .bell-btn:active {
+    transform: translate(1px, 1px);
+    box-shadow: inset -1px -1px 0 var(--wc-pixel-highlight), inset 1px 1px 0 var(--wc-pixel-shadow);
+  }
+  .home .app-stage {
+    --wc-pixel-step: 2px;
+    --wc-pixel-inset: 4px;
+    --wc-pixel-cut: 6px;
+    border: 3px solid var(--wc-pixel-outline);
+    padding: 2px;
+    border-radius: 0;
+    clip-path: var(--wc-pixel-shape);
+    filter: drop-shadow(0 1px 0 color-mix(in srgb, var(--wc-pixel-outline) 62%, transparent)) drop-shadow(0 2px 3px color-mix(in srgb, var(--wc-pixel-outline) 14%, transparent));
+    box-shadow: none;
+  }
+  .home .app-stage::before {
+    z-index: 2;
+    inset: 2px;
+    border: 1px solid var(--wc-pixel-inner);
+    border-radius: 0;
+    clip-path: var(--wc-pixel-shape);
+    box-shadow: inset 1px 1px 0 var(--wc-pixel-highlight), inset -1px -1px 0 var(--wc-pixel-shadow);
+  }
+  .home .app-stage > .top,
+  .home .app-stage > main { position: relative; z-index: 1; }
+  .wc-retro-window {
+    --wc-pixel-step: 2px;
+    --wc-pixel-inset: 4px;
+    --wc-pixel-cut: 6px;
+    position: relative;
+    isolation: isolate;
+    padding: 6px;
+    border: 2px solid var(--wc-pixel-outline);
+    border-radius: 0;
+    clip-path: var(--wc-pixel-shape);
+    background: var(--wc-surface, var(--card));
+    filter: drop-shadow(0 1px 0 color-mix(in srgb, var(--wc-pixel-outline) 62%, transparent)) drop-shadow(0 2px 2px color-mix(in srgb, var(--wc-pixel-outline) 10%, transparent));
+    box-shadow: inset 1px 1px 0 var(--wc-pixel-highlight), inset -1px -1px 0 var(--wc-pixel-shadow);
+  }
+  .wc-retro-window::before {
+    position: absolute;
+    z-index: 2;
+    inset: 2px;
+    border: 1px solid var(--wc-pixel-inner);
+    clip-path: var(--wc-pixel-shape);
+    box-shadow: inset 1px 1px 0 var(--wc-pixel-highlight), inset -1px -1px 0 var(--wc-pixel-shadow);
+    content: "";
+    pointer-events: none;
+  }
+  .wc-retro-window > * { position: relative; z-index: 1; }
+  .wc-retro-titlebar,
+  .home .top {
+    min-height: 2.25rem;
+    padding-block: 0.12rem;
+    border: 0;
+    border-bottom: 1px solid var(--wc-pixel-shadow);
+    border-radius: 0;
+    background: var(--wc-titlebar, var(--primary));
+    color: var(--wc-titlebar-text, var(--wc-titlebar-fg, var(--primary-foreground)));
+    box-shadow: inset 1px 1px 0 var(--wc-pixel-highlight), inset 0 -1px 0 var(--wc-pixel-inner);
+    text-shadow: 0 1px 0 color-mix(in srgb, var(--wc-titlebar-text, var(--wc-titlebar-fg, var(--primary-foreground))) 16%, transparent);
+  }
+  .home .top { min-height: 2.45rem; padding-block: 0.14rem; }
+  .home .top .wc-retro-ctl { width: 1.75rem; height: 1.65rem; }
+  .wc-retro-titlebar .home-clubs-title,
+  .wc-retro-titlebar .home-section-icon,
+  .wc-retro-titlebar .home-section-spark { color: var(--wc-titlebar-text, var(--wc-titlebar-fg, var(--primary-foreground))); }
+  .wc-retro-titlebar .wc-retro-btn { min-height: 1.7rem; padding-block: 0.1rem; }
+  .wc-retro-btn,
+  .wc-retro-ctl {
+    --wc-pixel-step: 1px;
+    --wc-pixel-inset: 2px;
+    --wc-pixel-cut: 3px;
+    border: 1px solid var(--wc-pixel-outline);
+    border-radius: 0;
+    clip-path: var(--wc-pixel-shape);
+    box-shadow: inset 1px 1px 0 var(--wc-pixel-highlight), inset -1px -1px 0 var(--wc-pixel-shadow), 0 1px 0 color-mix(in srgb, var(--wc-pixel-outline) 50%, transparent);
+  }
+  .wc-retro-btn:active:not(:disabled),
+  .wc-retro-ctl:active {
+    box-shadow: inset -1px -1px 0 var(--wc-pixel-highlight), inset 1px 1px 0 var(--wc-pixel-shadow);
+  }
+  .wc-retro-ctl--close {
+    background: color-mix(in srgb, var(--destructive) 24%, var(--wc-surface, var(--card)));
+  }
+  .home .home-hero {
+    --wc-pixel-step: 1px;
+    --wc-pixel-inset: 3px;
+    --wc-pixel-cut: 5px;
+    position: relative;
+    isolation: isolate;
+    border: 2px solid var(--wc-pixel-outline);
+    padding-inline: calc(clamp(1rem, 3vw, 2rem) + 1px);
+    padding-block: calc(1.25rem + 1px);
+    border-radius: 0;
+    clip-path: var(--wc-pixel-shape);
+    filter: drop-shadow(0 1px 0 color-mix(in srgb, var(--wc-pixel-outline) 58%, transparent));
+    box-shadow: inset 1px 1px 0 var(--wc-pixel-highlight), inset -1px -1px 0 var(--wc-pixel-shadow);
+  }
+  .home .home-hero::before {
+    position: absolute;
+    z-index: 2;
+    inset: 1px;
+    border: 1px solid var(--wc-pixel-inner);
+    clip-path: var(--wc-pixel-shape);
+    box-shadow: inset 1px 1px 0 var(--wc-pixel-highlight);
+    content: "";
+    pointer-events: none;
+  }
+  .home .home-hero > * { position: relative; z-index: 3; }
+  .home .home-hello-line { margin-bottom: 0.25rem; }
+  .home .home-kicker { margin-bottom: 0.35rem; }
+  .home .home-hero h1 { margin-bottom: 0.5rem; line-height: 1.04; }
+  .home .home-hero p { line-height: 1.45; }
+  .home .home-hero .btn { margin-top: 0.7rem; }
+  /* Use light title text on these medium-dark gradient center stops without
+     changing either theme's color palette. */
+  .wc-theme-bluebird,
+  .wc-theme-lime { --wc-titlebar-text: #fff; }
+  @media (max-width: 720px) {
+    .app-menubar { padding-block: 0; }
+    .home .app-stage { border-width: 2px; }
+    .home .app-stage::before { inset: 1px; }
+    .home .home-hero { --wc-pixel-cut: 4px; --wc-pixel-inset: 2px; --wc-pixel-step: 1px; }
+  }
+  @media (prefers-contrast: more) {
+    .wc-retro-window,
+    .app-menubar,
+    .home .app-stage,
+    .home .home-hero,
+    .app-menubar-link,
+    .app-menubar-end .mensagens-btn,
+    .app-menubar-end .appearance-btn,
+    .app-menubar-end .bell-btn,
+    .wc-retro-btn,
+    .wc-retro-ctl {
+      --wc-pixel-outline: var(--wc-border-dark, var(--border));
+      --wc-pixel-inner: var(--wc-border, var(--foreground));
+      --wc-pixel-shadow: var(--wc-border-dark, var(--border));
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .app-menubar-link,
+    .app-menubar-end .mensagens-btn,
+    .app-menubar-end .appearance-btn,
+    .app-menubar-end .bell-btn { transition: none; }
   }
   .wc-window {
     @apply mb-5 overflow-hidden;

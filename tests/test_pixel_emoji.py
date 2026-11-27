@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.club_tags import club_has_tag, parse_tag_emojis, tag_payload
 from app.db import SessionLocal
-from app.main import app
+from app.main import app, templates
 from app.markup import format_chat
 from app.models import Club
 from app.pixel_emoji import (
@@ -213,6 +213,28 @@ def test_emoji_picker_is_reused_and_sits_above_page():
     assert "app-menubar" in home.text
     assert "wc-px" in home.text
     assert 'viewBox="0 0 32 32"' in home.text
+    assert 'href="/" title="Início"' in home.text
+
+
+def test_home_window_chrome_is_decorative_and_nav_has_no_active_spark():
+    controls = str(templates.env.get_template("macros/window.html").module.wc_retro_window_controls())
+    home = Path("app/templates/home.html").read_text()
+    base = Path("app/templates/base.html").read_text()
+    sidebar = Path("app/templates/macros/sidebar.html").read_text()
+    css = Path("app/static/src/input.css").read_text()
+    assert 'aria-hidden="true"' in controls
+    assert "<button" not in controls and "tabindex=" not in controls
+    assert controls.count('class="wc-retro-ctl ') == 3
+    assert "wc_retro_window_controls()" in home
+    assert "data-home-window-action" not in home
+    assert "home-main-content" not in home
+    assert '<div class="top-end">' in base
+    assert "app-menubar-spark" not in sidebar
+    assert "--wc-pixel-shape: polygon(" in css
+    assert "clip-path: var(--wc-pixel-shape)" in css
+    assert "background: var(--wc-titlebar, var(--primary))" in css
+    assert "--wc-titlebar-text: #fff" in css
+    assert "--wc-titlebar-surface" not in css
 
 
 def test_pixelmojis_pack_renders_and_stays_namespaced():

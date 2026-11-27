@@ -18,7 +18,6 @@
 <a class="app-menubar-link{% if active %} is-on{% endif %}" href="{{ href }}" title="{{ label }}" aria-label="{{ aria or label }}"{% if active %} aria-current="page"{% endif %}>
   <span class="app-menubar-ico" aria-hidden="true">{% if icon == 'nav-clubs' %}{{ wc_club_banner() }}{% else %}{{ px_icon(icon) }}{% endif %}</span>
   <span class="app-menubar-txt">{{ label }}</span>
-  {% if active %}<span class="app-menubar-spark" aria-hidden="true">{{ px_icon('decor-sparkle') }}</span>{% endif %}
 </a>
 {% endmacro %}
 
